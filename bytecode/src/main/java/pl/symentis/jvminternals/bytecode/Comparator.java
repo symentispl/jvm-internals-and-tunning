@@ -2,6 +2,6 @@ package pl.symentis.jvminternals.bytecode;
 
 public interface Comparator {
 
-	public boolean greaterThan(int a, int b);
+	public String greaterThan(int a, int b);
 
 }
