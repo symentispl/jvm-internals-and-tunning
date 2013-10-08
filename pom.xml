@@ -57,6 +57,7 @@
 	<modules>
 		<module>bytecode</module>
 		<module>gc</module>
+		<module>io</module>
 	</modules>
 
 </project>
