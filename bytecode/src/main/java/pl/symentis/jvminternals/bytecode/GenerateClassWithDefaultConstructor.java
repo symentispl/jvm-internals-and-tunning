@@ -9,10 +9,8 @@ import static org.objectweb.asm.Opcodes.RETURN;
 import static org.objectweb.asm.Type.getMethodDescriptor;
 import static org.objectweb.asm.Type.getMethodType;
 import static org.objectweb.asm.Type.getType;
+import static pl.symentis.jvminternals.bytecode.ClassFileHelper.writeClassToFile;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.PrintStream;
 
 import org.objectweb.asm.ClassWriter;
@@ -29,10 +27,12 @@ import org.objectweb.asm.Type;
 public class GenerateClassWithDefaultConstructor {
 
 	public static void main(String[] args) throws Exception {
+		String classname = "ClassWithDefaultConstructor";
+
 		ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES
 				| ClassWriter.COMPUTE_MAXS);
 
-		writer.visit(Opcodes.V1_6, Opcodes.ACC_PUBLIC, "MyClass", null,
+		writer.visit(Opcodes.V1_6, Opcodes.ACC_PUBLIC, classname, null,
 				"java/lang/Object", new String[] {});
 
 		MethodVisitor constructor = writer.visitMethod(Opcodes.ACC_PUBLIC,
@@ -48,7 +48,7 @@ public class GenerateClassWithDefaultConstructor {
 		constructor.visitVarInsn(ALOAD, 1);
 		constructor.visitVarInsn(ASTORE, 2);
 		constructor.visitVarInsn(ALOAD, 2);
-		
+
 		constructor.visitMethodInsn(INVOKEVIRTUAL, getType(Integer.class)
 				.getInternalName(), "toString",
 				getMethodDescriptor(getType(String.class)));
@@ -71,18 +71,11 @@ public class GenerateClassWithDefaultConstructor {
 
 		byte[] classBuff = writer.toByteArray();
 
-		writeClassToFile(classBuff);
+		writeClassToFile(classname, classBuff);
 
-		Class<?> class1 = new DefiningClassLoader().defineClass("MyClass",
+		Class<?> klass = new DefiningClassLoader().defineClass(classname,
 				classBuff);
-		Object object = class1.getConstructor(Integer.class).newInstance(5);
+		klass.getConstructor(Integer.class).newInstance(5);
 
-	}
-
-	private static void writeClassToFile(byte[] classBuff)
-			throws FileNotFoundException, IOException {
-		FileOutputStream fileWriter = new FileOutputStream("MyClass.class");
-		fileWriter.write(classBuff);
-		fileWriter.close();
 	}
 }

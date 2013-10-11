@@ -1,10 +1,10 @@
-package pl.symentis.jvminternals;
+package pl.symentis.jvminternals.threads;
 
 /**
  * Hello world!
  * 
  */
-public class App {
+public class CounterRunner {
 
 	public static void main(String[] args) throws InterruptedException {
 		final Counter counter = new Counter();

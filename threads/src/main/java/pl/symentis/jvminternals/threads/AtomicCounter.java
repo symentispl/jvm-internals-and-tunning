@@ -1,4 +1,4 @@
-package pl.symentis.jvminternals;
+package pl.symentis.jvminternals.threads;
 
 import java.util.concurrent.atomic.AtomicLong;
 

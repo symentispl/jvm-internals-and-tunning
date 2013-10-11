@@ -3,10 +3,8 @@ package pl.symentis.jvminternals.bytecode;
 import static org.objectweb.asm.Opcodes.ALOAD;
 import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
 import static org.objectweb.asm.Type.getMethodType;
+import static pl.symentis.jvminternals.bytecode.ClassFileHelper.writeClassToFile;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.lang.invoke.CallSite;
 import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandle;
@@ -33,12 +31,14 @@ public class GenerateClassWithInvokeDynamic {
 	 */
 	public static void main(String[] args) throws Exception {
 
+		String classname = "ClassWithInvokeDynamic";
+
 		ClassWriter writer = new ClassWriter(0);
 
 		writer.visit(
 				Opcodes.V1_7,
 				Opcodes.ACC_PUBLIC,
-				"MyClass",
+				classname,
 				null,
 				"java/lang/Object",
 				new String[] { Type.getType(Comparator.class).getInternalName() });
@@ -83,20 +83,13 @@ public class GenerateClassWithInvokeDynamic {
 
 		byte[] classBuff = writer.toByteArray();
 
-		writeClassToFile(classBuff);
+		writeClassToFile(classname, classBuff);
 
-		Class<?> class1 = new DefiningClassLoader().defineClass("MyClass",
+		Class<?> class1 = new DefiningClassLoader().defineClass(classname,
 				classBuff);
 		Comparator object = (Comparator) class1.newInstance();
 		System.out.println(object.greaterThan(2, 2));
 
-	}
-
-	private static void writeClassToFile(byte[] classBuff)
-			throws FileNotFoundException, IOException {
-		FileOutputStream fileWriter = new FileOutputStream("MyClass.class");
-		fileWriter.write(classBuff);
-		fileWriter.close();
 	}
 
 	// invoke dynamic call site bootstrap method

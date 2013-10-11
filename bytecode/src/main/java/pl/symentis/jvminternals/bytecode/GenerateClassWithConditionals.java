@@ -4,10 +4,7 @@ import static org.objectweb.asm.Opcodes.ALOAD;
 import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
 import static org.objectweb.asm.Type.getMethodType;
 import static org.objectweb.asm.Type.getType;
-
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import static pl.symentis.jvminternals.bytecode.ClassFileHelper.writeClassToFile;
 
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
@@ -29,13 +26,15 @@ public class GenerateClassWithConditionals {
 	 */
 	public static void main(String[] args) throws Exception {
 
+		String classname = "ClassWithConditional";
+
 		ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES
 				| ClassWriter.COMPUTE_MAXS);
 
 		writer.visit(
 				Opcodes.V1_6,
 				Opcodes.ACC_PUBLIC,
-				"MyClass",
+				classname,
 				null,
 				"java/lang/Object",
 				new String[] { Type.getType(Comparator.class).getInternalName() });
@@ -77,20 +76,13 @@ public class GenerateClassWithConditionals {
 
 		byte[] classBuff = writer.toByteArray();
 
-		writeClassToFile(classBuff);
+		writeClassToFile(classname, classBuff);
 
-		Class<?> class1 = new DefiningClassLoader().defineClass("MyClass",
+		Class<?> class1 = new DefiningClassLoader().defineClass(classname,
 				classBuff);
 		Comparator object = (Comparator) class1.newInstance();
 		System.out.println(object.greaterThan(2, 1));
 
-	}
-
-	private static void writeClassToFile(byte[] classBuff)
-			throws FileNotFoundException, IOException {
-		FileOutputStream fileWriter = new FileOutputStream("MyClass.class");
-		fileWriter.write(classBuff);
-		fileWriter.close();
 	}
 
 }

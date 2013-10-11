@@ -5,14 +5,11 @@ import static org.objectweb.asm.Opcodes.ASTORE;
 import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
 import static org.objectweb.asm.Opcodes.RETURN;
 import static org.objectweb.asm.Type.getMethodType;
+import static pl.symentis.jvminternals.bytecode.ClassFileHelper.writeClassToFile;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -26,13 +23,15 @@ import org.objectweb.asm.Type;
 public class GenerateClassWithPrivateField {
 
 	public static void main(String[] args) throws Exception {
+		String classname = "ClassWithPrivateField";
+
 		ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES
 				| ClassWriter.COMPUTE_MAXS);
 
-		writer.visit(Opcodes.V1_6, Opcodes.ACC_PUBLIC, "MyClass", null,
+		writer.visit(Opcodes.V1_6, Opcodes.ACC_PUBLIC, classname, null,
 				"java/lang/Object", new String[] {});
 
-		FieldVisitor field = writer.visitField(Opcodes.ACC_PRIVATE, "list",
+		writer.visitField(Opcodes.ACC_PRIVATE, "list",
 				Type.getDescriptor(ArrayList.class), null, null);
 
 		MethodVisitor constructor = writer.visitMethod(Opcodes.ACC_PUBLIC,
@@ -46,8 +45,9 @@ public class GenerateClassWithPrivateField {
 
 		constructor.visitTypeInsn(Opcodes.NEW, "java/util/ArrayList");
 
-		//proove that compiler can also play part in generating optimal bytecode, Opcode.DUP :)
-		
+		// prove that compiler can also play part in generating optimal
+		// bytecode, Opcode.DUP :)
+
 		constructor.visitVarInsn(ASTORE, 2);
 		constructor.visitVarInsn(ALOAD, 2);
 		constructor.visitVarInsn(Opcodes.ILOAD, 1);
@@ -58,7 +58,7 @@ public class GenerateClassWithPrivateField {
 		constructor.visitVarInsn(ALOAD, 0);
 		constructor.visitVarInsn(ALOAD, 2);
 
-		constructor.visitFieldInsn(Opcodes.PUTFIELD, "MyClass", "list",
+		constructor.visitFieldInsn(Opcodes.PUTFIELD, classname, "list",
 				Type.getDescriptor(ArrayList.class));
 
 		constructor.visitInsn(RETURN);
@@ -69,24 +69,12 @@ public class GenerateClassWithPrivateField {
 
 		byte[] classBuff = writer.toByteArray();
 
-		writeClassToFile(classBuff);
+		writeClassToFile(classname, classBuff);
 
-		Class<?> class1 = new DefiningClassLoader().defineClass("MyClass",
+		Class<?> klass = new DefiningClassLoader().defineClass(classname,
 				classBuff);
-		Object object = class1.getConstructor(Integer.TYPE).newInstance(5);
+		klass.getConstructor(Integer.TYPE).newInstance(5);
 
 	}
 
-	private static void writeClassToFile(byte[] classBuff)
-			throws FileNotFoundException, IOException {
-		FileOutputStream fileWriter = new FileOutputStream("MyClass.class");
-		fileWriter.write(classBuff);
-		fileWriter.close();
-	}
-
-	private ArrayList list;
-
-	public GenerateClassWithPrivateField(int i) {
-		list = new ArrayList(i);
-	}
 }
