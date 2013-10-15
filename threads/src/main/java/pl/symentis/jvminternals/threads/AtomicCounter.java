@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class AtomicCounter {
 
-	private AtomicLong counter;
+	private AtomicLong counter = new AtomicLong();
 
 	public void inc() {
 		counter.incrementAndGet();

@@ -7,7 +7,7 @@ package pl.symentis.jvminternals.threads;
 public class CounterRunner {
 
 	public static void main(String[] args) throws InterruptedException {
-		final Counter counter = new Counter();
+		final AtomicCounter counter = new AtomicCounter();
 
 		Runnable counterTask = new Runnable() {
 

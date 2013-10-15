@@ -55,10 +55,11 @@ public class GenerateClassWithInvokeDynamic {
 		constructor.visitMaxs(1, 1);
 		constructor.visitEnd();
 
-		MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC,
+		MethodVisitor method = writer.visitMethod(
+				Opcodes.ACC_PUBLIC,
 				"greaterThan",
-				getMethodType(Type.BOOLEAN_TYPE, Type.INT_TYPE, Type.INT_TYPE)
-						.getInternalName(), null, null);
+				getMethodType(Type.getType(String.class), Type.INT_TYPE,
+						Type.INT_TYPE).getInternalName(), null, null);
 		method.visitCode();
 
 		MethodType methodType = MethodType.methodType(CallSite.class,
@@ -71,10 +72,11 @@ public class GenerateClassWithInvokeDynamic {
 		method.visitVarInsn(Opcodes.ILOAD, 1);
 		method.visitVarInsn(Opcodes.ILOAD, 2);
 
-		method.visitInvokeDynamicInsn("dupa", Type.getMethodDescriptor(
-				Type.BOOLEAN_TYPE, Type.INT_TYPE, Type.INT_TYPE), bootstrap);
+		method.visitInvokeDynamicInsn("callMe", Type.getMethodDescriptor(
+				Type.getType(String.class), Type.INT_TYPE, Type.INT_TYPE),
+				bootstrap);
 
-		method.visitInsn(Opcodes.IRETURN);
+		method.visitInsn(Opcodes.ARETURN);
 
 		method.visitMaxs(2, 3);
 		method.visitEnd();
@@ -100,11 +102,11 @@ public class GenerateClassWithInvokeDynamic {
 		Class<?> thisClass = lookup.lookupClass();
 		MethodHandle sayHello = lookup
 				.findStatic(thisClass, "sayHello", MethodType.methodType(
-						Boolean.TYPE, Integer.TYPE, Integer.TYPE));
+						String.class, Integer.TYPE, Integer.TYPE));
 		return new ConstantCallSite(sayHello.asType(type));
 	}
 
-	public static boolean sayHello(int i, int y) {
-		return true;
+	public static String sayHello(int i, int y) {
+		return "true";
 	}
 }
