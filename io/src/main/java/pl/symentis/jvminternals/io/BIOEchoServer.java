@@ -15,42 +15,47 @@ public class BIOEchoServer {
 	private static final Logger LOGGER = LoggerFactory
 			.getLogger(BIOEchoServer.class);
 
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) throws IOException,
+			InterruptedException {
 
-		ServerSocket serverSocket = new ServerSocket(8888);
+		try (ServerSocket serverSocket = new ServerSocket(8888)) {
 
-		while (true) {
-			final Socket socket = serverSocket.accept();
+			while (true) {
+				final Socket socket = serverSocket.accept();
 
-			LOGGER.debug("new connection");
+				LOGGER.debug("new connection");
 
-			Runnable connection = new Runnable() {
+				Runnable connection = new Runnable() {
 
-				@Override
-				public void run() {
-					try {
-						BufferedReader reader = new BufferedReader(
-								new InputStreamReader(socket.getInputStream()));
-						String line = reader.readLine();
-						PrintWriter writer = new PrintWriter(
-								socket.getOutputStream());
-						writer.print(line);
-						writer.flush();
-
-					} catch (IOException e) {
-						LOGGER.error("", e);
-					} finally {
+					@Override
+					public void run() {
 						try {
-							socket.close();
+							BufferedReader reader = new BufferedReader(
+									new InputStreamReader(
+											socket.getInputStream()));
+							String line = reader.readLine();
+							PrintWriter writer = new PrintWriter(
+									socket.getOutputStream());
+							writer.print(line);
+							writer.flush();
+
 						} catch (IOException e) {
-							LOGGER.warn("", e);
+							LOGGER.error("", e);
+						} finally {
+							try {
+								socket.close();
+							} catch (IOException e) {
+								LOGGER.warn("", e);
+							}
 						}
 					}
-				}
-			};
+				};
 
-			new Thread(connection).start();
+				Thread serverThread = new Thread(connection);
+				serverThread.start();
 
+				serverThread.join();
+			}
 		}
 	}
 }
