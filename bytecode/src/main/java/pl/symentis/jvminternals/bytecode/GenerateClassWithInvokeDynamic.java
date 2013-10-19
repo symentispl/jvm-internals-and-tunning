@@ -103,6 +103,7 @@ public class GenerateClassWithInvokeDynamic {
 		MethodHandle methodHandle = lookup
 				.findStatic(thisClass, "alwaysTrue", MethodType.methodType(
 						String.class, Integer.TYPE, Integer.TYPE));
+
 		return new ConstantCallSite(methodHandle.asType(type));
 	}
 

@@ -28,6 +28,8 @@ public class UnsafeExample {
 
 		int fieldOffset = UNSAFE.fieldOffset(UnsafeExample.class.getField("value"));
 
+		System.out.println(fieldOffset);
+		
 		UnsafeExample m = new UnsafeExample();
 
 		UNSAFE.compareAndSwapInt(m, fieldOffset, 1, 1);
