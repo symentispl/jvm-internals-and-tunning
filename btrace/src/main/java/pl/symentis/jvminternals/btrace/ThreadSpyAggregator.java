@@ -1,16 +1,23 @@
 package pl.symentis.jvminternals.btrace;
 
+import com.sun.btrace.aggregation.Aggregation;
+import com.sun.btrace.aggregation.AggregationFunction;
 import com.sun.btrace.annotations.*;
+
 import static com.sun.btrace.BTraceUtils.*;
 
 @BTrace
-public class ThreadSpy {
+public class ThreadSpyAggregator {
+
+	public static Aggregation aggregation = newAggregation(AggregationFunction.AVERAGE);
+
 	@OnMethod(clazz = "java.lang.Thread", method = "start", location = @Location(value = Kind.RETURN))
 	public static void func(@Duration long duration) {
-		sharedMethod(concat("mamy nowy wątek, wystartowal", str(duration)));
+		addToAggregation(aggregation, duration);
 	}
 
+	@OnEvent("threads")
 	public static void sharedMethod(String msg) {
-		println(msg);
+		printAggregation("threads", aggregation);
 	}
 }
