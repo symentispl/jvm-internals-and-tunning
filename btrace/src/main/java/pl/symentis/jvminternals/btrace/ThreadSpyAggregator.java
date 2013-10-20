@@ -16,8 +16,11 @@ public class ThreadSpyAggregator {
 		addToAggregation(aggregation, duration);
 	}
 
+	/**
+	 * Methods annotated by @OnEvent can't have arguments
+	 */
 	@OnEvent
-	public static void sharedMethod(String msg) {
+	public static void sharedMethod() {
 		println("---summary---");
 		printAggregation("avg threads start time ", aggregation);
 	}
