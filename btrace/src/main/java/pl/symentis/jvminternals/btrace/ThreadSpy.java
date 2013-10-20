@@ -7,10 +7,10 @@ import static com.sun.btrace.BTraceUtils.*;
 public class ThreadSpy {
 	@OnMethod(clazz = "java.lang.Thread", method = "start", location = @Location(value = Kind.RETURN))
 	public static void func(@Duration long duration) {
-		sharedMethod(concat("mamy nowy wątek, wystartowal", str(duration)));
+		println(concat("mamy nowy wątek, wystartowal", str(duration)));
 	}
 
-	public static void sharedMethod(String msg) {
-		println(msg);
-	}
+//	public static void sharedMethod(String msg) {
+//		println(msg);
+//	}
 }
