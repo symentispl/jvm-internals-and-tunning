@@ -19,6 +19,6 @@ public class ThreadSpyAggregator {
 	@OnEvent
 	public static void sharedMethod(String msg) {
 		println("podsumowanie");
-		printAggregation("threads", aggregation);
+		printAggregation("avg threads start time ", aggregation);
 	}
 }
