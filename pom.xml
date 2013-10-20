@@ -58,7 +58,8 @@
 		<module>bytecode</module>
 		<module>gc</module>
 		<module>io</module>
-    <module>threads</module>
+    	<module>threads</module>
+    	<module></module>  <module>btrace</module>
   </modules>
 
 </project>
