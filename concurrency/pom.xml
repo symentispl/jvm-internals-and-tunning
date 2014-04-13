@@ -11,7 +11,7 @@
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 
-	<artifactId>threads</artifactId>
-	<name>threads</name>
+	<artifactId>concurrency</artifactId>
+	<name>concurrency</name>
 
 </project>
