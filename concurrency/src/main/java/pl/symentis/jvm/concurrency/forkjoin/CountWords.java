@@ -1,4 +1,4 @@
-package pl.symentis.concurrency.forkjoin;
+package pl.symentis.jvm.concurrency.forkjoin;
 
 import static java.lang.Long.valueOf;
 

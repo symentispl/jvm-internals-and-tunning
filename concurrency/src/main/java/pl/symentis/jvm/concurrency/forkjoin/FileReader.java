@@ -1,4 +1,4 @@
-package pl.symentis.concurrency.forkjoin;
+package pl.symentis.jvm.concurrency.forkjoin;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
