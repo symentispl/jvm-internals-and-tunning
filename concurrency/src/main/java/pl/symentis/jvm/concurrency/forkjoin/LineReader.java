@@ -3,26 +3,34 @@ package pl.symentis.jvm.concurrency.forkjoin;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.Reader;
 import java.util.ArrayList;
 import java.util.concurrent.RecursiveTask;
 
-public class FileReader extends RecursiveTask<Long> {
+public class LineReader extends RecursiveTask<Long> {
 
 	/**
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
+	private final Reader reader;
+	
+	public LineReader(Reader reader) {
+		super();
+		this.reader = reader;
+	}
+
+
 
 	@Override
 	protected Long compute() {
 
 		ArrayList<CountWords> counters = new ArrayList<>();
-
-		try (BufferedReader reader = new BufferedReader(new java.io.FileReader(
-				"/home/jarek/bigger.txt"));) {
+		
+		try (BufferedReader buffered = new BufferedReader(reader);) {
 
 			String line;
-			while ((line = reader.readLine()) != null) {
+			while ((line = buffered.readLine()) != null) {
 
 				CountWords c = new CountWords(line);
 				counters.add(c);
