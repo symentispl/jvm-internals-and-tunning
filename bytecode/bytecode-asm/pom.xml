@@ -5,19 +5,17 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>pl.symentis.jvminternals</groupId>
-		<artifactId>jvminternals</artifactId>
+		<artifactId>jvminternals-bytecode</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 
-	<artifactId>btrace</artifactId>
-	<name>btrace</name>
+	<artifactId>bytecode-asm</artifactId>
 
 	<dependencies>
 		<dependency>
-			<groupId>com.sun.tools.btrace</groupId>
-			<artifactId>btrace-client</artifactId>
-			<version>1.2.3</version>
+			<groupId>org.ow2.asm</groupId>
+			<artifactId>asm-all</artifactId>
 		</dependency>
 	</dependencies>
 </project>

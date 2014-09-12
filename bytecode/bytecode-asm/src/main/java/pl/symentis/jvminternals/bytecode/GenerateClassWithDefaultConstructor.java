@@ -2,12 +2,16 @@ package pl.symentis.jvminternals.bytecode;
 
 import static org.objectweb.asm.Opcodes.ALOAD;
 import static org.objectweb.asm.Opcodes.ASTORE;
+import static org.objectweb.asm.Opcodes.GETSTATIC;
 import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
+import static org.objectweb.asm.Opcodes.INVOKEVIRTUAL;
 import static org.objectweb.asm.Opcodes.RETURN;
+import static org.objectweb.asm.Type.getMethodDescriptor;
 import static org.objectweb.asm.Type.getMethodType;
+import static org.objectweb.asm.Type.getType;
 import static pl.symentis.jvminternals.bytecode.ClassFileHelper.writeClassToFile;
 
-import java.util.ArrayList;
+import java.io.PrintStream;
 
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
@@ -20,46 +24,44 @@ import org.objectweb.asm.Type;
  * 
  * @author jaroslaw.palka@symentis.pl
  */
-public class GenerateClassWithPrivateField {
+public class GenerateClassWithDefaultConstructor {
 
 	public static void main(String[] args) throws Exception {
-		String classname = "ClassWithPrivateField";
+		String classname = "ClassWithDefaultConstructor";
 
 		ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES
 				| ClassWriter.COMPUTE_MAXS);
 
-		writer.visit(Opcodes.V1_6, Opcodes.ACC_PUBLIC, classname, null,
+		writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, classname, null,
 				"java/lang/Object", new String[] {});
 
-		writer.visitField(Opcodes.ACC_PRIVATE, "list",
-				Type.getDescriptor(ArrayList.class), null, null);
-
 		MethodVisitor constructor = writer.visitMethod(Opcodes.ACC_PUBLIC,
-				"<init>", getMethodType(Type.VOID_TYPE, Type.INT_TYPE)
-						.getDescriptor(), null, null);
+				"<init>",
+				getMethodType(Type.VOID_TYPE, Type.getType(Integer.class))
+						.getInternalName(), null, null);
 
 		constructor.visitCode();
 		constructor.visitVarInsn(ALOAD, 0);
 		constructor.visitMethodInsn(INVOKESPECIAL, "java/lang/Object",
-				"<init>", getMethodType(Type.VOID_TYPE).getDescriptor());
+				"<init>", getMethodType(Type.VOID_TYPE).getInternalName(),false);
 
-		constructor.visitTypeInsn(Opcodes.NEW, "java/util/ArrayList");
-
-		// prove that compiler can also play part in generating optimal
-		// bytecode, Opcode.DUP :)
-
+		constructor.visitVarInsn(ALOAD, 1);
 		constructor.visitVarInsn(ASTORE, 2);
 		constructor.visitVarInsn(ALOAD, 2);
-		constructor.visitVarInsn(Opcodes.ILOAD, 1);
-		constructor.visitMethodInsn(INVOKESPECIAL, "java/util/ArrayList",
-				"<init>", getMethodType(Type.VOID_TYPE, Type.INT_TYPE)
-						.getDescriptor());
 
-		constructor.visitVarInsn(ALOAD, 0);
-		constructor.visitVarInsn(ALOAD, 2);
+		constructor.visitMethodInsn(INVOKEVIRTUAL, getType(Integer.class)
+				.getInternalName(), "toString",
+				getMethodDescriptor(getType(String.class)),false);
+		constructor.visitVarInsn(ASTORE, 3);
 
-		constructor.visitFieldInsn(Opcodes.PUTFIELD, classname, "list",
-				Type.getDescriptor(ArrayList.class));
+		String desc = getType(PrintStream.class).getDescriptor();
+		constructor.visitFieldInsn(GETSTATIC, getType(System.class)
+				.getInternalName(), "out", desc);
+		constructor.visitVarInsn(ALOAD, 3);
+
+		constructor.visitMethodInsn(INVOKEVIRTUAL, getType(PrintStream.class)
+				.getInternalName(), "println",
+				getMethodDescriptor(Type.VOID_TYPE, getType(String.class)),false);
 
 		constructor.visitInsn(RETURN);
 		constructor.visitMaxs(1, 1);
@@ -73,8 +75,7 @@ public class GenerateClassWithPrivateField {
 
 		Class<?> klass = new DefiningClassLoader().defineClass(classname,
 				classBuff);
-		klass.getConstructor(Integer.TYPE).newInstance(5);
+		klass.getConstructor(Integer.class).newInstance(5);
 
 	}
-
 }

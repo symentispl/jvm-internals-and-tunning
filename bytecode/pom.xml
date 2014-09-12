@@ -5,18 +5,20 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>pl.symentis.jvminternals</groupId>
-		<artifactId>jvm-internals</artifactId>
+		<artifactId>jvminternals</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 
-	<artifactId>bytecode</artifactId>
-	<name>bytecode</name>
+	<artifactId>jvminternals-bytecode</artifactId>
+	<packaging>pom</packaging>
 
-	<dependencies>
-		<dependency>
-			<groupId>org.ow2.asm</groupId>
-			<artifactId>asm-all</artifactId>
-			</dependency>
-	</dependencies>
+	<modules>
+		<module>bytecode-asm</module>
+		<module>bytecode-jitescript</module>
+		<module>bytecode-bytebuddy</module>
+		<module>bytecode-javaagent</module>
+		<module>bytecode-byteman</module>
+	</modules>
+
 </project>

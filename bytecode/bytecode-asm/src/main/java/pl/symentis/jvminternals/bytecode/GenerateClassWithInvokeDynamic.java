@@ -36,7 +36,7 @@ public class GenerateClassWithInvokeDynamic {
 		ClassWriter writer = new ClassWriter(0);
 
 		writer.visit(
-				Opcodes.V1_7,
+				Opcodes.V1_8,
 				Opcodes.ACC_PUBLIC,
 				classname,
 				null,
@@ -50,7 +50,7 @@ public class GenerateClassWithInvokeDynamic {
 		constructor.visitCode();
 		constructor.visitVarInsn(ALOAD, 0);
 		constructor.visitMethodInsn(INVOKESPECIAL, "java/lang/Object",
-				"<init>", getMethodType(Type.VOID_TYPE).getInternalName());
+				"<init>", getMethodType(Type.VOID_TYPE).getInternalName(),false);
 		constructor.visitInsn(Opcodes.RETURN);
 		constructor.visitMaxs(1, 1);
 		constructor.visitEnd();

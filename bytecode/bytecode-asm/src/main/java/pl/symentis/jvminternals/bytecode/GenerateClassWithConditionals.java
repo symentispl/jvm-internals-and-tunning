@@ -32,7 +32,7 @@ public class GenerateClassWithConditionals {
 				| ClassWriter.COMPUTE_MAXS);
 
 		writer.visit(
-				Opcodes.V1_6,
+				Opcodes.V1_8,
 				Opcodes.ACC_PUBLIC,
 				classname,
 				null,
@@ -46,7 +46,7 @@ public class GenerateClassWithConditionals {
 		constructor.visitCode();
 		constructor.visitVarInsn(ALOAD, 0);
 		constructor.visitMethodInsn(INVOKESPECIAL, "java/lang/Object",
-				"<init>", getMethodType(Type.VOID_TYPE).getInternalName());
+				"<init>", getMethodType(Type.VOID_TYPE).getInternalName(),false);
 		constructor.visitInsn(Opcodes.RETURN);
 		constructor.visitMaxs(1, 1);
 		constructor.visitEnd();

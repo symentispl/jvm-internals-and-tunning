@@ -12,7 +12,7 @@ public class WordCount {
 
 	public static void main(String[] args) throws Exception {
 
-		ForkJoinPool pool = new ForkJoinPool(4);
+		ForkJoinPool pool = new ForkJoinPool(16);
 
 		ForkJoinTask<Long> submit = pool.submit(new LineReader(new FileReader(
 				"/home/jarek/bigger.txt")));
