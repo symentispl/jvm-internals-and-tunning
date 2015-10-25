@@ -1,7 +1,13 @@
 = Automatyczne zarządzanie pamięcią w JVM
 :backend: revealjs
+:highlighter: pygments
+:stem: asciimath
+:source-highlighter: pygments
+:pygments-css: style
+:revealjs_theme: serif
+:revealjs_history: true
 
-== 
+== Automatyczne zarządzenie pamięcią
 
 * Automatyczne zarządzanie pamięcią (odśmiecanie) to nie nowy problem
 * John McCarthy w 1959 proponuje automatyczne zarządzanie pamięcią na potrzeby implementacji języka Lisp
@@ -9,26 +15,24 @@
 ** Reference counting
 ** Tracing garbage collectors
 
-== 
+=== Zliczanie referencji
 
 Zliczanie referencji to forma automatycznego zarządzania pamięcią w której każdy obiekt ma licznik ilości odniesień do niego. Śmieci są identyfikowane poprzez posiadanie liczby odniesienia równej zero. Licznik odwołań jest zwiększany, gdy odniesienie do obiektu jest tworzone i zmniejszany, gdy odwołanie jest usuwane. Pamięć zajmowana przez obiekt jest zwalniana, gdy liczba osiągnie zero.
-== 
+
+=== Wady i zalety
 
 * Pamięć jest zwalniana natychmiast gdy wartość licznika osiągnie zero
 * Wymaga dodatkowych technik aby wykryć cykle odwołań
 * W środowisku wieloprocesorowym dostęp do licznika referencji musi być synchronizowany (atomic)
 
-== 
+=== Śledzenie referencji
 
 * Tracing garbage collector najpierw określa które obiekty są dostępne (osiągalne), a następnie usuwa te które są nieosiągalne
-
-== 
-
 * Podstawowym mechanizmem w algorytmach GC typu „tracing” jest tzw. „reachability analisys”
 * Umożliwia ona określenie czy dany obiekt jest osiągalny (czasami określany jako „live object”)
 * Obiekt jest osiągalny/”żywy” gdy jest co najmniej jedno odwołanie do tego obiektu, z innego obiektu który jest osiągalny, bezpośrednio lub też poprzez innego obiekty, które są osiągalne (transistive closure)
 
-== 
+=== Wady i zalety 
 
 * Analiza „reachability of objects” rozpoczyna się od tzw. „garbage collection roots”,
 ** Obiekty znajdując się na stosie wątku, „żywego wątku”
@@ -36,88 +40,216 @@ Zliczanie referencji to forma automatycznego zarządzania pamięcią w której k
 ** Zmienne lokalne i globalne JNI (Java Native Interface)
 ** Obiekty wykorzystywane jako monitory podczas synchronizacji
 
-== 
+=== Pokoleniowa analiza
 
-It has been empirically observed that in many programs, the most recently created objects are also those most likely to become unreachable quickly (known as infant mortality or the generational hypothesis)- Wikipedia
-== 
+    It has been empirically observed that in many programs,
+    the most recently created objectsare also those most
+    likely to become unreachable quickly
+    (known as infant mortality or the generational hypothesis)
+    - Wikipedia
+
+== Założnie teorii pokoleniowej
 
 * Pokoleniowy odśmiecanie pamięci bazuje na dwóch założeniach,
 ** Większość nowych obiektów szybko staje się nieosiągalnych
 ** Ilość odwołań z starych obiektów do nowych obiektów jest niewielka
 
-== 
+== Automatyczne zarządzanie pamięcią a JVM
 
-* Oracle JVM
+* Oracle JVM/OpenJDK
 ** Serial
 ** Parallel
 ** Concurrent mark sweep
-* G1 - Garbage First
+** G1 - Garbage First
+
+=== Poza Oracle/OpenJDK
+
+* Shenandoah: http://openjdk.java.net/jeps/189[An Ultra-Low-Pause-Time Garbage Collector]
 * Oracle JRockit Real Time 
 * IBM Websphere Real Time
 * Azul Zing (pauseless)
 
-== 
-
-
-== 
+=== Alokacja pamięci
 
 * W przypadku pokoleniowego („generational” GC) , alokacja nowych obiektów odbywa się tylko w przestrzeni „Eden”
 * Dostępne techniki to:
 ** „bump-the-pointer”
 ** TLAB (Thread Local Allocation Buffer)
 
-== 
+=== TLAB
 
-* Od Java 5 domyślny “garbage collector”
-* Wykorzystuje wiele wątków do odśmiecania pamięci
-* Domyślnie wiele wątków jest wykorzystywanych tylko podczas “minor collections”, “major collections” wykonywane są przez pojedynczy wątek
-* -XX:+UseParallelOldGC umożliwia wykorzystanie wielu wątków także dla „major collections” 
 
-== 
+[shaape]
+----
+      Thread1    Thread2    Thread3    Thread4
+    +---+----+ +--------+ +--------+ +--------+ 
+    |   |    | |        | |        | |        |
+    |   |    | |        | |        | |        |
+    +---+----+ +--------+ +--------+ +--------+
+options:
+ - ".*": {fill: [white, no-shadow], frame: [blue, dashed]}
+----
 
-* „minor collections”Odśmiecanie pamięci w generacji „Young”
-* „major collections” aka „Full GC”Odśmiecanie pamięci w generacji „Tenured”
+=== Organizacja pamięci w JVM
 
-== 
+[shaape]
+----
++---------------------------+-----------------+-----------------+
+|            New            |    Survivor0    |    Survivor1    |
++---------------------------+--------------+--------------------+
+|                        Tenured/Old                            |
++---------------------------------------------------------------+
 
-* Jednak nie dajmy się zwieźć pozorom, -XX:+UseParallelGC i -XX:+UseParallelOldGC to dwie odmienne implementacje, ParallelOldGC ma do czynienia z o wiele większą przestrzenią generacji “Old”
-* Domyślnie na maszynach z N procesorów, wykorzystywanych jest N wątków
-* Jednak ilość wątków może być kontrolowana przez parametr -XX:ParallelGCThread=N
++---------------------------------------------------------------+
+|                         Metaspace                             |
++---------------------------------------------------------------+
+----
 
-== 
+=== Śledzenie
 
-* “GC roots” zostają rozdzielone między dostępne wątki, dzięki temu faza “mark” jest krótsza
-* Każdy “żywy” obiekt jest natychmiast kopiowany do przestrzeni “To”, lub do przestrzeni “Old”, 
-* ** jeśli przetrwał odpowiednią ilość kolekcji,
-** lub gdy w „To” nie ma już miejsca dla obiektu
+[graphviz]
+----
+digraph {
+	A->B
+	A->C
+	A->D
 
-== 
+	B->E
+	C->E
+
+	F->G
+	G->H
+	
+}
+----
+
+=== Reachability analisys
+
+* An object is alive if it is referenced by a live object.
+* An object is alive if a static reference to it exists (part of the root set).
+* An object is alive if a stack reference to it exists (part of the root set).
+
+=== Faza "mark"
+
+* "reachability analisys" rozpoczyna się od obiektów znanych jako "GC roots"
+* każdy z tych obiektów jest odwiedzany, i oznaczany jako "alive"
+* pozostałe obiekty które nie zostały oznaczone jako "alive" są usuwane
+* faza ta wymaga zatrzymania wszystkich wątków aplikacji, tzw. "stop the world"
+* faza "mark" nie jestem jedyną przyczyną pauz w aplikacjach działających pod kontrolą JVM (ale o tym później)
+
+=== Garbage Collection roots
+
+* zmienne lokalne
+* wątki
+* pola statyczne
+* JNI
+* pozostałe inne
+
+=== Typy algorytmów 
+
+* mark+copy
+* mark+sweep+copy
+
+=== Znakowanie kart i bariery
+
+Warto zauważyć że podczas fazy "mark" analizowane są tylko obiekty w przestrzeni Young/New.
+W przeciwnym wypadku cała pokoleniowa hipoteza nie miałaby sensu wydajnościowego (analiza
+całej pamięci, zamiast tylko obszaru w którm zakładamy, że mamy krótko żyjące obiekty).
+
+Co z obiektami z przestrzeni Young/New, do których istnieje referencja z obiektów znajdujących się w
+przestrzeni Old/Tenured?
+
+=== Znakowanie kart i bariery
+
+W tym celu zostały wprowadzone dwa mechanizmy:
+
+* znakowanie kart, "card marking"
+* bariery (nie mylić ich z barierami odpowiedzialnymi za kolejność wykonywania instrukcji przez CPU, tzw. "ordering barrier", ale o tym później)
+
+=== Znakowanie kart
+
+* obszar pamięci JVM, jest podzialone na małe fragmenty tzw. "cards", o rozmiarze mniejszym niż pojedyncza strona pamięci, domyślnie 512 bajtów
+* JVM utrzymuję mapę która przechowuje wartość flagi ("dirty") dla każdej karty
+* kiedy pole obiektu jest modyfikowane, ustawiana jest flaga "dirty"
+* jak to się dzieje?
+
+=== Bariery
+
+    A barrier is a block on reading from or writing to certain memory
+    locations by certain threads or processes.
+
+    Barriers can be implemented in either software or hardware.
+    Software barriers involve additional instructions around
+    load or store operations, which would typically be added
+    by a cooperative compiler. Hardware barriers don’t require
+    compiler support, and may be implemented on common
+    operating systems by using memory protection.
+
+=== Małe, duże i pełne pauzy
+
+* minor
+* major
+* full
+
+=== Dla ciekawych
+
+* http://psy-lob-saw.blogspot.com/2014/10/the-jvm-write-barrier-card-marking.html[The JVM Write Barrier - Card Marking]
+* http://www.ibm.com/developerworks/library/j-jtp11253/[Java theory and practice: Garbage collection in the HotSpot JVM]
+* http://blog.ragozin.info/2011/06/understanding-gc-pauses-in-jvm-hotspots.html[Understanding GC pauses in JVM, HotSpot's minor GC.]
+* http://www.memorymanagement.org[Memory Management Reference]
+
+=== Warunkowe znakowanie kart
+
+* 
+* '-XX:UseCondCardMark'
+
+=== Niepraktyczne informacje zarządzaniu pamięcią 
+
+== ParallelGC
+
+* Od Java 5 domyślny “garbage collector” (z nadejściem JDK9, planowane zastąpienie go G1) 
+* Wykorzystuje wiele wątków do odśmiecania pamięci, działa tylko w obszarze Young
+* jest to odśmiecacz typu mark+copy, obiekty są kopiowane do przestrzeni Survivor
+* JVM posiada dwie przestrzenie Survivor (Survivor0 + Survivor1), znane także jako "To" i "From"
+* przestrzenie Survivor mają ten sam rozmiar
+
+== Mechanika ParallelGC
+
+* “GC roots” zostają rozdzielone między dostępne wątki, dzięki temu faza “mark” jest krótsza (pamiętajmy jednak o "stop the world")
+* Każdy “żywy” obiekt jest natychmiast kopiowany do przestrzeni “To”, lub do przestrzeni “Old” 
+** jeśli przetrwał odpowiednią ilość kolekcji w przestrzeni Young
+** lub gdy w „To” nie ma już miejsca dla obiektu (major GC)
+
+== Mechanika ParallelGC
 
 * Przestrzeń “To” staje się przestrzenią “From” i “From”->”To”
 * Czyli po każdym przebiegu tego odśmiecacza przestrzeń „To” jest pusta
 * Ponieważ „mark and copy” odbywa się wielowątkowo, każdy z wątków GC dostaje swój wycinek “To”
 * Bo przecież alokacja nowych obiektów, odbywa się tylko w przestrzeni “Eden”, więc nie będzie nam przeszkadzała lekko defragmentowana przestrzeń “To”
 
-== 
+=== Kilka pokręteł
 
-
-== 
-
-* -XX:+PrintTenuringDistribution
 * -XX:NewRatio=2
 * -XX:SurvivorRatio=10
 * -XX:TargetSurvivorRatio=90
 * -XX:MaxTenuringThreshold=30
 
-== 
+== ParallelOldGC 
+
+* Jednak nie dajmy się zwieźć pozorom, -XX:+UseParallelGC i -XX:+UseParallelOldGC to dwie odmienne implementacje, ParallelOldGC ma do czynienia z o wiele większą przestrzenią generacji “Old”
+* Domyślnie na maszynach z N procesorów, wykorzystywanych jest N wątków
+* Jednak ilość wątków może być kontrolowana przez parametr -XX:ParallelGCThread=N
+* jest to algorytm typu mark+sweep+copy
+
+=== Mechanika ParallelOldGC
 
 * O wiele bardziej złożony algorytm, gdyż przestrzeń “Old” jest znacząco większa od przestrzeni „Young” a obiekty, które się tam znajdują wykazują się większym czasem życia
-* ParallelOldGC odbywa się w trzech krokach:
-* ** parallel marking
+* ParallelOldGC odbywa się w trzech fazach:
+** parallel marking
 ** summary step
 ** sweeping step
 
-== 
+=== Mechanika ParallelOldGC
 
 * Przestrzeń “Old” zostaje podzielona na regiony
 * “GC roots” podzielone pomiędzy w wątki GC
@@ -158,12 +290,12 @@ It has been empirically observed that in many programs, the most recently create
 * A co z tymi obiektami, które znajdują się regionie „Old” i posiadają referencji do obiektów w generacji „Young”?
 * Zastosowany jest mechanizmy znane jako "card table" i write barrier
 
-== 
+== ConcMarkSweepGC 
 
-* Poprzednie kolektory, są szybkie, jednak muszą zatrzymać działanie aplikacji
+* Poprzednie kolektory, są szybkie, jednak muszą zatrzymać działanie aplikacji (high throughput/high pause time)
 * Kosztem mniejszej wydajności CMS
 * Cztery kroki
-* ** initial mark
+** initial mark
 ** concurrent mark
 ** remarking
 ** concurrent sweep
@@ -213,9 +345,6 @@ It has been empirically observed that in many programs, the most recently create
 
 * Podobnie jak w przypadku poprzednich modeli pamięć jest podzielona na obszary, w których przechowywane są obiekty w rożnym wieku
 * W przeciwieństwie jednak do poprzedników, tych obszarów tworzonych przez G1 mamy do dyspozycji około 2000, każdy z tych obszarów ma taki sam rozmiar, -XX:G1HeapRegionSize=n
-
-== 
-
 
 == 
 
@@ -399,5 +528,3 @@ It has been empirically observed that in many programs, the most recently create
 * Różne wymagania alokacji i odśmiecanie dla różnych architektur
 ** Przetwarzanie wsadowe
 ** Aplikacje stanowe i bezstanowe
-
-   
