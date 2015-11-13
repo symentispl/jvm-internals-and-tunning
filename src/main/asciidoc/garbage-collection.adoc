@@ -11,7 +11,7 @@
 
 * Automatyczne zarządzanie pamięcią (odśmiecanie) to nie nowy problem
 * John McCarthy w 1959 proponuje automatyczne zarządzanie pamięcią na potrzeby implementacji języka Lisp
-* Dostępne techniki 
+* Dostępne techniki
 ** Reference counting
 ** Tracing garbage collectors
 
@@ -32,7 +32,7 @@ Zliczanie referencji to forma automatycznego zarządzania pamięcią w której k
 * Umożliwia ona określenie czy dany obiekt jest osiągalny (czasami określany jako „live object”)
 * Obiekt jest osiągalny/”żywy” gdy jest co najmniej jedno odwołanie do tego obiektu, z innego obiektu który jest osiągalny, bezpośrednio lub też poprzez innego obiekty, które są osiągalne (transistive closure)
 
-=== Wady i zalety 
+=== Wady i zalety
 
 * Analiza „reachability of objects” rozpoczyna się od tzw. „garbage collection roots”,
 ** Obiekty znajdując się na stosie wątku, „żywego wątku”
@@ -48,7 +48,7 @@ Zliczanie referencji to forma automatycznego zarządzania pamięcią w której k
     (known as infant mortality or the generational hypothesis)
     - Wikipedia
 
-== Założnie teorii pokoleniowej
+== Założenie teorii pokoleniowej
 
 * Pokoleniowy odśmiecanie pamięci bazuje na dwóch założeniach,
 ** Większość nowych obiektów szybko staje się nieosiągalnych
@@ -65,7 +65,7 @@ Zliczanie referencji to forma automatycznego zarządzania pamięcią w której k
 === Poza Oracle/OpenJDK
 
 * Shenandoah: http://openjdk.java.net/jeps/189[An Ultra-Low-Pause-Time Garbage Collector]
-* Oracle JRockit Real Time 
+* Oracle JRockit Real Time
 * IBM Websphere Real Time
 * Azul Zing (pauseless)
 
@@ -78,11 +78,10 @@ Zliczanie referencji to forma automatycznego zarządzania pamięcią w której k
 
 === TLAB
 
-
 [shaape]
 ----
       Thread1    Thread2    Thread3    Thread4
-    +---+----+ +--------+ +--------+ +--------+ 
+    +---+----+ +--------+ +--------+ +--------+
     |   |    | |        | |        | |        |
     |   |    | |        | |        | |        |
     +---+----+ +--------+ +--------+ +--------+
@@ -119,7 +118,7 @@ digraph {
 
 	F->G
 	G->H
-	
+
 }
 ----
 
@@ -146,7 +145,7 @@ digraph {
 * JNI
 * pozostałe inne
 
-=== Typy algorytmów 
+=== Typy algorytmów
 
 * mark+copy
 * mark+sweep+copy
@@ -201,41 +200,60 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 
 === Warunkowe znakowanie kart
 
-* 
+*
 * '-XX:UseCondCardMark'
 
-=== Niepraktyczne informacje zarządzaniu pamięcią 
+=== Niepraktyczne informacje zarządzaniu pamięcią
 
 == ParallelGC
 
-* Od Java 5 domyślny “garbage collector” (z nadejściem JDK9, planowane zastąpienie go G1) 
-* Wykorzystuje wiele wątków do odśmiecania pamięci, działa tylko w obszarze Young
+* włączany opcją `-XX:+UseParallelGC`
+* Od Java 5 domyślny “garbage collector” (z nadejściem JDK9, planowane zastąpienie go przez G1)
+* Wykorzystuje wiele wątków do odśmiecania pamięci, zarówno podczas "minor" i "major" kolekcji
 * jest to odśmiecacz typu mark+copy, obiekty są kopiowane do przestrzeni Survivor
 * JVM posiada dwie przestrzenie Survivor (Survivor0 + Survivor1), znane także jako "To" i "From"
 * przestrzenie Survivor mają ten sam rozmiar
 
-== Mechanika ParallelGC
+=== Mechanika ParallelGC
 
 * “GC roots” zostają rozdzielone między dostępne wątki, dzięki temu faza “mark” jest krótsza (pamiętajmy jednak o "stop the world")
-* Każdy “żywy” obiekt jest natychmiast kopiowany do przestrzeni “To”, lub do przestrzeni “Old” 
-** jeśli przetrwał odpowiednią ilość kolekcji w przestrzeni Young
+* ilość wątków GC można kontrolować parametrem `-XX:ParallelGCThreads=<N>`,
+* domyślnie dla maszyn o CPU<=8; N=CPU
+* dla pozostałych przypadków N=5/8 CPU lub N=5/16 CPU
+* Każdy “żywy” obiekt jest natychmiast kopiowany do przestrzeni “To”, lub do przestrzeni “Old”
+** jeśli przetrwał odpowiednią ilość kolekcji w przestrzeni Young (TenuringThreshold)
 ** lub gdy w „To” nie ma już miejsca dla obiektu (major GC)
 
-== Mechanika ParallelGC
+=== Mechanika ParallelGC
 
 * Przestrzeń “To” staje się przestrzenią “From” i “From”->”To”
 * Czyli po każdym przebiegu tego odśmiecacza przestrzeń „To” jest pusta
 * Ponieważ „mark and copy” odbywa się wielowątkowo, każdy z wątków GC dostaje swój wycinek “To”
 * Bo przecież alokacja nowych obiektów, odbywa się tylko w przestrzeni “Eden”, więc nie będzie nam przeszkadzała lekko defragmentowana przestrzeń “To”
+* defragmentację "To" można zmniejszyć poprzez mniejszą liczbę wątków GC lub poprzez zwiększenie generacji Tenured
+
+=== Ergonomia ParallelGC
+
+* maksymalny czas pauzy, `-XX:MaxGCPauseMillis=<N>`, maksymalny oczekiwany czas pauzy w milisekundach
+* przepustowość, `-XX:GCTimeRatio=<N>`, liczony jako współczynnik czasu spędzonego na odśmiecanie w stosunku do całego czasu działania aplikacji, (1/1+N), domyślna wartość to 99
+* narzut, `-Xmx`, czyli maksymalny rozmiar pamięci,
+* jeśli cel maksymalnego czasu pauzy nie jest osiągniety, rozmiar tylko jednej z generacji jest pomniejszany
+* jeśli cel przepustowości nie jest osiągniety, rozmiary obydwu generacji są powiększane, proporcjonalnie do czasu odśmiecania w każdej z nich,
 
 === Kilka pokręteł
 
-* -XX:NewRatio=2
-* -XX:SurvivorRatio=10
-* -XX:TargetSurvivorRatio=90
-* -XX:MaxTenuringThreshold=30
+* `-XX:NewRatio=<N>`, określa stosunek rozmiaru generacji "Old" do generacji "Young", `N=Old/Young`, domyślne wartości zależne są od platformy i wersji JDK
+* `-XX:MaxNewSize=<N>` oraz `-XX:NewSize=<N>`, określa rozmiar generacji Young w bajtach
+* `-XX:SurvivorRatio=10`, określa stosunek rozmiaru przestrzeni Eden do przestrzeni Survivor
+* `-XX:TargetSurvivorRatio=5` oraz `-XX:MaxTenuringThreshold=15`, docelowy i maksymalny czas życia obiektu w obszarze Survivor
 
-== ParallelOldGC 
+=== Kilka pokręteł
+
+* `-XX:YoungGenerationSizeIncrement<T>` oraz `-XX:TenuredGenerationSizeIncrement=<T>`, określają szybkość przyrostu rozmiaru generacji, domyślnie 20%
+* `-XX:AdaptiveSizeDecrementScaleFactor=<D>`, określa współczynnik o który rozmiar generacji jest pomniejszany, i wynosi on T/D
+* `-XX:+UseGCOverheadLimit`, kontroluje kiedy rzucany jest `OutOfMemoryError`, domyślnie gdy >98% czasu aplikacja spędza na GC, odzyskując >2% pamięci
+
+== ParallelOldGC
 
 * Jednak nie dajmy się zwieźć pozorom, -XX:+UseParallelGC i -XX:+UseParallelOldGC to dwie odmienne implementacje, ParallelOldGC ma do czynienia z o wiele większą przestrzenią generacji “Old”
 * Domyślnie na maszynach z N procesorów, wykorzystywanych jest N wątków
@@ -250,48 +268,44 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 ** summary step
 ** sweeping step
 
-=== Mechanika ParallelOldGC
+=== Parallel marking
 
 * Przestrzeń “Old” zostaje podzielona na regiony
 * “GC roots” podzielone pomiędzy w wątki GC
 * Za każdym razem gdy obiekt zostanie oznaczony jako “live” (“reacheable”), region w którym się znajdował, zostaje zaktualizowany o ilość “żywych bajtów”
 * Dzięki temu na koniec tej fazy wiadome jest ile w danym regionie znajduje się „żywych” danych
 
-== 
+=== Summary step
 
-* Dla każdego regionu, jest wyznacza wartość “density” (stosunek ilość żywych bajtów do całkowitej ilości bajtów) 
+* Dla każdego regionu, jest wyznacza wartość “density” (stosunek ilość żywych bajtów do całkowitej ilości bajtów)
 * W tym kroku wiemy także, że podczas poprzedniej kolekcji:
-* obiekty były kompaktowane do lewej
+** obiekty były kompaktowane do lewej
 ** nowe obiekty które od tego czasu zostały przeniesione do “Old” znajdują się po prawej stronie
 ** Więc im obiekt bardziej na lewo tym starszy, tym mniejsza szansa, że będzie usuwany z pamięci
 
-== 
+=== Summary step
 
 * Powyższe informacje pozwalają na pewna optymalizacje:
 * zaczynając od lewej, szukany jest region o gęstości (“density”), z którego najwięcej zyskamy jeśli go posprzątamy,
 ** wszystkie region na lewo nie sprzątane, i nazywane są “dense prefix”
 * Dodatkowo podczas tej fazy już wiadomo obiekty z którego regiony zostaną przeniesione do danego regionu (z reguły te na prawo wypełniają te na lewo)
 
-== 
+=== Sweeping step
 
 * Regiony które mogą być sprzątane jednocześnie są dzielone miedzy watki,
-* ** region które nie zapełniają innych regionów (patrz poprzedni krok)
-** lub region które są puste,
+* region które nie zapełniają innych regionów (patrz poprzedni krok)
+* lub region które są puste,
 * Wątki najpierw usuwają „unreachable objects”
 * A potem przesuwają obiekty (compact)
-* Dzięki optymalizacji (nie skanujemy całego regionu „Old”), możemy odzyskać dużo pamięci, mniejszym kosztem, ponieważ na lewo są stare obiekty 
+* Dzięki optymalizacji (nie skanujemy całego regionu „Old”), możemy odzyskać dużo pamięci, mniejszym kosztem, ponieważ na lewo są stare obiekty
 
-== 
+=== Sweeping step
 
 * A potem przesuwają obiekty (compact)
 * Dzięki optymalizacji (nie skanujemy całego regionu „Old”), możemy odzyskać dużo pamięci, mniejszym kosztem, ponieważ na lewo są stare obiekty
 
-== 
 
-* A co z tymi obiektami, które znajdują się regionie „Old” i posiadają referencji do obiektów w generacji „Young”?
-* Zastosowany jest mechanizmy znane jako "card table" i write barrier
-
-== ConcMarkSweepGC 
+== ConcMarkSweepGC
 
 * Poprzednie kolektory, są szybkie, jednak muszą zatrzymać działanie aplikacji (high throughput/high pause time)
 * Kosztem mniejszej wydajności CMS
@@ -301,30 +315,31 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 ** remarking
 ** concurrent sweep
 
-== 
+=== initial mark
 
 * Zatrzymuje watki aplikacji na krótka chwile, by w wykorzystujac jeden watek, zaznaczyc tylko obiekty które sa bezposrednio dostepne z “GC roots”
 
-== 
+=== concurrent mark
 
 * Podczas gdy aplikacja działa dalej, osobny wątek GC kontynuuje zaznaczanie obiektów,
 
-== 
+=== remarking
 
 * Ponieważ sytuacja w między czasie może się zmienić CMS, znowu na chwile zatrzymuje aplikacje, by sprawdzić te obiekty które się z międzyczasie zmieniły
 
-== 
+=== concurrent sweep
 
 * Następuje sprzątanie, w wielu watkach, bez kompaktowania
 * Dlatego też alokacja pamięci odbywa się na trochę innych zasadach
 
-== 
+=== Concurrent mode failure
 
-174.445: [GC 174.446: [ParNew: 66408K->66408K(66416K), 0.0000618 secs]174.446: [CMS (concurrent mode failure): 161928K->162118K(175104K), 4.0975124 secs] 228336K->162118K(241520K) 
-== 
+`174.445: [GC 174.446: [ParNew: 66408K->66408K(66416K), 0.0000618 secs]174.446: [CMS (concurrent mode failure): 161928K->162118K(175104K), 4.0975124 secs] 228336K->162118K(241520K)`
 
 * W przypadku pojawienia się tego komunikatu, CMS zostaje na czas tego uruchomienia „Full GC” zastąpione SerialGC
-* Concurrent Mode Failure jest wynikiem defragmentacji generacji „Old” i niemożliwością zaalokowania odpowiedniego ciągłego obszaru pamięci. 
+* Concurrent Mode Failure jest wynikiem defragmentacji generacji „Old” i niemożliwością zaalokowania odpowiedniego ciągłego obszaru pamięci.
+
+== ParNewGC
 
 == Wydajność GC
 
@@ -339,46 +354,47 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 * -XX:+UseG1GC
 * Jest kolejna próba zminimalizowania pauz w działaniu aplikacji, przy jednoczesnym kompaktowaniu pamięci (przestrzeni „Old”)
 
-== 
+=== Organizacja pamięci w G1
 
 * Podobnie jak w przypadku poprzednich modeli pamięć jest podzielona na obszary, w których przechowywane są obiekty w rożnym wieku
 * W przeciwieństwie jednak do poprzedników, tych obszarów tworzonych przez G1 mamy do dyspozycji około 2000, każdy z tych obszarów ma taki sam rozmiar, -XX:G1HeapRegionSize=n
 
-== 
+=== Regiony w G1
 
 * Implementacja G1 utrzymuje listę regionów, które są wolne, i miarę zapotrzebowania przypisuje te regiony do generacji „Young” (Eden/Survivor) lub „Tenured” („Old”)
 * W tej implementacji przestrzenie nie są ciągłym obszarem pamięci
 * Dzięki temu rozmiar Eden/Survivor/Old może być dostosowywany do zapotrzebowania aplikacji
 * Podobnie jak w poprzednich implementacjach, obiekty są promowane( ewakuowane w słowniku GC) do obszarów, które zawierają coraz starsze obiekty
 
-== 
+=== Alokacja pamięci
 
-* Alokacja podobnie jak w poprzednich algorytmach, odbywa się głównie w przestrzeni „Eden”, 
+* Alokacja podobnie jak w poprzednich algorytmach, odbywa się głównie w przestrzeni „Eden”,
 * Chyba, że obiekt jest większy niż połowa rozmiary regiony, wtedy takie obiekty są alokowane w specjalnych przestrzeniach zwanych „humongous”
 * Kiedy pojemność „Eden” zostanie osiągnięta, rozpoczyna się faza „young garbage collection”, nazywana także „evacuation pause”
 * Jest to faza „stop-the-world”, podczas której wykorzystwane jest wiele wątków, i obiekty kopiowane są do „to-space”, lub też w zależności od wieku obiektu (tenured threshold) do przestrzeni „old”
 
-== 
+== Podsumowanie algorytmów
 
 * "Serial" to odśmiecacz typu „stop-the-world”, kopiujący kolekcjoner który wykorzystuje tylko jeden wątek
-* "ParNew" to odśmiecacz typu „stop-the-world”, kopiujący kolekcjoner, który wykorzystuje wiele wątków. Różni się od "Parallel Scavenge" pewnymi usprawnieniami które umożliwiają wykorzystanie go w parze z CMS
+* "ParNew" to odśmiecacz typu „stop-the-world”, kopiujący kolekcjoner, który wykorzystuje wiele wątków.
+Różni się od "Parallel Scavenge" pewnymi usprawnieniami które umożliwiają wykorzystanie go w parze z CMS
 
-== 
+=== Podsumowanie algorytmów
 
 * "Parallel Scavenge" to odśmiecacz typu „stop-the-world”, kopujący algorytm który wykorzystuje wiele wątków
 * "Serial Old" to odśmiecacz typu „stop-the-world”, „mark-sweep-compact” który wykorzystuje pojedynczy wątek
 * "ConcurrentMarkSweep" (CMS) to prawie „współbieżny” odśmiecacz, zapewniający krótkie pauzy .
 * "Parallel Old" to implementcja ParallelGC na potrzeby generacji „Old”
 
-== 
+=== Możliwe kombinacje algorytmów
 
 * UseSerialGC to "Serial" + "Serial Old"
 * UseParNewGC to "ParNew" + "Serial Old"
 * UseConcMarkSweepGC to"ParNew" + "CMS" + "Serial Old". "CMS" jest wykorzystywany przez większość czasu podczas kolekcji generacji „tenured”. "Serial Old" jest wykorzystywany w sytuacjach wystąpienia „concurrent mode failure„.
 * UseParallelGC to "Parallel Scavenge" + "Serial Old"
-* UseParallelOldGC to "Parallel Scavenge" + "Parallel Old" 
+* UseParallelOldGC to "Parallel Scavenge" + "Parallel Old"
 
-== 
+=== PermGen/Metaspace
 
 * PermGen to wydzielony obszar z generacji „tenured” w którym JVM przechowuje:
 ** „bytecode” metod czyli „method area”
@@ -387,7 +403,7 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 ** struktury wewnętrznie wykorzystywane przez JVM
 * Generacja „permament” (PermGen) jest odśmiecana za każdym razem gdy odśmiecana jest generacja „tenured”
 
-== 
+=== Co śmieci w Metaspace?
 
 * Jeśli twoja aplikacja lub biblioteka intensywnie używa,
 ** java.lang.reflect.Proxy
@@ -395,77 +411,102 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 ** javassist.util.proxy.ProxyFactory
 ** Apache commons proxy
 ** AspectJ z „runtime weaving” (SpringFramework się też liczy)
-* To wiedz, że PermGen wypełni się szybko
-* Dlaczego?
+* To wiedz, że Metaspace wypełni się szybko
 
-== 
+=== Metryki GC (przepustowość)
 
 * Poniższe metryki opisują efektywność odśmiecania pamięci
 ** Przepustowość (throughput)Procent czasu nie spędzanego przez aplikacje na odśmiecaniu, 100% oznacza brak odśmiecania, przyjęło się przyjmować 95-98% jak poprawną wartość
 ** Narzut na odśmiecanie (GC overhead)odwrotność przepustowości, czyli procent czasu spędzanego przez aplikację na odśmiecanie
 
-== 
+=== Metryki GC (pauza)
 
 ** Czas pauzy (pause time)Czas podczas którego działanie aplikacji jest wstrzymane na potrzeby odśmiecania
 ** Częstotliwość odśmiecania(frequency of collection)jak często w czasie życia aplikacji następuje odśmiecanie
 
-== 
+=== Metryki GC (narzut)
 
 ** Narzut pamięci (footprint)Rozmiar pamięci wykorzystywanej przez maszynę JVM
-** Promptnessczas pomiędzy momentem kiedy obiekt stał się „unreachable” a momentem kiedy pamięć przez niego zajmowana została zwolniona
+** Promptness, czas pomiędzy momentem kiedy obiekt stał się „unreachable” a momentem kiedy pamięć przez niego zajmowana została zwolniona
 
-== 
+== Narzędia i monitorowanie GC
 
-* Proste jednak kompletnie niepraktyczne narzędzie to:jmap -heap <vmid>
+* Proste, jednak kompletnie niepraktyczne narzędzie to: `jmap -heap <vmid>`
+* Jest to jednak najszybszy sposób żeby sprawdzić z jakimi parametrami
+odśmiecania aktualnie działa uruchomiona maszyna wirtualna i jakie są aktualne
+rozmiary poszczególnych generacji i przestrzeni
 
-* Jest to jednak najszybszy sposób żeby sprawdzić z jakimi parametrami odśmiecania aktualnie działa uruchomiona maszyna wirtualna
-
-== 
-
-
-== 
+=== Logowanie zdarzeń GC
 
 * Poprzez parametry przekazywane do maszyny wirtualnej
-* -XX:+PrintGC
-** Major or minor collection
-** Rozmiar sterty (generacji) przed odśmiecaniem
-** Rozmiar sterty (generacji) po odśmiecaniu
-** Całkowity rozmiar sterty (generacji)
-** Czas odśmiecania
+* `-XX:+PrintGC`
 
-== 
+=== Szczegóły GC
+
+* `-XX:+PrintGCDetails` i `-XX:+PrintGCTimeStamps`,
+** tzw. 'GC cause', czyli co wymusiło GC
+** nazwa kolektora (PSYoungGen, ParOldGen, Metaspace)
+** `prev_used->used(capacity)`, czyli informacja ile pamięci zostało odzyskane
+** czas działania kolektora
+
+=== Przykładowe logi
+
+----
+3437,843:
+  [GC (Allocation Failure)
+  [PSYoungGen: 155760K->7040K(161280K)] 211173K->62644K(297472K), 0,0096349 secs]
+  [Times: user=0,03 sys=0,00, real=0,01 secs]
+----
+
+==== Przykładowe logi
+
+----
+3437,843:
+[GC (Allocation Failure)
+[PSYoungGen: 6249K->0K(126976K)]
+[ParOldGen: 64978K->30783K(107520K)]
+71227K->30783K(234496K),
+[Metaspace: 34760K->34756K(1081344K)], 0,0852895 secs]
+[Times: user=0,25 sys=0,00, real=0,08 secs]
+----
+
+=== Wiek obiektów
+
+* flaga `-XX:+PrintTenuringDistribution`, wyświetla informacje o rozmiarach
+poszczególnych kategorii wiekowych, oraz ilości odśmiecań, które
+obiekty przetrwały zanim zostały wypromowane do generacji "Old”
+
+=== Przykładowe logi
+
+----
+575,138:
+[GC (Allocation Failure) 575,138: [ParNew
+Desired survivor size 2228224 bytes, new threshold 3 (max 6)
+- age   1:     494888 bytes,     494888 total
+- age   2:    1464944 bytes,    1959832 total
+- age   3:     285224 bytes,    2245056 total
+: 38865K->4024K(39296K), 0,0076277 secs]
+66888K->32676K(126720K), 0,0077602 secs]
+[Times: user=0,02 sys=0,00, real=0,01 secs]
+----
 
 
-== 
+=== Zapisywanie logów
 
-* -XX:+PrintGCDetails i -XX:+PrintGCTimeStamps
-** Bardziej szczegółowe informacje, szczególnie dla algorytmu ConcurrentMarkSweep, gdzie wypisywane są czasy i rozmiar pamięci dla poszczególnych faz
+* `-Xloggc:<filename>`, zapisuje logi z odśmiecania w wskazanym pliku
+* `-XX:+UseGCLogFileRotation`, włącza rotację plików z logami GC
+* `-XX:NumberOfGClogFiles=<N>`, maksymalna ilość plików z logami GC
+* `-XX:GCLogFileSize=<N>`, maksymalny rozmiar pliku z logami GC
 
-== 
+=== jstat
 
-
-== 
-
-* -XX:+PrintTenuringDistribution
-** wyświetla informacje o rozmiarach poszczególnych kategorii wiekowych, ilości odśmiecań, które obiekty przetrwały zanim zostały wypromowane do generacji „Tenured”
-
-== 
-
-
-== 
-
-* -Xloggc:<filename>zapisuje logi z odśmiecania w wskazanym pliku
-* -XX:+UseGCLogFileRotationwłącza rotację plików z logami GC
-* -XX:NumberOfGClogFiles=1maksymalna ilość plików z logami GC
-* -XX:GCLogFileSize=8Kmaksymalny rozmiar pliku z logami
-
-== 
-
-* Kolejnym narzędziem dostępnym z linii poleceń jest jstat, rozpowszechniany razem z Java SDKjstat -option [-t] [-hlines] vmid [interval [count]]
+* Kolejnym narzędziem dostępnym z linii poleceń jest jstat,
+rozpowszechniany razem z Java SDK
+  jstat -option [-t] [-hlines] vmid [interval [count]]
 * Gdzie vmid, jest identyfikatorem procesu JVM,
-* jstat umożliwia podpięcie się do procesu JVM i zbieranie różnego typu statystyk, 
+* jstat umożliwia podpięcie się do procesu JVM i zbieranie różnego typu statystyk,
 
-== 
+=== Dostępne opcje jstat
 
 * -option to typ statystki którą ma wyświetlać jstat
 ** class
@@ -479,49 +520,51 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 ** gcpermcapacity
 ** gcutil
 
-== 
+=== Dodatkowe narzędzia
 
-* Warto zapoznać się z powyższymi narzędziami jak i formatami w jakich udostępniane są statystki odśmiecania, jednak na co dzień warto korzystać z wizualnych 
+* Warto zapoznać się z powyższymi narzędziami jak i formatami w jakich udostępniane są statystki odśmiecania, jednak na co dzień warto korzystać z wizualnych
 * VisualVM
 ** Wtyczka VisualGC, wymaga dodatkowej instalacji, pokazuje bieżące zachowanie GC
+
+=== Dodatkowe narzędzia
+
 * GCviewer
-** 
-		link:https://github.com/chewiebug/GCViewer[https://github.com/chewiebug/GCViewer]
+** link:https://github.com/chewiebug/GCViewer[https://github.com/chewiebug/GCViewer]
 	, szwajcarski scyzoryk w temacie GC
 * Jhiccup
-** 
-		link:http://www.azulsystems.com/jHiccup[http://www.azulsystems.com/jHiccup]
+** link:http://www.azulsystems.com/jHiccup[http://www.azulsystems.com/jHiccup]
 	, czyli mamy czkawkę, czy nie?
+
+=== Dodatkowe narzędzia
+
+* Java Mission Control i FlightRecorder (obecnie dostępne wraz z Oracle JDK)
+* link:https://eclipse.org/mat/[Memory Analyzer Tool]
 
 == Trzy wymiary automatycznego zarządzania pamięcią
 
-* Spośród wielu metryk opisujących zachowanie GC, musisz wybrać jedną, pod którą będziesz starał się zoptymalizować parametry odśmiecania
+* Spośród wielu metryk opisujących zachowanie GC, musisz wybrać jedną,
+pod którą będziesz starał się zoptymalizować parametry odśmiecania
 * Najczęściej będą to:
 ** Rozmiar sterty
 ** Przepustowość
 ** Czas pauzy
 
-== 
+=== Grzechy główne manipulacji GC
 
-* Przedwczesna optymalizacja GCnie rób tego jeśli naprawdę nie musisz
-* Brak wiary w ergonomię GCbyć może -XX:MaxGCPauseMillis=<nnn> i -XX:GCTimeRatio=<nnn> to jedyne parametry które powinieneś znać
-* Wiara że optymalizacja GC przykryje złe nawyki w pisaniu kodu czy też brak pragmatyzmu w architekturze systemu
+* Przedwczesna optymalizacja GC, nie rób tego jeśli naprawdę nie musisz
+* Brak wiary w ergonomię GC, być może `-XX:MaxGCPauseMillis=<nnn>`
+i `-XX:GCTimeRatio=<nnn>` to jedyne parametry które powinieneś znać
+* Wiara że optymalizacja GC przykryje złe nawyki w pisaniu kodu czy też
+brak pragmatyzmu w architekturze systemu
 
-== 
+=== Grzechy główne manipulacji GC
 
 * Brak systemowego/całościowego podejścia do testowania wydajności
 * stackoverflow.com i google.com to nie są miejsca gdzie znajdziesz parametry swojego JVM
 * Brak zrozumienia jak działają poszczególne algorytmy odśmiecania i interakcji pomiędzy JVM i systemem operacyjnym
 
-== 
 
-* Spośród wielu metryk opisujących zachowanie GC, musisz wybrać jedną, pod którą będziesz starał się zoptymalizować parametry odśmiecania
-* Najczęściej będą to:
-** Rozmiar sterty
-** Przepustowość
-** Czas pauzy
-
-== 
+=== Grzechy główne manipulacji GC
 
 * Różne wymagania alokacji i odśmiecanie dla różnych architektur
 ** Przetwarzanie wsadowe
