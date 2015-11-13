@@ -125,9 +125,10 @@ digraph {
 
 === Reachability analisys
 
-* An object is alive if it is referenced by a live object.
-* An object is alive if a static reference to it exists (part of the root set).
-* An object is alive if a stack reference to it exists (part of the root set).
+* An object is alive if it is referenced by a live object
+* An object is alive if a static reference to it exists (part of the root set)
+* An object is alive if a stack reference to it exists (part of the root set)
+* An object is alive if a object is part of root set
 
 === Faza "mark"
 
@@ -191,7 +192,7 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 * major
 * full
 
-=== Dla ciekawych
+=== Dla ciekawskich
 
 * http://psy-lob-saw.blogspot.com/2014/10/the-jvm-write-barrier-card-marking.html[The JVM Write Barrier - Card Marking]
 * http://www.ibm.com/developerworks/library/j-jtp11253/[Java theory and practice: Garbage collection in the HotSpot JVM]
@@ -260,14 +261,14 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 
 * Dla każdego regionu, jest wyznacza wartość “density” (stosunek ilość żywych bajtów do całkowitej ilości bajtów) 
 * W tym kroku wiemy także, że podczas poprzedniej kolekcji:
-* ** obiekty były kompaktowane do lewej
+* obiekty były kompaktowane do lewej
 ** nowe obiekty które od tego czasu zostały przeniesione do “Old” znajdują się po prawej stronie
 ** Więc im obiekt bardziej na lewo tym starszy, tym mniejsza szansa, że będzie usuwany z pamięci
 
 == 
 
 * Powyższe informacje pozwalają na pewna optymalizacje:
-* ** zaczynając od lewej, szukany jest region o gęstości (“density”), z którego najwięcej zyskamy jeśli go posprzątamy,
+* zaczynając od lewej, szukany jest region o gęstości (“density”), z którego najwięcej zyskamy jeśli go posprzątamy,
 ** wszystkie region na lewo nie sprzątane, i nazywane są “dense prefix”
 * Dodatkowo podczas tej fazy już wiadomo obiekty z którego regiony zostaną przeniesione do danego regionu (z reguły te na prawo wypełniają te na lewo)
 
@@ -325,19 +326,16 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 * W przypadku pojawienia się tego komunikatu, CMS zostaje na czas tego uruchomienia „Full GC” zastąpione SerialGC
 * Concurrent Mode Failure jest wynikiem defragmentacji generacji „Old” i niemożliwością zaalokowania odpowiedniego ciągłego obszaru pamięci. 
 
-== 
-
-
-== 
+== Wydajność GC
 
 * Analiza dostępności obiektów - „reachability analisys”
-* Kopiowanie obiektów pomiędzy przestrzeniami compacting vs non-compacting vs copying
+* Kopiowanie obiektów pomiędzy przestrzeniami, compacting vs non-compacting vs copying
 * Aktualizacja referencji do obiektów które zostały przeniesione
 * Kompaktowanie pamięci
 
-== 
+== Garbage First, G1
 
-* G1 znany także jako „garbage first”, to nowy algorytm, który w wersji eksperymentalnej pojawił się już w Java 6, w pełni wspierany od wersji 7u4
+* G1 znany także jako „garbage first”, to nowy algorytm, który w wersji eksperymentalnej pojawił się już w Java 6, w pełni wspierany od wersji 7u4, planowany jako domyślny GC od wersji JDK 9,
 * -XX:+UseG1GC
 * Jest kolejna próba zminimalizowania pauz w działaniu aplikacji, przy jednoczesnym kompaktowaniu pamięci (przestrzeni „Old”)
 
@@ -495,7 +493,7 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 		link:http://www.azulsystems.com/jHiccup[http://www.azulsystems.com/jHiccup]
 	, czyli mamy czkawkę, czy nie?
 
-== 
+== Trzy wymiary automatycznego zarządzania pamięcią
 
 * Spośród wielu metryk opisujących zachowanie GC, musisz wybrać jedną, pod którą będziesz starał się zoptymalizować parametry odśmiecania
 * Najczęściej będą to:
@@ -528,3 +526,10 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 * Różne wymagania alokacji i odśmiecanie dla różnych architektur
 ** Przetwarzanie wsadowe
 ** Aplikacje stanowe i bezstanowe
+
+== Dodatkowe odnośniki
+
+* https://plumbr.eu/blog/category/garbage-collection[Garbage collectors at Plumbr]
+* http://www.dynatrace.com/en/javabook/how-garbage-collection-works.html[Garbage collectors at DynaTrace]
+* http://gchandbook.org[The Garbage Collection Handbook]
+* http://www.cs.kent.ac.uk/people/staff/rej/gcbib/[the Garbage Collection Bibliography]
