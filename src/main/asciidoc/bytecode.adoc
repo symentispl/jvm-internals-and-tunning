@@ -109,13 +109,68 @@ defined set operands
 
 === invoke*
 
+* Bytecode posiada 5 różnych instrukcji służących do wywoływania metod,
+** `invokevirtual`
+** `invokespecial`
+** `invokeinterface`
+** `invokestatic`
+** `invokedynamic`
+** różnią się typem tzw. `receiver` czyli pierwszego elementu na stosie oraz
+w jaki sposób jest określania metoda, która ma zostać wywołana
+
+=== virtual, special, interface
+
+* wszystkie powyższe bytecode wymagają by pierwszym elementem na stosie był
+tzw. `receiver`, czyli obiekt na którym zostanie wywołana metoda, przy czym
+** `invokevirtual`, class of object
+** `invokespecial`, type of reference
+** `invokeinterface`, same as invoke virtual but reference type must be interface,
+
+http://www.artima.com/underthehood/invocationP.html
+
 === Exception table
+
+----
+0: invokestatic  #16 // Method callSomething:()V
+3: goto          36
+6: astore_1
+7: getstatic     #19 // Field java/lang/System.out:Ljava/io/PrintStream;
+36: getstatic     #19 // Field java/lang/System.out:Ljava/io/PrintStream;
+39: ldc           #31 // String Done
+41: invokevirtual #33 // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+44: return
+    Exception table:
+       from    to  target type
+           0     3     6   Class java/lang/Exception
+           0    14    25   any
+----
+
+=== Exception table
+
+* przechowuje informacje o blokach kodu `catch` oraz `finnaly`, wdanej metodzie
+* oraz mapowanie pomiędzy typem wyjątku a blockiem kodu
+* bytecode nie posiada opcode dla słów kluczowych `catch` i `finally` (Java)
 
 === StackMapTable
 
+* atrybut wspierany przez javac i JVM od wersji JDK 6, wymagany od wersji JDK 7,
+* jest wykorzystywny podczas weryfikacji kontroli typów poprzez "class loader"
+* jest to kolekcja tzw. "stack map frames"
+* przyspiesza ładowanie .class oraz gwarantuje mniejsze zużycie pamięci
+
 === LocalVariableTable
 
+* jest to opcjonalny atrybut, wykorzystywane przez debugger, przechowuje
+informacje o nazwach zmiennych
+
 === LineNumberTable
+
+* jest to opcjonalny atrybut, wykorzystywane przez debugger, przechowuje
+mapowanie pomiędzy numerem lini w pliku źródłowym a bci (bytecode index)
+
+=== Specyfikacja bytecode
+
+* link:https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html[The class File Format]
 
 === Przegląd narzędzi do manipulacji
 
@@ -173,7 +228,7 @@ sparse conditional constant propagation, dead code elimination,
 global value numbering, partial redundancy elimination, strength reduction,
 register allocation.
 
-=== Inlining: matka wszystkich optymalizacji
+=== inlining
 
 [source,java]
 ----
@@ -192,6 +247,56 @@ int doubleAndAdd(int x, int y){
   return (x+x)+(y+y);
 }
 ----
+
+=== inlining: matka wszystkich optymalizacji
+
+[source,java]
+----
+public void m(){
+	n(this);
+}
+
+public static n(Object obj){
+	if(obj==null){
+		doSomething();
+	}
+}
+----
+
+=== inlining
+
+[source,java]
+----
+public void m(){
+	if(this==null){
+		doSomething();
+	}
+}
+----
+
+=== null check folding
+
+[source,java]
+----
+public void m(){
+	if(false){
+		doSomething();
+	}
+}
+----
+
+=== dead code elimination
+
+[source,java]
+----
+public void m(){
+}
+----
+
+=== and last but not least
+
+`-XX:+UseFastEmptyMethods`
+
 
 === Ekonomia inlining
 
@@ -223,7 +328,6 @@ C2
 
 gdy chcesz zapisać wynik kompilacji do pliku
 `-XX:+LogCompilation -XX:LogFile=compilation.log`
-
 
 === Logowanie optymalizacji
 ----
@@ -294,23 +398,78 @@ y := w + 4
 z := y
 ----
 
-=== Loop unrolling
-
 === Kompilator C2
+
+* najbardziej zaawansowany i wydajny kompilator,
+* optymalizuje tzw. hot spots
+** `InlineFrequencyCount`
+** `InlineFrequencyRatio`
+** `InlineThrowCount`
+** `InlineThrowMaxSize`
+** `MaxInlineSize
 
 === sea of nodes
 
+* link:http://http://grothoff.org/christian/teaching/2007/3353/papers/click95simple.pdf['sea of nodes'] jest to forma reprezentacji kodu w postaci DFG (data flow graph)
+* wykorzystywana przez C2 kompilator
+* opcodes jako węzły, z uporządowanymi wejściami (ordered inputs)
+
+=== sea of nodes: example
+
+[source,java]
+----
+a = b + c
+e = c + d
+----
+
+[graphviz]
+----
+digraph {
+  a -> ADD
+  b -> ADD
+  ADD -> c
+  c -> DIV
+  d -> DIV
+  DIV -> e
+}
+----
+
 === register allocation by graph coloring
 
+* cichy bohater HotSpot, wszyscy dyskutują inlinining, jednak ten mechanizm
+zapewniam
+** optymalne wykorzystanie rejestrów procesora
+** zmniejszenie odwołań do pamięci RAM
+ 
 === On Stack Replacement
 
+* on stack replacement (OSR) to technika która umożliwia podmianę kodu,
+nie tylko po wyjściu z metody
+* umożliwia optymalizację długich pętli w ich trakcie działania,
+* podmiana kodu odbywa się na tzw. back trace/egde, czyli przy przejsciu pętli
+do następnej iteracji
+
 === Traps, Type profile and Megamorphs
+
+* 'uncommon traps' wyzwalają deoptymalizację,
+* to bloki kodu generowane przez kompilator, sprawdzające poprawność warunków
+optymalizacji
+**
+
+
+=== loop unrolling
+
+=== string concat
+
+=== pointer compare
 
 === Lock elision, biased locking, adaptive locking (fast path lock)
 
 === Escape analisys (ojciec optymalizacji)
 
 === Deopitmization
+
+http://www.slideshare.net/dougqh/jvm-mechanics-when-does-the
 
 === Code cache
 
