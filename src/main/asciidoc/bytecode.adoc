@@ -11,7 +11,7 @@
 
   Java Virtual Machine bytecode is a low level language for non existing CPU
 
-=== Struktura pliku .class
+=== .class file structure
 
 ----
 ClassFile {
@@ -126,6 +126,31 @@ tzw. `receiver`, czyli obiekt na którym zostanie wywołana metoda, przy czym
 ** `invokespecial`, type of reference
 ** `invokeinterface`, same as invoke virtual but reference type must be interface,
 
+=== invokeinterface
+
+* why a separate opcode is necessary for interface references?
+* when the Java virtual machine loads a class file, it may create a method table for the class.
+* _method table_ is just an array of direct references to the bytecodes for each
+instance method that can be invoked on an object, including methods inherited
+from superclasses.
+* JVM uses a different opcode to invoke a method given an interface reference
+because it can't make as many assumptions about the method table offset as it
+can given a class reference.
+* if the JVM has a class reference, it knows each method will always occupy the
+same position in the method table, independent of the actual class of the object.
+* this is not true with an interface reference: The method could occupy different
+locations for different classes that implement the same interface.
+
+=== invokedynamic
+
+* `invokedynamic` means the ability to invoke a method without statically
+binding to a specific type, and perhaps additionally without specifying static
+types for the parameter list
+* `invokedynamic` is linked at runtime by use of _bootstrap_ methods, which
+return method handles
+* this was original designed to support dynamic languages and is also foundation
+of lambdas implementation in JDK 8
+
 http://www.artima.com/underthehood/invocationP.html
 
 === Exception table
@@ -182,14 +207,51 @@ mapowanie pomiędzy numerem lini w pliku źródłowym a bci (bytecode index)
 
 === Java Instrumentation API
 
-=== Interpretacja bytecode
+* java.lang.instrument defines mechanism to introspect and transform code before
+it is passed to class loader
+* class file -> instrument -> class loader
+
+=== coding the agent
+
+[source,java]
+----
+import java.lang.instrument.ClassFileTransformer;
+import java.lang.instrument.Instrumentation;
+import java.security.ProtectionDomain;
+
+public class Agent {
+	public static void premain(String agentArgs,
+							   Instrumentation inst) {
+		inst.addTransformer(new ClassFileTransformer() {});
+	}
+}
+----
+
+=== setting up an artifact
+
+[source]
+META-INF/MANIFEST.MF
+----
+Premain-Class: pl.symentis.bytecode.instrument.Agent
+----
+
+  java -javaagent:myagent.jar MyClass
+
+=== class definition, redefinition and retransformation
+
+* the request for a new class definition is made with java.lang.ClassLoader#defineClass or its native equivalents.
+* the request for a class redefinition is made with Instrumentation.redefineClasses or its native equivalents.
+* the request for a class retransformation is made with Instrumentation#retransformClasses or its native equivalents.
+* the transformer is called during the processing of the request, before the class file bytes have been verified or applied.
+
+=== bytecode interpreters
 
 * C++ template
 * ASM template
 * interpreter frame
 * OpenJDK Zero and Shark
 
-== Kompilator Just in Time
+== just in time compiler
 
 Jest częscią maszyny wirtualnej HotSpot i jest odpowiedzialny za optymalizację
 i kompilację bytecode w czasie działania maszyny wirtualnej.
@@ -440,7 +502,7 @@ digraph {
 zapewniam
 ** optymalne wykorzystanie rejestrów procesora
 ** zmniejszenie odwołań do pamięci RAM
- 
+
 === On Stack Replacement
 
 * on stack replacement (OSR) to technika która umożliwia podmianę kodu,
@@ -459,24 +521,173 @@ optymalizacji
 
 === loop unrolling
 
-=== string concat
+* optymalizacja, która zamienia pętle, na wiele powtórzeń tego samego bloku kodu,
+**  `-XX:LoopMaxUnroll` = 16
+**  `-XX:LoopOptsCount` = 43
+**  `-XX:LoopUnrollLimit` = 60
+**  `-XX:LoopUnrollMin` = 4
+**  `-XX:LoopUnswitching` = true
 
 === pointer compare
 
-=== Lock elision, biased locking, adaptive locking (fast path lock)
+=== string optimization
 
-=== Escape analisys (ojciec optymalizacji)
+=== string concat
+
+* collapses recursive patterns
+* pre-allocation of buffer size (counts size of destination string and allocates spaces for it not-zeroing memory)
+
+=== lock elision, biased locking, adaptive locking (fast path lock)
+
+=== lock elision
+
+[source,java]
+----
+public void getNames(){}
+  List v = new Vector(); // <1>
+  v.add("Moe"); // <2>
+  v.add("Larry");
+  v.add("Curly");
+  return v;
+ }
+----
+<1> notice use of vector, it is synchronized, but this object never escapes the thread
+<2> will inline `add(Object)` method, and remove locks (thanks to escape analisis)
+
+=== biased locking
+
+[source,java]
+----
+int i = 0;
+synchronized(this){
+
+} // <1>
+i++;
+synchronized(this){
+
+}
+----
+<1> will not unlock, other thread may need to revoke it, before he will be able
+to enter this block
+
+=== biased locking
+
+* `-XX:BiasedLockingStartupDelay=4000`, biased locking is not on, until this delay
+* `-XX:BiasedLockingBulkRebiasThreshold=20`,
+* `BiasedLockingBulkRevokeThreshold=40`
+* `BiasedLockingDecayTime`
+* `PrintPreciseBiasedLockingStatistics`
+* `TraceBiasedLocking`
+
+=== adaptive locking
+
+* a first attempt to lock is done using a simple compare-and-exchange (CAS)
+operation. This is very efficient as it can usually translate into a direct CPU
+instruction (e.g cmpxchg).
+* if the lock is either free or has been previously biased toward this thread
+the lock on the object is obtained for the thread and execution can continue immediately.
+* if the CAS fails the JVM will perform one round of spin locking where the
+thread parks to effectively put it to sleep between retrying the CAS.
+* if these initial attempts fail (signaling a fairly higher level of contention for the lock)
+the thread will move itself to a blocked state and enqueue itself in the list of
+threads waiting for the lock to be notified
+
+=== adaptive locking: links
+
+* link:http://blog.takipi.com/5-things-you-didnt-know-about-synchronization-in-java-and-scala/[5 Things You Didn’t Know About Synchronization in Java and Scala]
+* link:http://arturmkrtchyan.com/jvm-lock-spinning[JVM lock spinning]
+* link:http://hg.openjdk.java.net/jdk8/jdk8/hotspot/file/87ee5ee27509/src/share/vm/runtime/synchronizer.cpp[OpenJDK 8 synchronizer]
+
+=== escape analisys (a father of all optimizations)
+
+* it analyzes scope of object's uses, to find out if object is used globally or
+is local to a thread
+* helps decide whether to allocate it on the Java heap
+* enables many other optimizations, like lock elision
+* it is available since JDK 6u23, and it is always on
+* based on link:http://www-plan.cs.colorado.edu/diwan/7135/escapeOopsla99.ps[Flow-insensitive escape analysis algorithm]
 
 === Deopitmization
 
-http://www.slideshare.net/dougqh/jvm-mechanics-when-does-the
+[shaape]
+----
 
-=== Code cache
++--------------+                       +-----------+
+|   Interpret  |---------------------->|  Profile  |
++--------------+                       +-----------+
+       ^                                     |
+       |                                     |
+       |                                     |
+       |                                     |
+       |                                     |
++--------------+                       +-----------+
+|  Deoptimize  |<----------------------|  Compile  |
++--------------+                       +-----------+
+----
 
-== Narzędzia
+=== when code gets deoptimized
 
-=== Disasembly plugin
+* triggered by traps (remember C2 optimizes only for most common cases,
+  that's why it is called speculative)
+* through CHA (class hierarchy analisys), aka type profile
+* when code is no longer hot
+* more about it at link:http://www.slideshare.net/dougqh/jvm-mechanics-when-does-the[JVM Mechanics: When Does the JVM JIT & Deoptimize?]
 
-=== JITWatch
+=== an example of uncommon case
+
+[source, java]
+----
+static final int CHUNK_SIZE=1000;
+
+public static void main(String[] argv){
+  Object trap = null;
+  for(int i=0;i<250;++i){
+    for(int j=0;j<CHUNK_SIZE;++j){
+      new Object();
+      if(trap!=null){ //
+        System.out.println("I am being trapped!");
+        trap=null;
+      }
+    }
+    if (i == 200){ // <1>
+      trap = new Object();
+    }
+  }
+}
+----
+<1> uncommon trap
+
+=== an example of uncommon case
+----
+ 64   16 %   3     UncommonTrap::main @ 13 (70 bytes)
+ 65   17     3     UncommonTrap::main (70 bytes)
+ 65   18 %   4     UncommonTrap::main @ 13 (70 bytes)
+I am being trapped!
+ 67   16 %   3     UncommonTrap::main @ -2 (70 bytes)   made not entrant
+----
+
+=== code cache and inline cache
+
+== Tools
+
+=== disasembly plugin
+
+* this is an unofficial plugin to JVM which prints out assembly code generated
+by JIT compilers
+* it is not distributed with official JDK, and you have to build it from OpenJDK,
+* or download link:https://kenai.com/projects/base-hsdis/downloads[prebuilt binaries]
+* you can find it in `hotspot/src/share/tools/hsdis` directory of Open JDK
+* once you get binary, you will have to put it in `jre/lib/amd64` directory
+* it is required by couple of diagnostic options, more about it at
+link:http:https://wiki.openjdk.java.net/display/HotSpot/PrintAssembly[OpenJDK Wiki]
+
+=== jitwatch: visualiser for HotSpot
+
+* link:https://github.com/AdoptOpenJDK/jitwatch[jitwatch]
+* requires following options `-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading
+-XX:+LogCompilation -XX:LogFile=mylogfile.log`
+* if you want to HotSpot to output the disassembled native code then add the JVM switch `-XX:+PrintAssembly`
 
 === JMH
+
+=== Profilers are bad for ya!
