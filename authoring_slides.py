@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 from livereload import Server
-from os.path import join
 import sh
 
 SLIDES_SRC = "src/main/asciidoc"
@@ -21,9 +20,10 @@ def render_slides():
 def process_output(line):
     print line
 
-init_slides()
-render_slides()
+if __name__=="__main__":
+    init_slides()
+    render_slides()
 
-server = Server()
-server.watch('src/main/asciidoc/*.adoc', render_slides)
-server.serve(root='target/slides')
+    server = Server()
+    server.watch('src/main/asciidoc/*.adoc', render_slides)
+    server.serve(root='target/slides')

@@ -32,7 +32,7 @@ Zliczanie referencji to forma automatycznego zarządzania pamięcią w której k
 * Umożliwia ona określenie czy dany obiekt jest osiągalny (czasami określany jako „live object”)
 * Obiekt jest osiągalny/”żywy” gdy jest co najmniej jedno odwołanie do tego obiektu, z innego obiektu który jest osiągalny, bezpośrednio lub też poprzez innego obiekty, które są osiągalne (transistive closure)
 
-=== Wady i zalety
+=== Korzenie odśmiecania
 
 * Analiza „reachability of objects” rozpoczyna się od tzw. „garbage collection roots”,
 ** Obiekty znajdując się na stosie wątku, „żywego wątku”
@@ -48,7 +48,7 @@ Zliczanie referencji to forma automatycznego zarządzania pamięcią w której k
     (known as infant mortality or the generational hypothesis)
     - Wikipedia
 
-== Założenie teorii pokoleniowej
+=== Założenie teorii pokoleniowej
 
 * Pokoleniowy odśmiecanie pamięci bazuje na dwóch założeniach,
 ** Większość nowych obiektów szybko staje się nieosiągalnych
@@ -139,15 +139,13 @@ digraph {
 
 === Garbage Collection roots
 
-* zmienne lokalne
-* wątki
+* "stack frame"
 * pola statyczne
 * JNI
-* pozostałe inne
 
 === Typy algorytmów
 
-* mark+copy
+* "mark+copy" aka compacting
 * mark+sweep+copy
 
 === Znakowanie kart i bariery
@@ -200,10 +198,9 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 
 === Warunkowe znakowanie kart
 
-*
-* '-XX:UseCondCardMark'
-
-=== Niepraktyczne informacje zarządzaniu pamięcią
+* W środowisku przy wysokim współczynniku współbieżności, zaznaczanie kart może być kosztowne
+* aby zmienjszyć ten koszt należy wykorzystać flagę `-XX:UseCondCardMark`
+* wynika to z potencjalnego zajścia 'false sharing' w środowiskach wieloprocesorowych
 
 == ParallelGC
 
@@ -226,6 +223,22 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 
 === Mechanika ParallelGC
 
+* Każdy “żywy” obiekt jest natychmiast kopiowany do przestrzeni “To”, lub do przestrzeni “Old”
+** jeśli przetrwał odpowiednią ilość kolekcji w przestrzeni Young (TenuringThreshold)
+** lub gdy w „To” nie ma już miejsca dla obiektu (major GC)
+
+=== Słów kilka "object header"
+
+* nagłówek obiektu w JVM znajduje się przed polami obiektu
+* znajdują się w nim następujące informacje (link:http://hg.openjdk.java.net/jdk8/jdk8/hotspot/file/87ee5ee27509/src/share/vm/oops/markOop.hpp)
+** "hashCode" obiektu
+** wiek obiektu
+** flaga "mark" wykorzystywane przez GC
+** a także informacje wykorzystywane przez biased locking
+** oraz czy na jest "locked" (`monitorenter` i `monitorexit`)
+
+=== Mechanika ParallelGC
+
 * Przestrzeń “To” staje się przestrzenią “From” i “From”->”To”
 * Czyli po każdym przebiegu tego odśmiecacza przestrzeń „To” jest pusta
 * Ponieważ „mark and copy” odbywa się wielowątkowo, każdy z wątków GC dostaje swój wycinek “To”
@@ -237,6 +250,9 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 * maksymalny czas pauzy, `-XX:MaxGCPauseMillis=<N>`, maksymalny oczekiwany czas pauzy w milisekundach
 * przepustowość, `-XX:GCTimeRatio=<N>`, liczony jako współczynnik czasu spędzonego na odśmiecanie w stosunku do całego czasu działania aplikacji, (1/1+N), domyślna wartość to 99
 * narzut, `-Xmx`, czyli maksymalny rozmiar pamięci,
+
+=== Ergonomia ParallelGC
+
 * jeśli cel maksymalnego czasu pauzy nie jest osiągniety, rozmiar tylko jednej z generacji jest pomniejszany
 * jeśli cel przepustowości nie jest osiągniety, rozmiary obydwu generacji są powiększane, proporcjonalnie do czasu odśmiecania w każdej z nich,
 
@@ -357,7 +373,7 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 === Organizacja pamięci w G1
 
 * Podobnie jak w przypadku poprzednich modeli pamięć jest podzielona na obszary, w których przechowywane są obiekty w rożnym wieku
-* W przeciwieństwie jednak do poprzedników, tych obszarów tworzonych przez G1 mamy do dyspozycji około 2000, każdy z tych obszarów ma taki sam rozmiar, -XX:G1HeapRegionSize=n
+* W przeciwieństwie jednak do poprzedników, tych obszarów tworzonych przez G1 mamy do dyspozycji około 2000, każdy z tych obszarów ma taki sam rozmiar, -XX:G1HeapRegionSize=n (pomiędzy 1Mb a 32 Mb)
 
 === Regiony w G1
 
@@ -370,8 +386,48 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 
 * Alokacja podobnie jak w poprzednich algorytmach, odbywa się głównie w przestrzeni „Eden”,
 * Chyba, że obiekt jest większy niż połowa rozmiary regiony, wtedy takie obiekty są alokowane w specjalnych przestrzeniach zwanych „humongous”
+
+=== Alokacja pamięci
+
 * Kiedy pojemność „Eden” zostanie osiągnięta, rozpoczyna się faza „young garbage collection”, nazywana także „evacuation pause”
 * Jest to faza „stop-the-world”, podczas której wykorzystwane jest wiele wątków, i obiekty kopiowane są do „to-space”, lub też w zależności od wieku obiektu (tenured threshold) do przestrzeni „old”
+
+=== Fazy współbieżnego odśmiecania "Old"
+
+* initial mark (stop the world)
+* root region scanning
+* concurrent marking
+* remark (stop the world)
+* cleanup (stop the world)
+* copying (stop the world)
+
+=== initial mark
+
+This is a stop the world event. With G1, it is piggybacked on a normal young GC. Mark survivor regions (root regions) which may have references to objects in old generation.
+
+=== root region scanning
+
+Scan survivor regions for references into the old generation. This happens while the application continues to run. The phase must be completed before a young GC can occur.
+
+=== concurrent marking
+
+Find live objects over the entire heap. This happens while the application is running. This phase can be interrupted by young generation garbage collections.
+
+=== remark
+
+Completes the marking of live object in the heap. Uses an algorithm called snapshot-at-the-beginning (SATB) which is much faster than what was used in the CMS collector.
+
+=== cleanup
+
+* Performs accounting on live objects and completely free regions. (Stop the world)
+* Scrubs the Remembered Sets. (Stop the world)
+* Reset the empty regions and return them to the free list. (Concurrent)
+
+=== copying
+
+These are the stop the world pauses to evacuate or copy live objects to new unused regions. This can be done with young generation regions which are logged as [GC pause (young)]. Or both young and old generation regions which are logged as [GC Pause (mixed)].
+
+http://www.oracle.com/technetwork/tutorials/tutorials-1876574.html
 
 == Podsumowanie algorytmów
 
@@ -416,17 +472,17 @@ Różni się od "Parallel Scavenge" pewnymi usprawnieniami które umożliwiają 
 === Metryki GC (przepustowość)
 
 * Poniższe metryki opisują efektywność odśmiecania pamięci
-** Przepustowość (throughput)Procent czasu nie spędzanego przez aplikacje na odśmiecaniu, 100% oznacza brak odśmiecania, przyjęło się przyjmować 95-98% jak poprawną wartość
-** Narzut na odśmiecanie (GC overhead)odwrotność przepustowości, czyli procent czasu spędzanego przez aplikację na odśmiecanie
+** Przepustowość (throughput) - procent czasu nie spędzanego przez aplikacje na odśmiecaniu, 100% oznacza brak odśmiecania, przyjęło się przyjmować 95-98% jak poprawną wartość
+** Narzut na odśmiecanie (GC overhead) - odwrotność przepustowości, czyli procent czasu spędzanego przez aplikację na odśmiecanie
 
 === Metryki GC (pauza)
 
-** Czas pauzy (pause time)Czas podczas którego działanie aplikacji jest wstrzymane na potrzeby odśmiecania
-** Częstotliwość odśmiecania(frequency of collection)jak często w czasie życia aplikacji następuje odśmiecanie
+** Czas pauzy (pause time) - czas podczas którego działanie aplikacji jest wstrzymane na potrzeby odśmiecania
+** Częstotliwość odśmiecania(frequency of collection) - jak często w czasie życia aplikacji następuje odśmiecanie
 
 === Metryki GC (narzut)
 
-** Narzut pamięci (footprint)Rozmiar pamięci wykorzystywanej przez maszynę JVM
+** Narzut pamięci (footprint) - rozmiar pamięci wykorzystywanej przez maszynę JVM
 ** Promptness, czas pomiędzy momentem kiedy obiekt stał się „unreachable” a momentem kiedy pamięć przez niego zajmowana została zwolniona
 
 == Narzędia i monitorowanie GC
@@ -506,25 +562,12 @@ rozpowszechniany razem z Java SDK
 * Gdzie vmid, jest identyfikatorem procesu JVM,
 * jstat umożliwia podpięcie się do procesu JVM i zbieranie różnego typu statystyk,
 
-=== Dostępne opcje jstat
-
-* -option to typ statystki którą ma wyświetlać jstat
-** class
-** compiler
-** gc
-** gccapacity
-** gccause
-** gcnew
-** gcnewcapacity
-** gcoldoldcapacity
-** gcpermcapacity
-** gcutil
-
 === Dodatkowe narzędzia
 
 * Warto zapoznać się z powyższymi narzędziami jak i formatami w jakich udostępniane są statystki odśmiecania, jednak na co dzień warto korzystać z wizualnych
 * VisualVM
 ** Wtyczka VisualGC, wymaga dodatkowej instalacji, pokazuje bieżące zachowanie GC
+* Java Mission Control i Flight Recorder
 
 === Dodatkowe narzędzia
 
@@ -534,6 +577,8 @@ rozpowszechniany razem z Java SDK
 * Jhiccup
 ** link:http://www.azulsystems.com/jHiccup[http://www.azulsystems.com/jHiccup]
 	, czyli mamy czkawkę, czy nie?
+* jClarity
+** link:http://www.jclarity.com/censum/
 
 === Dodatkowe narzędzia
 
@@ -562,7 +607,6 @@ brak pragmatyzmu w architekturze systemu
 * Brak systemowego/całościowego podejścia do testowania wydajności
 * stackoverflow.com i google.com to nie są miejsca gdzie znajdziesz parametry swojego JVM
 * Brak zrozumienia jak działają poszczególne algorytmy odśmiecania i interakcji pomiędzy JVM i systemem operacyjnym
-
 
 === Grzechy główne manipulacji GC
 
