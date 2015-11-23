@@ -1,0 +1,18 @@
+= Java Memory Model and concurrency
+:backend: revealjs
+:highlighter: pygments
+:stem: asciimath
+:source-highlighter: pygments
+:pygments-css: style
+:revealjs_theme: serif
+:revealjs_history: true
+
+== Java Memory Model
+
+== synchronized vs locks
+
+== memory fences
+
+== java.util.concurrent
+
+== lock free programming
