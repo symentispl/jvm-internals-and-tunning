@@ -694,6 +694,47 @@ link:http:https://wiki.openjdk.java.net/display/HotSpot/PrintAssembly[OpenJDK Wi
 -XX:+LogCompilation -XX:LogFile=mylogfile.log`
 * if you want to HotSpot to output the disassembled native code then add the JVM switch `-XX:+PrintAssembly`
 
+=== danger ahead: whitebox api
+
+* available since JDK8, it is internal API which let's you manipulate JVM behaviour
+* http://hg.openjdk.java.net/jdk8u/jdk8u/hotspot/file/0e4094950cd3/test/testlibrary/whitebox/sun/hotspot/WhiteBox.java[hotspot/test/testlibrary/whitebox/sun/hotspot/WhiteBox.java]
+* you can trigger verious events, like GC, JIT compilation
+* it used internally for testing
+
+=== building whitebox
+
+[source,bash]
+----
+cd hotspot/test/testlibrary/whitebox
+javac -sourcepath . -d . sun\hotspot\**.java
+jar cf wb.jar .
+# now you can run your app with it
+java -Xbootclasspath/a:wb.jar -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI ...
+----
+
+=== using whitebox
+
+[source,java]
+----
+import sun.hotspot.WhiteBox;
+
+public static class GCYoungTest {
+  static WhiteBox wb = WhiteBox.getWhiteBox();
+  public static Object obj;
+
+  public static void main(String args[]) {
+    obj = new Object();
+    System.out.println(wb.isObjectInOldGen(obj));
+    wb.youngGC();
+    wb.youngGC();
+    // 2 young GC is needed to promote object into OldGen
+    System.out.println(wb.isObjectInOldGen(obj));
+  }
+}
+----
+
+for this example you need to add `-XX:MaxTenuringThreshold=1` to make it work as expected.
+
 === Other tools
 
 * http://openjdk.java.net/projects/code-tools/jmh/[Java Microbenchmark Harness]
