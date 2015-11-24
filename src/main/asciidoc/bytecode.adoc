@@ -104,8 +104,8 @@ defined set operands
 * `ALOAD`,`ILOAD`,`DLOAD`,`FLOAD`, umieszcza wybraną zmienną lokalną na stosie,
 * `DSTORE`,`ASTORE`,`ISTORE`,`FSTORE`, umieszcza wartość z stosu w tablicy zmiennych lokalnych
 * każdy z powyższysz opcode przyjmuje dodatkowy bajt jak indeks w tablicy zmiennych lokalnych
-* `DUP`
-* `POP`
+* `DUP`, powiela obiekt na stosie,
+* `POP`, usuwa obiekt z stosu
 
 === invoke*
 
@@ -136,10 +136,14 @@ from superclasses.
 * JVM uses a different opcode to invoke a method given an interface reference
 because it can't make as many assumptions about the method table offset as it
 can given a class reference.
+
+=== invokeinterface
+
 * if the JVM has a class reference, it knows each method will always occupy the
 same position in the method table, independent of the actual class of the object.
 * this is not true with an interface reference: The method could occupy different
 locations for different classes that implement the same interface.
+* more about it, http://www.artima.com/underthehood/invocationP.html
 
 === invokedynamic
 
@@ -150,8 +154,6 @@ types for the parameter list
 return method handles
 * this was original designed to support dynamic languages and is also foundation
 of lambdas implementation in JDK 8
-
-http://www.artima.com/underthehood/invocationP.html
 
 === Exception table
 
@@ -196,6 +198,10 @@ mapowanie pomiędzy numerem lini w pliku źródłowym a bci (bytecode index)
 === Specyfikacja bytecode
 
 * link:https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html[The class File Format]
+* narzędzia,
+** javap, disassembler dostępny w JDK
+** org.objectweb.asm.util.ASMifier, z biblioteki ASM
+** jarScan od jitwatch
 
 === Przegląd narzędzi do manipulacji
 
@@ -380,10 +386,6 @@ C2
 * `-XX:MaxRecursiveInlizeLevel=1`
 * `-XX:MinInliningThreshold=250`
 
-=== Here comes the megamorph
-
-=== inline cache
-
 === Logowanie optymalizacji
 
 `-XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining`
@@ -412,9 +414,16 @@ gdy chcesz zapisać wynik kompilacji do pliku
 
 * compilation id
 * symbol
-* compiler tier [1..4], gdzie 1-3 to C1 a 4 to C2
+* compiler tier (aka level) [1..4], gdzie 1-3 to C1 a 4 to C2
 * method
 * compiler cause
+
+=== Poziomy kompilacji
+
+* 1 - C1 kompilator, nie uwzględnia danych z pomiarów, małe metody, "accessor"
+* 2 - C1 kompilator, po wstępnym profilowaniu, domyślnie 1000 wywołań, dla tiered compilation 1500, wybrane optymalizacje
+* 3 - C1 kompilator, pozostałe optymalizacje
+* 4 - C2 kompilator
 
 === Symbole
 
@@ -431,11 +440,7 @@ gdy chcesz zapisać wynik kompilacji do pliku
 
 | n | Native wrapper
 
-| m | Nie pamiętam spawdzić
-
 |===
-
-=== Dead code elimination
 
 === Global value numbering
 
@@ -468,7 +473,7 @@ z := y
 ** `InlineFrequencyRatio`
 ** `InlineThrowCount`
 ** `InlineThrowMaxSize`
-** `MaxInlineSize
+** `MaxInlineSize`
 
 === sea of nodes
 
@@ -502,6 +507,7 @@ digraph {
 zapewniam
 ** optymalne wykorzystanie rejestrów procesora
 ** zmniejszenie odwołań do pamięci RAM
+* wykorzystywany algorytm to https://en.wikipedia.org/wiki/Graph_coloring[graph coloring]
 
 === On Stack Replacement
 
@@ -513,11 +519,10 @@ do następnej iteracji
 
 === Traps, Type profile and Megamorphs
 
-* 'uncommon traps' wyzwalają deoptymalizację,
+* 'uncommon traps' aka 'guards' wyzwalają deoptymalizację, ponieważ C2 optymalizuje kod dla najczęstrzych przypadków
 * to bloki kodu generowane przez kompilator, sprawdzające poprawność warunków
 optymalizacji
-**
-
+* typed profile, przechowuje informacje o oczekiwanym typie tzw. "receiver",
 
 === loop unrolling
 
@@ -530,14 +535,14 @@ optymalizacji
 
 === pointer compare
 
-=== string optimization
+* if JIT compiler can see that a is new object (due to
+inlining and escape analisys) it can not be equal
+to any previously allocated objects, this triggers pointer compare check folding
 
 === string concat
 
 * collapses recursive patterns
 * pre-allocation of buffer size (counts size of destination string and allocates spaces for it not-zeroing memory)
-
-=== lock elision, biased locking, adaptive locking (fast path lock)
 
 === lock elision
 
@@ -666,20 +671,21 @@ I am being trapped!
  67   16 %   3     UncommonTrap::main @ -2 (70 bytes)   made not entrant
 ----
 
-=== code cache and inline cache
-
 == Tools
 
 === disasembly plugin
 
 * this is an unofficial plugin to JVM which prints out assembly code generated
 by JIT compilers
+* it is required by couple of diagnostic options, more about it at
+link:http:https://wiki.openjdk.java.net/display/HotSpot/PrintAssembly[OpenJDK Wiki]
+
+=== disasembly plugin
+
 * it is not distributed with official JDK, and you have to build it from OpenJDK,
 * or download link:https://kenai.com/projects/base-hsdis/downloads[prebuilt binaries]
 * you can find it in `hotspot/src/share/tools/hsdis` directory of Open JDK
 * once you get binary, you will have to put it in `jre/lib/amd64` directory
-* it is required by couple of diagnostic options, more about it at
-link:http:https://wiki.openjdk.java.net/display/HotSpot/PrintAssembly[OpenJDK Wiki]
 
 === jitwatch: visualiser for HotSpot
 
@@ -688,6 +694,11 @@ link:http:https://wiki.openjdk.java.net/display/HotSpot/PrintAssembly[OpenJDK Wi
 -XX:+LogCompilation -XX:LogFile=mylogfile.log`
 * if you want to HotSpot to output the disassembled native code then add the JVM switch `-XX:+PrintAssembly`
 
-=== JMH
+=== Other tools
+
+* http://openjdk.java.net/projects/code-tools/jmh/[Java Microbenchmark Harness]
+* http://openjdk.java.net/projects/code-tools/jol/[Java Object Layout]
+* and other tools from http://openjdk.java.net/projects/code-tools/[Code tools project]
+* profilers, JProfiler, YourKit,
 
 === Profilers are bad for ya!
