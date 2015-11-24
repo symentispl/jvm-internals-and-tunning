@@ -579,6 +579,8 @@ rozpowszechniany razem z Java SDK
 	, czyli mamy czkawkę, czy nie?
 * jClarity
 ** link:http://www.jclarity.com/censum/
+* Plumbr
+** https://plumbr.eu/
 
 === Dodatkowe narzędzia
 
