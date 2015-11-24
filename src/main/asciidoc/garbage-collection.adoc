@@ -119,6 +119,13 @@ digraph {
 	F->G
 	G->H
 
+  I->J
+
+  A [label="A (GC Root)"]
+  F [label="F (GC Root)"]
+  I [label="I (unreachable)"]
+  J [label="J (unreachable)"]
+
 }
 ----
 
@@ -185,9 +192,9 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 
 === Małe, duże i pełne pauzy
 
-* minor
-* major
-* full
+* minor, kolekcje w przstrzeni "Eden"
+* major, kolekcje w przestrzeniach "Survivor"
+* full, kolekcja w przestrzeni Old, wiąże się z kompaktowaniem tego obszaru
 
 === Dla ciekawskich
 
@@ -207,6 +214,9 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 * włączany opcją `-XX:+UseParallelGC`
 * Od Java 5 domyślny “garbage collector” (z nadejściem JDK9, planowane zastąpienie go przez G1)
 * Wykorzystuje wiele wątków do odśmiecania pamięci, zarówno podczas "minor" i "major" kolekcji
+
+=== ParallelGC
+
 * jest to odśmiecacz typu mark+copy, obiekty są kopiowane do przestrzeni Survivor
 * JVM posiada dwie przestrzenie Survivor (Survivor0 + Survivor1), znane także jako "To" i "From"
 * przestrzenie Survivor mają ten sam rozmiar
@@ -217,6 +227,9 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 * ilość wątków GC można kontrolować parametrem `-XX:ParallelGCThreads=<N>`,
 * domyślnie dla maszyn o CPU<=8; N=CPU
 * dla pozostałych przypadków N=5/8 CPU lub N=5/16 CPU
+
+=== Mechanika ParallelGC
+
 * Każdy “żywy” obiekt jest natychmiast kopiowany do przestrzeni “To”, lub do przestrzeni “Old”
 ** jeśli przetrwał odpowiednią ilość kolekcji w przestrzeni Young (TenuringThreshold)
 ** lub gdy w „To” nie ma już miejsca dla obiektu (major GC)
@@ -230,12 +243,13 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 === Słów kilka "object header"
 
 * nagłówek obiektu w JVM znajduje się przed polami obiektu
-* znajdują się w nim następujące informacje (link:http://hg.openjdk.java.net/jdk8/jdk8/hotspot/file/87ee5ee27509/src/share/vm/oops/markOop.hpp)
 ** "hashCode" obiektu
 ** wiek obiektu
 ** flaga "mark" wykorzystywane przez GC
 ** a także informacje wykorzystywane przez biased locking
 ** oraz czy na jest "locked" (`monitorenter` i `monitorexit`)
+* więcej szczegółów, w pliku http://hg.openjdk.java.net/jdk8/jdk8/hotspot/file/87ee5ee27509/src/share/vm/oops/markOop.hpp[markOop.hpp]
+* oraz tutaj, http://www.slideshare.net/cnbailey/memory-efficient-java[Memory Efficient Java]
 
 === Mechanika ParallelGC
 
@@ -254,7 +268,7 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 === Ergonomia ParallelGC
 
 * jeśli cel maksymalnego czasu pauzy nie jest osiągniety, rozmiar tylko jednej z generacji jest pomniejszany
-* jeśli cel przepustowości nie jest osiągniety, rozmiary obydwu generacji są powiększane, proporcjonalnie do czasu odśmiecania w każdej z nich,
+* jeśli cel przepustowości nie jest osiągniety, rozmiary obydwu generacji są powiększane, proporcjonalnie do czasu odśmiecania w każdej z nich
 
 === Kilka pokręteł
 
@@ -309,8 +323,7 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 === Sweeping step
 
 * Regiony które mogą być sprzątane jednocześnie są dzielone miedzy watki,
-* region które nie zapełniają innych regionów (patrz poprzedni krok)
-* lub region które są puste,
+* region które nie zapełniają innych regionów (patrz poprzedni krok) lub region które są puste,
 * Wątki najpierw usuwają „unreachable objects”
 * A potem przesuwają obiekty (compact)
 * Dzięki optymalizacji (nie skanujemy całego regionu „Old”), możemy odzyskać dużo pamięci, mniejszym kosztem, ponieważ na lewo są stare obiekty
@@ -355,7 +368,22 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 * W przypadku pojawienia się tego komunikatu, CMS zostaje na czas tego uruchomienia „Full GC” zastąpione SerialGC
 * Concurrent Mode Failure jest wynikiem defragmentacji generacji „Old” i niemożliwością zaalokowania odpowiedniego ciągłego obszaru pamięci.
 
+=== Kilka pokręteł
+
+* `-XX:+CMSConcurrentMTEnabled` i `-XX:ConcGCThreads=<N>`, ilość wątków wykorzystywanych przez GC podczas faz współbieżnych
+* `-XX:PrintAdaptiveSizePolicy`, wyświetla informacje o zmianach obszarów
+* `-XX:+AdaptiveSizePolicy`, włącza politykę dynamicznej zmiany rozmiaru obszarów
+
+=== Kilka pokręteł
+
+* `-XX+UseCMSInitiatingOccupancyOnly` oraz `-XX:CMSInitiatingOccupancyFraction`, procentowy rozmiary obszaru Old, wymuszający odśmiecanie
+* w przeciwieństwie do "throughput collectors", który wyzwalana są gdy jest brak dostępnej pamięci
+* `-XX:+CMSClassUnloadingEnabled`, usuwanie klas podczas faz CMS
+* `-XX:+CMSIncrementalMode`, wymusza regularne uruchamianie CMS, kosztem wątków aplikacji
+
 == ParNewGC
+
+* ParNewGC, jest modyfikacją ParallelOld, który umożliwia współbieżne działanie GC w obszarze New i Old
 
 == Wydajność GC
 
@@ -545,7 +573,6 @@ Desired survivor size 2228224 bytes, new threshold 3 (max 6)
 66888K->32676K(126720K), 0,0077602 secs]
 [Times: user=0,02 sys=0,00, real=0,01 secs]
 ----
-
 
 === Zapisywanie logów
 
