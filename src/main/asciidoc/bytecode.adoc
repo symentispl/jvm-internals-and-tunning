@@ -1,0 +1,746 @@
+= Byte code i maszyna wirtualna
+:backend: revealjs
+:highlighter: pygments
+:stem: asciimath
+:source-highlighter: pygments
+:pygments-css: style
+:revealjs_theme: serif
+:revealjs_history: true
+
+
+== Byte code i maszyna wirtualna
+
+  Java Virtual Machine bytecode is a low level language for non existing CPU
+
+=== .class file structure
+
+----
+ClassFile {
+    u4             magic;
+    u2             minor_version;
+    u2             major_version;
+    u2             constant_pool_count;
+    cp_info        constant_pool[constant_pool_count-1];
+    u2             access_flags;
+    u2             this_class;
+    u2             super_class;
+    u2             interfaces_count;
+    u2             interfaces[interfaces_count];
+    u2             fields_count;
+    field_info     fields[fields_count];
+    u2             methods_count;
+    method_info    methods[methods_count];
+    u2             attributes_count;
+    attribute_info attributes[attributes_count];
+}
+----
+
+=== Struktura pliku .class
+
+Bytecode is stored in files, which format is defined by
+link:http://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html[lass
+  file format spec]
+
+Bytecode is a stream of single byte size opcodes followed by
+defined set operands
+
+=== Hello world
+
+[source, asm]
+----
+0: getstatic #16
+3: ldc #22
+5: invokevirtual #24
+8: return
+----
+
+=== Constant pool
+
+----
+#1 = Utf8               ClassWithDefaultConstructor
+#2 = Class              #1             // ClassWithDefaultConstructor
+#3 = Utf8               java/lang/Object
+#4 = Class              #3             // java/lang/Object
+#5 = Utf8               <init>
+#6 = Utf8               (Ljava/lang/Integer;)V
+#7 = Utf8               ()V
+#8 = NameAndType        #5:#7          // "<init>":()V
+#9 = Methodref          #4.#8          // java/lang/Object."<init>":()V
+#10 = Utf8               java/lang/Integer
+#11 = Class              #10            // java/lang/Integer
+#12 = Utf8               toString
+#13 = Utf8               ()Ljava/lang/String;
+#14 = NameAndType        #12:#13        // toString:()Ljava/lang/String;
+----
+
+=== Interpretacja bytecode
+
+[shaape]
+----
+                          +-----------------+
+                          |                 |
++---------+           +---+-------------+   |
+|         |   bci     |                 |   |
+| Thread  |---------->| Method bytecode +---+
+|         |           |                 |
+|         |           +-----------------+
+|         |
+|         |           +-----------------+
+|         |           |                 |
+|         |           |  Frame stack    |
+|         |           |                 |
+|         |           +-----------------+
+|         |
+|         |           +-----------------+
+|         |           |                 |
+|         |           | Local variables |
+|         |           |                 |
++---------+           +-----------------+
+----
+
+=== Bytecode, stack, variables
+
+=== Podstawowe operacje: manipulacja stosem
+
+* `ALOAD`,`ILOAD`,`DLOAD`,`FLOAD`, umieszcza wybraną zmienną lokalną na stosie,
+* `DSTORE`,`ASTORE`,`ISTORE`,`FSTORE`, umieszcza wartość z stosu w tablicy zmiennych lokalnych
+* każdy z powyższysz opcode przyjmuje dodatkowy bajt jak indeks w tablicy zmiennych lokalnych
+* `DUP`, powiela obiekt na stosie,
+* `POP`, usuwa obiekt z stosu
+
+=== invoke*
+
+* Bytecode posiada 5 różnych instrukcji służących do wywoływania metod,
+** `invokevirtual`
+** `invokespecial`
+** `invokeinterface`
+** `invokestatic`
+** `invokedynamic`
+** różnią się typem tzw. `receiver` czyli pierwszego elementu na stosie oraz
+w jaki sposób jest określania metoda, która ma zostać wywołana
+
+=== virtual, special, interface
+
+* wszystkie powyższe bytecode wymagają by pierwszym elementem na stosie był
+tzw. `receiver`, czyli obiekt na którym zostanie wywołana metoda, przy czym
+** `invokevirtual`, class of object
+** `invokespecial`, type of reference
+** `invokeinterface`, same as invoke virtual but reference type must be interface,
+
+=== invokeinterface
+
+* why a separate opcode is necessary for interface references?
+* when the Java virtual machine loads a class file, it may create a method table for the class.
+* _method table_ is just an array of direct references to the bytecodes for each
+instance method that can be invoked on an object, including methods inherited
+from superclasses.
+* JVM uses a different opcode to invoke a method given an interface reference
+because it can't make as many assumptions about the method table offset as it
+can given a class reference.
+
+=== invokeinterface
+
+* if the JVM has a class reference, it knows each method will always occupy the
+same position in the method table, independent of the actual class of the object.
+* this is not true with an interface reference: The method could occupy different
+locations for different classes that implement the same interface.
+* more about it, http://www.artima.com/underthehood/invocationP.html
+
+=== invokedynamic
+
+* `invokedynamic` means the ability to invoke a method without statically
+binding to a specific type, and perhaps additionally without specifying static
+types for the parameter list
+* `invokedynamic` is linked at runtime by use of _bootstrap_ methods, which
+return method handles
+* this was original designed to support dynamic languages and is also foundation
+of lambdas implementation in JDK 8
+
+=== Exception table
+
+----
+0: invokestatic  #16 // Method callSomething:()V
+3: goto          36
+6: astore_1
+7: getstatic     #19 // Field java/lang/System.out:Ljava/io/PrintStream;
+36: getstatic     #19 // Field java/lang/System.out:Ljava/io/PrintStream;
+39: ldc           #31 // String Done
+41: invokevirtual #33 // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+44: return
+    Exception table:
+       from    to  target type
+           0     3     6   Class java/lang/Exception
+           0    14    25   any
+----
+
+=== Exception table
+
+* przechowuje informacje o blokach kodu `catch` oraz `finnaly`, wdanej metodzie
+* oraz mapowanie pomiędzy typem wyjątku a blockiem kodu
+* bytecode nie posiada opcode dla słów kluczowych `catch` i `finally` (Java)
+
+=== StackMapTable
+
+* atrybut wspierany przez javac i JVM od wersji JDK 6, wymagany od wersji JDK 7,
+* jest wykorzystywny podczas weryfikacji kontroli typów poprzez "class loader"
+* jest to kolekcja tzw. "stack map frames"
+* przyspiesza ładowanie .class oraz gwarantuje mniejsze zużycie pamięci
+
+=== LocalVariableTable
+
+* jest to opcjonalny atrybut, wykorzystywane przez debugger, przechowuje
+informacje o nazwach zmiennych
+
+=== LineNumberTable
+
+* jest to opcjonalny atrybut, wykorzystywane przez debugger, przechowuje
+mapowanie pomiędzy numerem lini w pliku źródłowym a bci (bytecode index)
+
+=== Specyfikacja bytecode
+
+* link:https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html[The class File Format]
+* narzędzia,
+** javap, disassembler dostępny w JDK
+** org.objectweb.asm.util.ASMifier, z biblioteki ASM
+** jarScan od jitwatch
+
+=== Przegląd narzędzi do manipulacji
+
+* ASM
+* jitescript
+* javassist
+* bytebuddy
+* byteman
+
+=== Java Instrumentation API
+
+* java.lang.instrument defines mechanism to introspect and transform code before
+it is passed to class loader
+* class file -> instrument -> class loader
+
+=== coding the agent
+
+[source,java]
+----
+import java.lang.instrument.ClassFileTransformer;
+import java.lang.instrument.Instrumentation;
+import java.security.ProtectionDomain;
+
+public class Agent {
+	public static void premain(String agentArgs,
+							   Instrumentation inst) {
+		inst.addTransformer(new ClassFileTransformer() {});
+	}
+}
+----
+
+=== setting up an artifact
+
+[source]
+META-INF/MANIFEST.MF
+----
+Premain-Class: pl.symentis.bytecode.instrument.Agent
+----
+
+  java -javaagent:myagent.jar MyClass
+
+=== class definition, redefinition and retransformation
+
+* the request for a new class definition is made with java.lang.ClassLoader#defineClass or its native equivalents.
+* the request for a class redefinition is made with Instrumentation.redefineClasses or its native equivalents.
+* the request for a class retransformation is made with Instrumentation#retransformClasses or its native equivalents.
+* the transformer is called during the processing of the request, before the class file bytes have been verified or applied.
+
+=== bytecode interpreters
+
+* C++ template
+* ASM template
+* interpreter frame
+* OpenJDK Zero and Shark
+
+== just in time compiler
+
+Jest częscią maszyny wirtualnej HotSpot i jest odpowiedzialny za optymalizację
+i kompilację bytecode w czasie działania maszyny wirtualnej.
+
+Historycznie w Sun/OpenJDK/Oracle JDK były od początku dostępna dwa kompilatory,
+client (znany także jako C1) oraz server (znany także jako C2 lub opto).
+
+Od wersji JDK8, domyślnie działają one razem jako tzw. tiered compiler,
+kontrolowany przez flagę `-XX:+TieredCompilation`
+
+=== Kompilator C1
+
+Jest to szybki kompilator, operujący na CFG (control flow graph)
+SSA (static single assigement form) IR (intermediate representation)
+
+https://en.wikipedia.org/wiki/Static_single_assignment_form
+
+=== Static single assignment
+
+[stem]
+++++
+x=1
+y=2
+x_1=y
+y_1=2
+++++
+
+=== Kompilator C1
+
+Kompilator ten wykorzystuje mechanizm szablonów generujących kod natywny a
+także liniową alokację rejestrów.
+
+Kompilator C1 odpowiedzialny jest za takie optymalizacje jak, inlining,
+constant propagation, value range propagation,
+sparse conditional constant propagation, dead code elimination,
+global value numbering, partial redundancy elimination, strength reduction,
+register allocation.
+
+=== inlining
+
+[source,java]
+----
+int doubleAndAdd(int x, int y){
+  return doubleInt(x)+doubleInt(y);
+}
+
+int doubleInt(int i){
+  return i+i;
+}
+----
+
+[source,java]
+----
+int doubleAndAdd(int x, int y){
+  return (x+x)+(y+y);
+}
+----
+
+=== inlining: matka wszystkich optymalizacji
+
+[source,java]
+----
+public void m(){
+	n(this);
+}
+
+public static n(Object obj){
+	if(obj==null){
+		doSomething();
+	}
+}
+----
+
+=== inlining
+
+[source,java]
+----
+public void m(){
+	if(this==null){
+		doSomething();
+	}
+}
+----
+
+=== null check folding
+
+[source,java]
+----
+public void m(){
+	if(false){
+		doSomething();
+	}
+}
+----
+
+=== dead code elimination
+
+[source,java]
+----
+public void m(){
+}
+----
+
+=== and last but not least
+
+`-XX:+UseFastEmptyMethods`
+
+
+=== Ekonomia inlining
+
+* nie ma potrzeby tworzenia nowej ramki na stosie (stack frame)
+* zbędne staje się odwołanie do tablicy metod wirtualnych (vtable)
+* metody które poddają się tej optymalizacji
+** `private`
+** `final`
+** `static`
+** pozostałe, w określonych warunkach (ale o tym poźniej)
+
+=== Optymalizacja inlining
+
+* `-XX:FreqInlineSize=325`, maksymalny rozmiar metody (w bytecode), inline przez
+C2
+* `-XX:InlineSmallCode=2000`
+* `-XX:MaxInlineLevel=9`
+* `-XX:MaxInlineSize=35`
+* `-XX:MaxRecursiveInlizeLevel=1`
+* `-XX:MinInliningThreshold=250`
+
+=== Logowanie optymalizacji
+
+`-XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining`
+
+gdy chcesz zapisać wynik kompilacji do pliku
+`-XX:+LogCompilation -XX:LogFile=compilation.log`
+
+=== Logowanie optymalizacji
+----
+15684 3907       4       org.objectweb.asm.ClassReader::<init> (10 bytes)
+                !              @ 3   org.objectweb.asm.ClassReader::a (163 bytes)   already compiled into a big method
+                               @ 6   org.objectweb.asm.ClassReader::<init> (9 bytes)   inline (hot)
+                                 @ 5   org.objectweb.asm.ClassReader::<init> (257 bytes)   inline (hot)
+                                   @ 1   java.lang.Object::<init> (1 bytes)   inline (hot)
+                                   @ 14   org.objectweb.asm.ClassReader::readShort (27 bytes)   inline (hot)
+                                   @ 36   org.objectweb.asm.ClassReader::readUnsignedShort (26 bytes)   inline (hot)
+                                   @ 202   org.objectweb.asm.ClassReader::readUnsignedShort (26 bytes)   inline (hot)
+                               @ 10   java.util.zip.ZipEntry::isDirectory (10 bytes)   inline (hot)
+                                 @ 6   java.lang.String::endsWith (17 bytes)   inline (hot)
+                                   @ 13   java.lang.String::startsWith (72 bytes)   inline (hot)
+                               @ 18   java.util.zip.ZipEntry::getName (5 bytes)   accessor
+                               @ 26   org.eclipse.jetty.annotations.AnnotationParser::isValidClassFileName (145 bytes)   inline (hot)
+----
+
+=== Czytanie logów kompilatora
+
+* compilation id
+* symbol
+* compiler tier (aka level) [1..4], gdzie 1-3 to C1 a 4 to C2
+* method
+* compiler cause
+
+=== Poziomy kompilacji
+
+* 1 - C1 kompilator, nie uwzględnia danych z pomiarów, małe metody, "accessor"
+* 2 - C1 kompilator, po wstępnym profilowaniu, domyślnie 1000 wywołań, dla tiered compilation 1500, wybrane optymalizacje
+* 3 - C1 kompilator, pozostałe optymalizacje
+* 4 - C2 kompilator
+
+=== Symbole
+
+|===
+| Symbol | Meaning
+
+| % | On stack replacement
+
+| s | Synchronized method
+
+| ! | Method has exception handlers
+
+| b | Blocking compilation
+
+| n | Native wrapper
+
+|===
+
+=== Global value numbering
+
+Jest to optymalizacja która pomaga wyeliminować zbędny kod. Odbywa się to
+poprzez przypisanie tej samej wartości do zmiennych i wyrażeń, które są tożsame.
+
+[source,java]
+----
+w := 3      # -> 1
+x := 3      # -> 1
+y := x + 4  # -> 2
+z := w + 4  # -> 2
+----
+
+Po zastąpieniu wyrażen które zostały przypisane do tych samych wartości:
+
+[source, java]
+----
+w := 3
+x := w
+y := w + 4
+z := y
+----
+
+=== Kompilator C2
+
+* najbardziej zaawansowany i wydajny kompilator,
+* optymalizuje tzw. hot spots
+** `InlineFrequencyCount`
+** `InlineFrequencyRatio`
+** `InlineThrowCount`
+** `InlineThrowMaxSize`
+** `MaxInlineSize`
+
+=== sea of nodes
+
+* link:http://http://grothoff.org/christian/teaching/2007/3353/papers/click95simple.pdf['sea of nodes'] jest to forma reprezentacji kodu w postaci DFG (data flow graph)
+* wykorzystywana przez C2 kompilator
+* opcodes jako węzły, z uporządowanymi wejściami (ordered inputs)
+
+=== sea of nodes: example
+
+[source,java]
+----
+a = b + c
+e = c + d
+----
+
+[graphviz]
+----
+digraph {
+  a -> ADD
+  b -> ADD
+  ADD -> c
+  c -> DIV
+  d -> DIV
+  DIV -> e
+}
+----
+
+=== register allocation by graph coloring
+
+* cichy bohater HotSpot, wszyscy dyskutują inlinining, jednak ten mechanizm
+zapewniam
+** optymalne wykorzystanie rejestrów procesora
+** zmniejszenie odwołań do pamięci RAM
+* wykorzystywany algorytm to https://en.wikipedia.org/wiki/Graph_coloring[graph coloring]
+
+=== On Stack Replacement
+
+* on stack replacement (OSR) to technika która umożliwia podmianę kodu,
+nie tylko po wyjściu z metody
+* umożliwia optymalizację długich pętli w ich trakcie działania,
+* podmiana kodu odbywa się na tzw. back trace/egde, czyli przy przejsciu pętli
+do następnej iteracji
+
+=== Traps, Type profile and Megamorphs
+
+* 'uncommon traps' aka 'guards' wyzwalają deoptymalizację, ponieważ C2 optymalizuje kod dla najczęstrzych przypadków
+* to bloki kodu generowane przez kompilator, sprawdzające poprawność warunków
+optymalizacji
+* typed profile, przechowuje informacje o oczekiwanym typie tzw. "receiver",
+
+=== loop unrolling
+
+* optymalizacja, która zamienia pętle, na wiele powtórzeń tego samego bloku kodu,
+**  `-XX:LoopMaxUnroll` = 16
+**  `-XX:LoopOptsCount` = 43
+**  `-XX:LoopUnrollLimit` = 60
+**  `-XX:LoopUnrollMin` = 4
+**  `-XX:LoopUnswitching` = true
+
+=== pointer compare
+
+* if JIT compiler can see that a is new object (due to
+inlining and escape analisys) it can not be equal
+to any previously allocated objects, this triggers pointer compare check folding
+
+=== string concat
+
+* collapses recursive patterns
+* pre-allocation of buffer size (counts size of destination string and allocates spaces for it not-zeroing memory)
+
+=== lock elision
+
+[source,java]
+----
+public void getNames(){}
+  List v = new Vector(); // <1>
+  v.add("Moe"); // <2>
+  v.add("Larry");
+  v.add("Curly");
+  return v;
+ }
+----
+<1> notice use of vector, it is synchronized, but this object never escapes the thread
+<2> will inline `add(Object)` method, and remove locks (thanks to escape analisis)
+
+=== biased locking
+
+[source,java]
+----
+int i = 0;
+synchronized(this){
+
+} // <1>
+i++;
+synchronized(this){
+
+}
+----
+<1> will not unlock, other thread may need to revoke it, before he will be able
+to enter this block
+
+=== biased locking
+
+* `-XX:BiasedLockingStartupDelay=4000`, biased locking is not on, until this delay
+* `-XX:BiasedLockingBulkRebiasThreshold=20`,
+* `BiasedLockingBulkRevokeThreshold=40`
+* `BiasedLockingDecayTime`
+* `PrintPreciseBiasedLockingStatistics`
+* `TraceBiasedLocking`
+
+=== adaptive locking
+
+* a first attempt to lock is done using a simple compare-and-exchange (CAS)
+operation. This is very efficient as it can usually translate into a direct CPU
+instruction (e.g cmpxchg).
+* if the lock is either free or has been previously biased toward this thread
+the lock on the object is obtained for the thread and execution can continue immediately.
+* if the CAS fails the JVM will perform one round of spin locking where the
+thread parks to effectively put it to sleep between retrying the CAS.
+* if these initial attempts fail (signaling a fairly higher level of contention for the lock)
+the thread will move itself to a blocked state and enqueue itself in the list of
+threads waiting for the lock to be notified
+
+=== adaptive locking: links
+
+* link:http://blog.takipi.com/5-things-you-didnt-know-about-synchronization-in-java-and-scala/[5 Things You Didn’t Know About Synchronization in Java and Scala]
+* link:http://arturmkrtchyan.com/jvm-lock-spinning[JVM lock spinning]
+* link:http://hg.openjdk.java.net/jdk8/jdk8/hotspot/file/87ee5ee27509/src/share/vm/runtime/synchronizer.cpp[OpenJDK 8 synchronizer]
+
+=== escape analisys (a father of all optimizations)
+
+* it analyzes scope of object's uses, to find out if object is used globally or
+is local to a thread
+* helps decide whether to allocate it on the Java heap
+* enables many other optimizations, like lock elision
+* it is available since JDK 6u23, and it is always on
+* based on link:http://www-plan.cs.colorado.edu/diwan/7135/escapeOopsla99.ps[Flow-insensitive escape analysis algorithm]
+
+=== Deopitmization
+
+[shaape]
+----
+
++--------------+                       +-----------+
+|   Interpret  |---------------------->|  Profile  |
++--------------+                       +-----------+
+       ^                                     |
+       |                                     |
+       |                                     |
+       |                                     |
+       |                                     |
++--------------+                       +-----------+
+|  Deoptimize  |<----------------------|  Compile  |
++--------------+                       +-----------+
+----
+
+=== when code gets deoptimized
+
+* triggered by traps (remember C2 optimizes only for most common cases,
+  that's why it is called speculative)
+* through CHA (class hierarchy analisys), aka type profile
+* when code is no longer hot
+* more about it at link:http://www.slideshare.net/dougqh/jvm-mechanics-when-does-the[JVM Mechanics: When Does the JVM JIT & Deoptimize?]
+
+=== an example of uncommon case
+
+[source, java]
+----
+static final int CHUNK_SIZE=1000;
+
+public static void main(String[] argv){
+  Object trap = null;
+  for(int i=0;i<250;++i){
+    for(int j=0;j<CHUNK_SIZE;++j){
+      new Object();
+      if(trap!=null){ //
+        System.out.println("I am being trapped!");
+        trap=null;
+      }
+    }
+    if (i == 200){ // <1>
+      trap = new Object();
+    }
+  }
+}
+----
+<1> uncommon trap
+
+=== an example of uncommon case
+----
+ 64   16 %   3     UncommonTrap::main @ 13 (70 bytes)
+ 65   17     3     UncommonTrap::main (70 bytes)
+ 65   18 %   4     UncommonTrap::main @ 13 (70 bytes)
+I am being trapped!
+ 67   16 %   3     UncommonTrap::main @ -2 (70 bytes)   made not entrant
+----
+
+== Tools
+
+=== disasembly plugin
+
+* this is an unofficial plugin to JVM which prints out assembly code generated
+by JIT compilers
+* it is required by couple of diagnostic options, more about it at
+link:http:https://wiki.openjdk.java.net/display/HotSpot/PrintAssembly[OpenJDK Wiki]
+
+=== disasembly plugin
+
+* it is not distributed with official JDK, and you have to build it from OpenJDK,
+* or download link:https://kenai.com/projects/base-hsdis/downloads[prebuilt binaries]
+* you can find it in `hotspot/src/share/tools/hsdis` directory of Open JDK
+* once you get binary, you will have to put it in `jre/lib/amd64` directory
+
+=== jitwatch: visualiser for HotSpot
+
+* link:https://github.com/AdoptOpenJDK/jitwatch[jitwatch]
+* requires following options `-XX:+UnlockDiagnosticVMOptions -XX:+TraceClassLoading
+-XX:+LogCompilation -XX:LogFile=mylogfile.log`
+* if you want to HotSpot to output the disassembled native code then add the JVM switch `-XX:+PrintAssembly`
+
+=== danger ahead: whitebox api
+
+* available since JDK8, it is internal API which let's you manipulate JVM behaviour
+* http://hg.openjdk.java.net/jdk8u/jdk8u/hotspot/file/0e4094950cd3/test/testlibrary/whitebox/sun/hotspot/WhiteBox.java[hotspot/test/testlibrary/whitebox/sun/hotspot/WhiteBox.java]
+* you can trigger verious events, like GC, JIT compilation
+* it used internally for testing
+
+=== building whitebox
+
+[source,bash]
+----
+cd hotspot/test/testlibrary/whitebox
+javac -sourcepath . -d . sun\hotspot\**.java
+jar cf wb.jar .
+# now you can run your app with it
+java -Xbootclasspath/a:wb.jar -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI ...
+----
+
+=== using whitebox
+
+[source,java]
+----
+import sun.hotspot.WhiteBox;
+
+public static class GCYoungTest {
+  static WhiteBox wb = WhiteBox.getWhiteBox();
+  public static Object obj;
+
+  public static void main(String args[]) {
+    obj = new Object();
+    System.out.println(wb.isObjectInOldGen(obj));
+    wb.youngGC();
+    wb.youngGC();
+    // 2 young GC is needed to promote object into OldGen
+    System.out.println(wb.isObjectInOldGen(obj));
+  }
+}
+----
+
+for this example you need to add `-XX:MaxTenuringThreshold=1` to make it work as expected.
+
+=== Other tools
+
+* http://openjdk.java.net/projects/code-tools/jmh/[Java Microbenchmark Harness]
+* http://openjdk.java.net/projects/code-tools/jol/[Java Object Layout]
+* and other tools from http://openjdk.java.net/projects/code-tools/[Code tools project]
+* profilers, JProfiler, YourKit,
+
+=== Profilers are bad for ya!

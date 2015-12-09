@@ -1,0 +1,90 @@
+= Java Memory Model and concurrency
+:backend: revealjs
+:highlighter: pygments
+:stem: asciimath
+:source-highlighter: pygments
+:pygments-css: style
+:revealjs_theme: serif
+:revealjs_history: true
+
+== memory model
+
+* in multiprocessor systems, processors generally have one or more layers of
+memory cache, which improves performance both by speeding access to data and
+reducing traffic on the shared memory bus
+* a memory model defines necessary and sufficient conditions for knowing that
+writes to memory by other processors are visible to the current processor,
+and writes by the current processor are visible to other processors
+
+
+=== jebnąć obrazek z procesorem aż do znudzenia
+
+=== barriers and reordering
+
+* special instructions, called memory barriers, are required to flush or
+invalidate the local processor cache in order to see writes made by other
+processors or make writes by this processor visible to others. These memory
+barriers are usually performed when lock and unlock actions are taken
+
+=== jebany rysunek z czasami dostępów
+
+=== barriers and reordering
+
+* the compiler might decide that it is more efficient to move a write operation
+later in the program; as long as this code motion does not change the program's
+semantics, it is free to do so.  If a compiler defers an operation, another
+thread will not see it until it is performed; this mirrors the effect of caching.
+
+=== reordering
+
+[source,java]
+----
+class Reordering {
+  int x = 0, y = 0;
+  public void writer() {
+    x = 1;
+    y = 2;
+  }
+
+  public void reader() {
+    int r1 = y;
+    int r2 = x;
+  }
+}
+----
+
+== java memory model
+
+== memory fences
+
+== false sharing, cache lines and memory aligement (padding)
+
+== java.util.concurrent
+
+== synchronized vs locks
+
+=== synchronized
+
+* uses `monitorenter` and `monitorexit` bytecodes
+* this forces to wrap critical section into `try-catch-finally` blocks (done by javac)
+* underneath it uses fields in object header
+* whole locking mechanism is implemented in JVM code
+
+=== locks
+
+* part of java.util.concurrent package, since Java 5
+* implemented using sun.misc.Unsafe specific methods like `park`, `unpark`, `monitorEnter` and `monitorExit`
+
+== lock free programming
+
+=== o co chodzi (transactional methods)
+
+=== ABA problem
+
+=== compare xchange
+
+=== spin loops
+
+=== yeld, PAUSE and other stuff (mention Gil Tene JEP)
+
+=== JCTools and other concurrent libs
