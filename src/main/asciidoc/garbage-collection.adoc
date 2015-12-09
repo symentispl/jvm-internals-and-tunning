@@ -1,4 +1,4 @@
-= Automatyczne zarządzanie pamięcią w JVM
+= Budowa i optymalizacja JVM HotSpot
 :backend: revealjs
 :highlighter: pygments
 :stem: asciimath
@@ -6,6 +6,23 @@
 :pygments-css: style
 :revealjs_theme: serif
 :revealjs_history: true
+
+== Wprowadzenie
+
+Zakres szkolenia
+
+* automatyczne zarządzanie pamięcią w JVM
+* just in time compilation oraz optymalizacje
+* Java Memory Model i współbieżność
+* operacje I/O w JVM
+* narzędzia, techniki, wspomnienia
+
+== O mnie
+
+* Allegro.tech, obecnie tajny projekt o którym nie mogę mówić
+* JDD/4Developers, naczelny sprawca zamieszania czyli człowiek od kłopotów,
+* a tak poza tym jeśli cokolwiek ma związek z JVM i HotSpot, bytecode'em, parserami, językami programowania na JVM oraz technikami JIT, wcześniej czy później się tym zainteresuje :)
+* były architekt, manager, sysadmin i człowiek od wydajności,
 
 == Automatyczne zarządzenie pamięcią
 
@@ -190,6 +207,12 @@ W tym celu zostały wprowadzone dwa mechanizmy:
     compiler support, and may be implemented on common
     operating systems by using memory protection.
 
+=== Warunkowe znakowanie kart
+
+* W środowisku przy wysokim współczynniku współbieżności, zaznaczanie kart może być kosztowne
+* aby zmienjszyć ten koszt należy wykorzystać flagę `-XX:UseCondCardMark`
+* wynika to z potencjalnego zajścia 'false sharing' w środowiskach wieloprocesorowych
+
 === Małe, duże i pełne pauzy
 
 * minor, kolekcje w przstrzeni "Eden"
@@ -202,12 +225,6 @@ W tym celu zostały wprowadzone dwa mechanizmy:
 * http://www.ibm.com/developerworks/library/j-jtp11253/[Java theory and practice: Garbage collection in the HotSpot JVM]
 * http://blog.ragozin.info/2011/06/understanding-gc-pauses-in-jvm-hotspots.html[Understanding GC pauses in JVM, HotSpot's minor GC.]
 * http://www.memorymanagement.org[Memory Management Reference]
-
-=== Warunkowe znakowanie kart
-
-* W środowisku przy wysokim współczynniku współbieżności, zaznaczanie kart może być kosztowne
-* aby zmienjszyć ten koszt należy wykorzystać flagę `-XX:UseCondCardMark`
-* wynika to z potencjalnego zajścia 'false sharing' w środowiskach wieloprocesorowych
 
 == ParallelGC
 
@@ -513,7 +530,7 @@ Różni się od "Parallel Scavenge" pewnymi usprawnieniami które umożliwiają 
 ** Narzut pamięci (footprint) - rozmiar pamięci wykorzystywanej przez maszynę JVM
 ** Promptness, czas pomiędzy momentem kiedy obiekt stał się „unreachable” a momentem kiedy pamięć przez niego zajmowana została zwolniona
 
-== Narzędia i monitorowanie GC
+== Narzędzia i monitorowanie GC
 
 * Proste, jednak kompletnie niepraktyczne narzędzie to: `jmap -heap <vmid>`
 * Jest to jednak najszybszy sposób żeby sprawdzić z jakimi parametrami
