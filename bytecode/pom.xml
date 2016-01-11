@@ -19,6 +19,7 @@
 		<module>bytecode-bytebuddy</module>
 		<module>bytecode-javaagent</module>
 		<module>bytecode-byteman</module>
+		<module>bytecode-memoize</module>
 	</modules>
 
 </project>
