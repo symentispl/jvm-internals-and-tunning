@@ -40,9 +40,15 @@ public class MemoizeMethodGenerator {
 				ctClass.addMethod(copiedMethod);
 
 				// generate new body of annotated method
-				method.setBody("{" + "java.util.List key = java.util.Arrays.asList($args);"
-						+ "java.lang.Object result = _memoizeCache.get(key);" + "if(result!=null){"
-						+ " return ($r)result;" + "}" + "result = _testMethod($$);" + "_memoizeCache.put(key,result);"
+				method.setBody(
+						"{" 
+						+ "java.util.List key = java.util.Arrays.asList($args);"
+						+ "java.lang.Object result = _memoizeCache.get(key);" 
+						+ "if(result!=null){"
+						+ " return ($r)result;" 
+						+ "}" 
+						+ "result = _"+method.getName()+"($$);" 
+						+ "_memoizeCache.put(key,result);"
 						+ "return ($r)result;}");
 
 			}

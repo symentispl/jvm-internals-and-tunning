@@ -38,6 +38,7 @@
 						<configuration>
 							<includes>
 								<include>org.javassist:javassist</include>
+								<include>pl.symentis.jvminternals:bytecode-javaagent</include>
 							</includes>
 							<rules>
 								<rule>
