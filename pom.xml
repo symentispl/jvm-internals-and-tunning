@@ -71,6 +71,7 @@
 		<module>io</module>
 		<module>concurrency</module>
 		<module>btrace</module>
+		<module>jit</module>
 	</modules>
 
 </project>
