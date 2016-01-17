@@ -42,10 +42,8 @@ public class SecondGarbageCollectorCase {
 			B prevB = null;
 			while (i < 100000) {
 
-				String keyB = RandomStringUtils
-						.random(random.nextInt(1024) + 1);
-				String valueB = RandomStringUtils
-						.random(random.nextInt(1024) + 1);
+				String keyB = RandomStringUtils.randomAlphabetic(2);
+				String valueB = RandomStringUtils.random(random.nextInt(1024) + 1);
 
 				B b = new B(prevB, keyB);
 				mapB.put(b, valueB);

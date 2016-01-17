@@ -39,7 +39,7 @@ public class ThirdGarbageCollectorCase {
 			B prevB = null;
 			while (i < 100000) {
 
-				String keyB = RandomStringUtils.randomAlphanumeric(32);
+				String keyB = RandomStringUtils.randomAlphanumeric(2);
 				String valueB = RandomStringUtils.random(2048);
 
 				B b = new B(prevB, valueB);
