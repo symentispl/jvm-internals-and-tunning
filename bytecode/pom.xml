@@ -10,7 +10,7 @@
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 
-	<artifactId>jvminternals-bytecode</artifactId>
+	<artifactId>bytecode</artifactId>
 	<packaging>pom</packaging>
 
 	<modules>

@@ -3,16 +3,30 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>pl.symentis.jvminternals</groupId>
-		<artifactId>jvminternals-bytecode</artifactId>
+		<artifactId>bytecode</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 	<artifactId>bytecode-byteman</artifactId>
 	<dependencies>
+
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+			<version>2.0.1</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.jboss.byteman</groupId>
 			<artifactId>byteman-bmunit</artifactId>
-			<version>2.2.0.1</version>
+			<version>3.0.3</version>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 </project>
