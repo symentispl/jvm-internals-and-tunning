@@ -116,6 +116,10 @@ defined set operands
 ** `invokeinterface`
 ** `invokestatic`
 ** `invokedynamic`
+
+
+=== invoke* and receiver
+
 ** różnią się typem tzw. `receiver` czyli pierwszego elementu na stosie oraz
 w jaki sposób jest określania metoda, która ma zostać wywołana
 
@@ -134,6 +138,9 @@ tzw. `receiver`, czyli obiekt na którym zostanie wywołana metoda, przy czym
 * _method table_ is just an array of direct references to the bytecodes for each
 instance method that can be invoked on an object, including methods inherited
 from superclasses.
+
+=== invokeinterface
+
 * JVM uses a different opcode to invoke a method given an interface reference
 because it can't make as many assumptions about the method table offset as it
 can given a class reference.
@@ -248,6 +255,9 @@ Premain-Class: pl.symentis.bytecode.instrument.Agent
 
 * the request for a new class definition is made with java.lang.ClassLoader#defineClass or its native equivalents.
 * the request for a class redefinition is made with Instrumentation.redefineClasses or its native equivalents.
+
+=== class definition, redefinition and retransformation
+
 * the request for a class retransformation is made with Instrumentation#retransformClasses or its native equivalents.
 * the transformer is called during the processing of the request, before the class file bytes have been verified or applied.
 
@@ -271,20 +281,15 @@ kontrolowany przez flagę `-XX:+TieredCompilation`
 
 === Kompilator C1
 
-Jest to szybki kompilator, operujący na CFG (control flow graph)
-SSA (static single assigement form) IR (intermediate representation)
-
-https://en.wikipedia.org/wiki/Static_single_assignment_form
+Jest to szybki kompilator, operujący na https://en.wikipedia.org/wiki/Control_flow_graph[CFG (control flow graph)]
+https://en.wikipedia.org/wiki/Static_single_assignment_form[SSA (static single assigement form)] https://en.wikipedia.org/wiki/Intermediate_language#Intermediate_representation[IR (intermediate representation)]
 
 === Static single assignment
 
-[stem]
-++++
-x=1
-y=2
-x_1=y
-y_1=2
-++++
+stem:[x=1] +
+stem:[y=2] +
+stem:[x_1=y] +
+stem:[y_1=x_1]
 
 === Kompilator C1
 
@@ -371,6 +376,9 @@ public void m(){
 
 * nie ma potrzeby tworzenia nowej ramki na stosie (stack frame)
 * zbędne staje się odwołanie do tablicy metod wirtualnych (vtable)
+
+=== Ekonomia inlining
+
 * metody które poddają się tej optymalizacji
 ** `private`
 ** `final`
@@ -592,6 +600,9 @@ operation. This is very efficient as it can usually translate into a direct CPU
 instruction (e.g cmpxchg).
 * if the lock is either free or has been previously biased toward this thread
 the lock on the object is obtained for the thread and execution can continue immediately.
+
+=== adaptive locking
+
 * if the CAS fails the JVM will perform one round of spin locking where the
 thread parks to effectively put it to sleep between retrying the CAS.
 * if these initial attempts fail (signaling a fairly higher level of contention for the lock)
@@ -679,7 +690,7 @@ I am being trapped!
 * this is an unofficial plugin to JVM which prints out assembly code generated
 by JIT compilers
 * it is required by couple of diagnostic options, more about it at
-link:http:https://wiki.openjdk.java.net/display/HotSpot/PrintAssembly[OpenJDK Wiki]
+link:https://wiki.openjdk.java.net/display/HotSpot/PrintAssembly[OpenJDK Wiki]
 
 === disasembly plugin
 
