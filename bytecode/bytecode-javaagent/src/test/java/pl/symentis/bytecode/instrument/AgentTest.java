@@ -6,6 +6,7 @@ import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Map;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import javassist.ClassPool;
@@ -14,6 +15,7 @@ import javassist.CtClass;
 public class AgentTest {
 
 	@Test
+	@Ignore
 	public void generate_memoized_method() throws Exception {
 
 		ClassPool classPool = ClassPool.getDefault();

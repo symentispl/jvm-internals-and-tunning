@@ -25,7 +25,7 @@ public class FileProcessorTest {
 		
 		expectedException.expect(NullPointerException.class);
 		
-		myTestObj.processFile("badname1.txt");
+		myTestObj.processFile("badname.txt");
 	}
 
 }
