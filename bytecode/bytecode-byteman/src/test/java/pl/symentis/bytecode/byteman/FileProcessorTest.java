@@ -23,9 +23,9 @@ public class FileProcessorTest {
 	public void testSecurityException() throws Exception {
 		FileProcessor myTestObj = new FileProcessor();
 		
-		expectedException.expect(SecurityException.class);
+		expectedException.expect(NullPointerException.class);
 		
-		myTestObj.processFile("badname.txt");
+		myTestObj.processFile("badname1.txt");
 	}
 
 }

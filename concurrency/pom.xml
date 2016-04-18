@@ -21,4 +21,9 @@
 		</dependency>
 	</dependencies>
 
+	<packaging>pom</packaging>
+	<modules>
+		<module>rxjava</module>
+		<module>juc</module>
+	</modules>
 </project>

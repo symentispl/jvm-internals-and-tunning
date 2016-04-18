@@ -4,7 +4,7 @@ public class Counter {
 
 	private long counter;
 
-	public void inc() {
+	public synchronized void inc() {
 		++counter;
 	}
 

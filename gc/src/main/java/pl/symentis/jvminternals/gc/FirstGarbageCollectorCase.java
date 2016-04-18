@@ -52,17 +52,17 @@ public class FirstGarbageCollectorCase {
 			int i = 0;
 			while (i < 100000) {
 				String keyA = RandomStringUtils
-						.random(random.nextInt(1024) + 1);
+						.random(random.nextInt(2) + 1);
 				String valueA = RandomStringUtils
-						.random(random.nextInt(1024) + 1);
+						.random(random.nextInt(16000) + 1);
 
 				A a = new A(keyA);
 				mapA.put(a, valueA);
 
 				String keyB = RandomStringUtils
-						.random(random.nextInt(1024) + 1);
+						.random(random.nextInt(2) + 1);
 				String valueB = RandomStringUtils
-						.random(random.nextInt(1024) + 1);
+						.random(random.nextInt(16000) + 1);
 
 				B b = new B(a, keyB);
 				mapB.put(b, valueB);

@@ -7,7 +7,7 @@ package pl.symentis.jvm.concurrency.counter;
 public class CounterRunner {
 
 	public static void main(String[] args) throws InterruptedException {
-		final AtomicCounter counter = new AtomicCounter();
+		final Counter counter= new Counter();
 
 		Runnable counterTask = new Runnable() {
 

@@ -13,7 +13,7 @@ public class NullCheckFolding {
 	public void nullCheckFodling() {
 		assertNotNull(this);
 	}
-
+	
 	public static void main(String[] args) {
 		NullCheckFolding ncf = new NullCheckFolding();
 		for (int i = 0; i < 250; ++i) {

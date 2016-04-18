@@ -19,8 +19,9 @@ public class GenerateClass {
 				Integer.TYPE });
 
 		CodeBlock methodBody = new CodeBlock();
-		methodBody.ldc(0);
-		methodBody.ireturn();
+		methodBody
+			.ldc(0)
+			.ireturn();
 
 		jclass.defineMethod(methodName, modifiers, signature, methodBody);
 

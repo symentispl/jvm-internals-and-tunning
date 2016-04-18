@@ -9,7 +9,7 @@ package pl.symentis.jvminternals.gc;
 public class GarbageOnly {
     // object size in bytes
     private static final int DEFAULT_NUMBEROFTHREADS=8;
-    private static final int DEFAULT_OBJECTSIZE=100;
+    private static final int DEFAULT_OBJECTSIZE=32000;
     
     private static int numberOfThreads=DEFAULT_NUMBEROFTHREADS;
     private static int objectSize=DEFAULT_OBJECTSIZE;

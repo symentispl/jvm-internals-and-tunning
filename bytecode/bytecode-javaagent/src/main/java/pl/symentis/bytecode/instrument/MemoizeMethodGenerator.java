@@ -32,7 +32,7 @@ public class MemoizeMethodGenerator {
 			// made this field public, just to simplify tests
 			f.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
 			ctClass.addField(f, Initializer.byNew(weakHashMapClass));
-
+			
 			// then copy each method and create delegate to it
 			for (CtMethod method : methods) {
 
@@ -40,6 +40,8 @@ public class MemoizeMethodGenerator {
 				ctClass.addMethod(copiedMethod);
 
 				// generate new body of annotated method
+				
+				
 				method.setBody(
 						"{" 
 						+ "java.util.List key = java.util.Arrays.asList($args);"
@@ -50,7 +52,7 @@ public class MemoizeMethodGenerator {
 						+ "result = _"+method.getName()+"($$);" 
 						+ "_memoizeCache.put(key,result);"
 						+ "return ($r)result;}");
-
+				ctClass.debugWriteFile();
 			}
 
 		}

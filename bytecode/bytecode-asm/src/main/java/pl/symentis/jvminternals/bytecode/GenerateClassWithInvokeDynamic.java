@@ -25,6 +25,8 @@ import org.objectweb.asm.Type;
  */
 public class GenerateClassWithInvokeDynamic {
 
+	private static boolean linked;
+	
 	/**
 	 * @param args
 	 * @throws Exception
@@ -76,6 +78,15 @@ public class GenerateClassWithInvokeDynamic {
 				Type.getType(String.class), Type.INT_TYPE, Type.INT_TYPE),
 				bootstrap);
 
+		method.visitInsn(Opcodes.POP);
+		
+		method.visitVarInsn(Opcodes.ILOAD, 1);
+		method.visitVarInsn(Opcodes.ILOAD, 2);
+
+		method.visitInvokeDynamicInsn("callMe", Type.getMethodDescriptor(
+				Type.getType(String.class), Type.INT_TYPE, Type.INT_TYPE),
+				bootstrap);
+
 		method.visitInsn(Opcodes.ARETURN);
 
 		method.visitMaxs(2, 3);
@@ -90,7 +101,10 @@ public class GenerateClassWithInvokeDynamic {
 		Class<?> class1 = new DefiningClassLoader().defineClass(classname,
 				classBuff);
 		Comparator object = (Comparator) class1.newInstance();
-		System.out.println(object.greaterThan(2, 2));
+		
+		for(int i=0;i<3;i++){
+			System.out.println(object.greaterThan(2, 2));			
+		}
 
 	}
 
@@ -98,20 +112,35 @@ public class GenerateClassWithInvokeDynamic {
 	public static CallSite bootstrap(MethodHandles.Lookup caller, String name,
 			MethodType type) throws NoSuchMethodException,
 			IllegalAccessException {
+		
+		System.out.println(".. and now linking call site");
+		
 		MethodHandles.Lookup lookup = MethodHandles.lookup();
 		Class<?> thisClass = lookup.lookupClass();
-		MethodHandle methodHandle = lookup
-				.findStatic(thisClass, "alwaysTrue", MethodType.methodType(
+	
+		
+		MethodHandle methodHandle;
+		if(!linked){
+		methodHandle = lookup
+				.findStatic(thisClass, "realMethod", MethodType.methodType(
 						String.class, Integer.TYPE, Integer.TYPE));
-
+			linked = true;
+		} else{
+			methodHandle = lookup
+					.findStatic(thisClass, "alwaysTrue", MethodType.methodType(
+							String.class, Integer.TYPE, Integer.TYPE));
+			
+		}
 		return new ConstantCallSite(methodHandle.asType(type));
 	}
 
 	public static String alwaysTrue(int x, int y) {
+		System.out.println("calling alwaysTrue");
 		return "true";
 	}
 
 	public static String realMethod(int x, int y) {
+		System.out.println("calling realMethod");
 		if (x > y) {
 			return "true";
 		} else {

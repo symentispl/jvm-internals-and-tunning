@@ -32,7 +32,7 @@ public class GenerateClassWithDefaultConstructor {
 		ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES
 				| ClassWriter.COMPUTE_MAXS);
 
-		writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, classname, null,
+		writer.visit(Opcodes.V1_7, Opcodes.ACC_PUBLIC, classname, null,
 				"java/lang/Object", new String[] {});
 
 		MethodVisitor constructor = writer.visitMethod(Opcodes.ACC_PUBLIC,
@@ -75,7 +75,7 @@ public class GenerateClassWithDefaultConstructor {
 
 		Class<?> klass = new DefiningClassLoader().defineClass(classname,
 				classBuff);
-		klass.getConstructor(Integer.class).newInstance(5);
+		klass.getConstructor(Integer.class).newInstance(777);
 
 	}
 }

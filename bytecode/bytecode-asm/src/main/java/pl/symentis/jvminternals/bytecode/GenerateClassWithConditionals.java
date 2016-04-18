@@ -81,7 +81,7 @@ public class GenerateClassWithConditionals {
 		Class<?> class1 = new DefiningClassLoader().defineClass(classname,
 				classBuff);
 		Comparator object = (Comparator) class1.newInstance();
-		System.out.println(object.greaterThan(2, 1));
+		System.out.println(object.greaterThan(1, 1));
 
 	}
 
