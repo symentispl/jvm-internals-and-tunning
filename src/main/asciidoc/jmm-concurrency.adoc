@@ -7,6 +7,100 @@
 :revealjs_theme: serif
 :revealjs_history: true
 
+== things you need to know about CPU
+
+=== the primer
+
+* processor microarchitecture
+* load and store buffers
+* out of order execution
+* cache hierarchy (and coherence protocols)
+
+=== the loop
+
+[ditaa]
+----
++--------------------+
+|      fetch         |<---+
++--------------------+    |
+          |               |
+          v               |
++--------------------+    |
+|      decode        |    |
++--------------------+    |
+          |               |
+          v               |
++--------------------+    |
+|      schedule      |    |
++--------------------+    |
+          |               |
+          v               |
++--------------------+    |
+|     execute        |    |
++--------------------+    |
+          |               |
+          v               |
++--------------------+    |
+|     retirement     |----+
++--------------------+
+----
+
+=== how single cpu works?
+
+[ditaa]
+----
+                       +-------------------------+
+                       |   fetch and predecode   |<--------+
+                       +-------------------------+         |
+                                   |                       |
+                                   v                       v
+                       +-------------------------+      +------+   +----------------------+
+                       |   instruction queue     |      | iTLB |-->| L1 instruction cache |
+                       +-------------------------+      +------+   +----------------------+
+                                   |                       ^                 ^
+                                   v                       |                 |
+                       +-------------------------+         |                 |
+                       |         decode          |         |                 v
+                       +-------------------------+      +--------+   +----------------------+    +---------------+
+                                   |                    | L2 TLB |-->|       L2 cache       |--->| L3 and beyond |
+                                   v                    +--------+   +----------------------+    +---------------+
+                       +-------------------------+         |                 ^
+      -----------------|     rename/allocate     |         |                 |
+      |                +-------------------------+         |                 |
+      |                            |                       |                 |
+      |                            v                       v                 v
+      |                +-------------------------+     +------+   +-----------------------+
+      |                |       scheduler         |     | dTLB |-->|    L1 data cache      |
+      |                +-------------------------+     +------+   +-----------------------+
+      |                            |                      ^
+      v                            v                      |
++----------+           +-------------------------+        |
+|retirement|<----------|     execution units     |--------+
++----------+           +-------------------------+
+----
+
+=== in-order vs out-of-order
+
+* old CPUs only had in-order pipelines
+* it caused stalls in execution, CPU was waiting until data was available
+* modern CPUs still have in-order pipeline (fetch->decode)
+* as we have reached limits of CPU clocks, we get more speed by
+** parelizing execution (more execution units)
+** bigger caches
+** mesh architectures (more interconnected cores)
+
+=== things get weird
+
+=== load and store buffers
+
+=== out of order execution
+
+=== cache coherence
+
+=== false sharing
+
+=== help me!
+
 == memory model
 
 * in multiprocessor systems, processors generally have one or more layers of
@@ -15,9 +109,6 @@ reducing traffic on the shared memory bus
 * a memory model defines necessary and sufficient conditions for knowing that
 writes to memory by other processors are visible to the current processor,
 and writes by the current processor are visible to other processors
-
-
-=== jebnąć obrazek z procesorem aż do znudzenia
 
 === barriers and reordering
 
@@ -79,12 +170,21 @@ class Reordering {
 
 === o co chodzi (transactional methods)
 
-=== ABA problem
-
 === compare xchange
+
+=== java.util.concurrent.atomic
+
+=== ABA problem
 
 === spin loops
 
 === yeld, PAUSE and other stuff (mention Gil Tene JEP)
 
-=== JCTools and other concurrent libs
+=== Queues are every where JCTools and other concurrent libs
+
+== other concurrency models
+
+* data flow programming, _java.util.concurrent.CompletableFuture_
+* actor model, aka "true OOP" (Erlang, Pony, http://akka.io/[Akka])
+* communicating sequential processes (Go, http://docs.paralleluniverse.co/quasar/[Quasar])
+* software transactional memory (http://clojure.org/about/concurrent_programming[Clojure])

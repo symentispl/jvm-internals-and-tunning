@@ -26,4 +26,4 @@ if __name__=="__main__":
 
     server = Server()
     server.watch('src/main/asciidoc/*.adoc', render_slides)
-    server.serve(root='target/slides')
+    server.serve(root=SLIDES_TARGET)
