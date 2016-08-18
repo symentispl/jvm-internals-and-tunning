@@ -7,23 +7,6 @@
 :revealjs_theme: serif
 :revealjs_history: true
 
-== Wprowadzenie
-
-Zakres szkolenia
-
-* automatyczne zarządzanie pamięcią w JVM
-* just in time compilation oraz optymalizacje
-* Java Memory Model i współbieżność
-* operacje I/O w JVM
-* narzędzia, techniki, wspomnienia
-
-== O mnie
-
-* Allegro.tech, obecnie tajny projekt o którym nie mogę mówić
-* JDD/4Developers, naczelny sprawca zamieszania czyli człowiek od kłopotów,
-* a tak poza tym jeśli cokolwiek ma związek z JVM i HotSpot, bytecode'em, parserami, językami programowania na JVM oraz technikami JIT, wcześniej czy później się tym zainteresuje :)
-* były architekt, manager, sysadmin i człowiek od wydajności,
-
 == Automatyczne zarządzenie pamięcią
 
 * Automatyczne zarządzanie pamięcią (odśmiecanie) to nie nowy problem

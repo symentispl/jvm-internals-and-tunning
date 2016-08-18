@@ -1,4 +1,5 @@
 = Java Memory Model and concurrency
+:idprefix:
 :backend: revealjs
 :highlighter: pygments
 :stem: asciimath
@@ -6,6 +7,7 @@
 :pygments-css: style
 :revealjs_theme: serif
 :revealjs_history: true
+:imagesdir: images
 
 == things you need to know about CPU
 
@@ -36,16 +38,23 @@
           |               |
           v               |
 +--------------------+    |
-|     execute        |    |
-+--------------------+    |
-          |               |
-          v               |
-+--------------------+    |
-|     retirement     |----+
+|     execute        |----+
++--------------------+
+          |
+          v
++--------------------+
+|     retirement     |
 +--------------------+
 ----
 
 === how single cpu works?
+
+*WARNING* +
+it's oversimplified view of the reality, +
+it's much more complex +
+but it should help you understand basic concepts
+
+=== !
 
 [ditaa]
 ----
@@ -65,7 +74,7 @@
                                    |                    | L2 TLB |-->|       L2 cache       |--->| L3 and beyond |
                                    v                    +--------+   +----------------------+    +---------------+
                        +-------------------------+         |                 ^
-      -----------------|     rename/allocate     |         |                 |
+      +----------------|     rename/allocate     |         |                 |
       |                +-------------------------+         |                 |
       |                            |                       |                 |
       |                            v                       v                 v
@@ -78,6 +87,47 @@
 |retirement|<----------|     execution units     |--------+
 +----------+           +-------------------------+
 ----
+
+=== fetch and decode
+
+* also called Front-End Pipeline, retrieves instructions from L1 instruction
+cache, uses decoders to decode them into micro-ops and buffers them for down
+stream stages
+* it handles decoding "in order"
+* consists of the Instruction Translation Look-aside Buffer,
+an instruction pre-fetcher, the L1 instruction cache and the pre-decode logic
+
+=== micro-ops?
+
+A simple instruction such as
+
+[source,asm]
+----
+add eax,ebx
+----
+generates only one μop,
+
+=== !
+
+while an instruction like
+[source,asm]
+----
+add eax,[var]
+----
+may generate two: one for reading from memory into a temporary (unnamed) register,
+and one for adding the contents of the temporary register to eax
+
+=== !
+
+The instruction
+[source,asm]
+----
+add [var],eax
+----
+may generate three μops: one for reading from memory, one for adding, and one
+for writing the result back to memory.
+
+The advantage of this is that the μops can be executed out of order.
 
 === in-order vs out-of-order
 
@@ -100,6 +150,8 @@
 === false sharing
 
 === help me!
+
+image::intel_skylake.jpg[]
 
 == memory model
 
