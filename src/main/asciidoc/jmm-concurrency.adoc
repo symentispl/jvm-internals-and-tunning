@@ -173,7 +173,7 @@ barriers are usually performed when lock and unlock actions are taken
 
 === barriers and reordering
 
-* the compiler might decide that it is more efficient to move a write operation
+the compiler might decide that it is more efficient to move a write operation
 later in the program; as long as this code motion does not change the program's
 semantics, it is free to do so.  If a compiler defers an operation, another
 thread will not see it until it is performed; this mirrors the effect of caching.
@@ -216,19 +216,105 @@ class Reordering {
 === locks
 
 * part of java.util.concurrent package, since Java 5
-* implemented using sun.misc.Unsafe specific methods like `park`, `unpark`, `monitorEnter` and `monitorExit`
+* advantages over `synchronized` construct
+** fairness
+** `tryLock()`
+** `lockInterruptibly()`
+** `newCondition()`, is like `wait()/notify()` on steroids
+
+=== locks
+
+* `ReentrantLock`,
+* `ReentrantReadWriteLock`,
+* `StampedLock` (Java 8)
+
+=== atomic operations
+
+is it safe on multiprocessor systems?
+
+[source,java]
+----
+int i = 0;
+i++;
+----
+
+=== ... or better in bytecode
+
+[source,bytecode]
+----
+iconst_0
+istore_1
+iload_1
+iconst_1
+iadd
+----
+
+=== ... or in assembly
+
+[source,nasm]
+----
+global _start
+
+section .data
+  i: DW 0
+
+section .bss
+
+section .text
+  _start:
+
+  inc dword [i];
+  ; required on Linux exit syscall
+  mov     ebx, 0          ; Arg one: the status
+  mov     eax, 1          ; Syscall number:
+  int     0x80
+----
+
+single `inc` instruction, should work, shouldn't it?
+
+remember &#xb5;ops?
+
+=== compare-exchange
+
+CPU to the rescure with `cmpxchg` instruction and others like `xadd`
+
+[quote]
+Compares the value in the AL, AX, or EAX register (depending on the
+size of the operand) with the first operand (destination operand).
+If the two values are equal, the second operand (source operand)
+is loaded into the destination operand. Otherwise, the destination
+operand is loaded into the AL, AX, or EAX register.
+This instruction can be used with a LOCK prefix to allow the
+instruction to be executed atomically.
+
+
+=== java.util.concurrent.atomic
+
+* classes like `AtomicLong` or `AtomicInteger` provide compare-exchange semantic
+for Java
 
 == lock free programming
 
 === o co chodzi (transactional methods)
 
-=== compare xchange
-
-=== java.util.concurrent.atomic
-
 === ABA problem
 
 === spin loops
+
+=== !
+
+[quote, Stackoverflow]
+This is an entirely different thing than the CPU LOCK prefix feature which
+guards a single instruction only and thus might hold other threads for the
+duration of that single instruction only. Since this is implemented by the
+CPU itself, it doesn’t require additional software efforts.
+Therefore the challenge of developing lock-free algorithms is not the removal
+of synchronization entirely, it boils down to reduce the critical section of
+the code to a single atomic operation which will be provided by the CPU itself.
+
+=== !
+
+fancy example of lock-free, maybe MPSC queue, whatever
 
 === yeld, PAUSE and other stuff (mention Gil Tene JEP)
 
