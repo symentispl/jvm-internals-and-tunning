@@ -1,4 +1,4 @@
-= Just in
+= Just in time compiler
 :idprefix:
 :backend: revealjs
 :highlighter: pygments

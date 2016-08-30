@@ -1,4 +1,4 @@
-= Byte code i maszyna wirtualna
+= Bytecode i maszyna wirtualna
 :idprefix:
 :backend: revealjs
 :highlighter: pygments
@@ -13,6 +13,13 @@
 == Byte code i maszyna wirtualna
 
   Java Virtual Machine bytecode is a low level language for non existing CPU
+
+=== bytece and .class file
+
+Bytecode is stored in files, which format is defined by
+link:http://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html[class file format spec]
+
+Bytecode is a stream of single byte size opcodes followed by defined set operands
 
 === .class file structure
 
@@ -37,18 +44,9 @@ ClassFile {
 }
 ----
 
-=== Struktura pliku .class
-
-Bytecode is stored in files, which format is defined by
-link:http://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html[lass
-  file format spec]
-
-Bytecode is a stream of single byte size opcodes followed by
-defined set operands
-
 === Hello world
 
-[source, asm]
+[source]
 ----
 0: getstatic #16
 3: ldc #22
@@ -100,8 +98,6 @@ defined set operands
 +---------+           +-----------------+
 ----
 
-=== Bytecode, stack, variables
-
 === Podstawowe operacje: manipulacja stosem
 
 * `ALOAD`,`ILOAD`,`DLOAD`,`FLOAD`, umieszcza wybraną zmienną lokalną na stosie,
@@ -119,11 +115,10 @@ defined set operands
 ** `invokestatic`
 ** `invokedynamic`
 
-
 === invoke* and receiver
 
-** różnią się typem tzw. `receiver` czyli pierwszego elementu na stosie oraz
-w jaki sposób jest określania metoda, która ma zostać wywołana
+* różnią się typem tzw. `receiver` czyli pierwszego elementu na stosie oraz
+w jaki sposób następuje jest określanie która metoda ma zostać wywołana
 
 === virtual, special, interface
 
@@ -184,7 +179,7 @@ of lambdas implementation in JDK 8
 
 === Exception table
 
-* przechowuje informacje o blokach kodu `catch` oraz `finnaly`, wdanej metodzie
+* przechowuje informacje o blokach kodu `catch` oraz `finally`, w danej metodzie
 * oraz mapowanie pomiędzy typem wyjątku a blockiem kodu
 * bytecode nie posiada opcode dla słów kluczowych `catch` i `finally` (Java)
 
