@@ -31,11 +31,9 @@ public class LineReader extends RecursiveTask<Long> {
 
 			String line;
 			while ((line = buffered.readLine()) != null) {
-
 				CountWords c = new CountWords(line);
 				counters.add(c);
 				c.fork();
-
 			}
 
 			long z = 0;

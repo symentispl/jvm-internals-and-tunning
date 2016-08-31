@@ -8,6 +8,10 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * 
+ *
+ */
 public class AverageRandomNumbers {
 
 	private static class RandomNumbers implements Runnable {
@@ -62,6 +66,7 @@ public class AverageRandomNumbers {
 			allRandomNumbers.add(randomNumbers);
 			fixedThreadPool.execute(randomNumbers);
 		}
+		
 
 	}
 }

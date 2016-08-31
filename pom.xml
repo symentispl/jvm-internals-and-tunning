@@ -69,7 +69,6 @@
 		<module>gc</module>
 		<module>io</module>
 		<module>concurrency</module>
-		<module>btrace</module>
 		<module>jit</module>
     <module>jmh</module>
   </modules>

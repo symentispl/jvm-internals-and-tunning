@@ -1,5 +1,10 @@
 package pl.symentis.jit;
 
+/**
+ * 
+ * -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:CompileCommand=print,*NullCheckFolding.nullCheckFolding
+ *
+ */
 public class UncommonTrap {
 	static final int CHUNK_SIZE = 1000;
 

@@ -5,8 +5,6 @@ package pl.symentis.jit;
  * or
  * -XX:-UseBiasedLocking
  * 
- * @author jarek
- *
  */
 public class BiasedLocking {
 

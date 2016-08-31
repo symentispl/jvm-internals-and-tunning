@@ -29,10 +29,6 @@ public class CountDownToExtinction {
 			countDownLatch.countDown();
 		}
 
-		public List<Integer> getNumbers() {
-			return numbers;
-		}
-
 	}
 
 	public static void main(String[] args) throws InterruptedException {

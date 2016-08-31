@@ -12,10 +12,10 @@ public class WordCount {
 
 	public static void main(String[] args) throws Exception {
 
-		ForkJoinPool pool = new ForkJoinPool(16);
+		ForkJoinPool pool = new ForkJoinPool();
 
 		ForkJoinTask<Long> submit = pool.submit(new LineReader(new FileReader(
-				"/home/jarek/bigger.txt")));
+				"src/main/resources/big.txt")));
 
 		long time = currentTimeMillis();
 		out.println(format("counted words, %d", submit.get()));

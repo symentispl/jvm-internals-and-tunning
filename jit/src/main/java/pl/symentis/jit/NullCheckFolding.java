@@ -1,5 +1,10 @@
 package pl.symentis.jit;
 
+/**
+ * 
+ * -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:CompileCommand=print,*NullCheckFolding.nullCheckFolding
+ *
+ */
 public class NullCheckFolding {
 
 	static final int CHUNK_SIZE = 1000;
@@ -10,7 +15,7 @@ public class NullCheckFolding {
 		}
 	}
 
-	public void nullCheckFodling() {
+	public void nullCheckFolding() {
 		assertNotNull(this);
 	}
 	
@@ -18,7 +23,7 @@ public class NullCheckFolding {
 		NullCheckFolding ncf = new NullCheckFolding();
 		for (int i = 0; i < 250; ++i) {
 			for (int j = 0; j < CHUNK_SIZE; ++j) {
-				ncf.nullCheckFodling();
+				ncf.nullCheckFolding();
 			}
 		}
 	}
