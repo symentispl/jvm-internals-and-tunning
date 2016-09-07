@@ -2,7 +2,7 @@ package pl.symentis.jit;
 
 /**
  * 
- * -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:CompileCommand=print,*NullCheckFolding.nullCheckFolding
+ * -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining
  *
  */
 public class UncommonTrap {
