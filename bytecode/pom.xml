@@ -15,7 +15,6 @@
 
 	<modules>
 		<module>bytecode-asm</module>
-		<module>bytecode-jitescript</module>
 		<module>bytecode-bytebuddy</module>
 		<module>bytecode-javaagent</module>
 		<module>bytecode-byteman</module>

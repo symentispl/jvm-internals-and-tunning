@@ -6,7 +6,7 @@ import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.FixedValue;
 
-public class ToStringProxyFactory {
+public class ToStringProxy {
 
 	public static <T> Class<? extends T> toStringProxy(Class<T> clazz, String toString) {
 		Class dynamicType = new ByteBuddy()
@@ -14,7 +14,7 @@ public class ToStringProxyFactory {
 		.method(named("toString"))
 		.intercept(FixedValue.value(toString))
 		.make()
-		.load(ToStringProxyFactory.class.getClassLoader(), ClassLoadingStrategy.Default.WRAPPER)
+		.load(ToStringProxy.class.getClassLoader(), ClassLoadingStrategy.Default.WRAPPER)
 		.getLoaded();
 		return dynamicType;
 	}

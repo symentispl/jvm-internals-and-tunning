@@ -11,8 +11,7 @@ public class GlobalValueNumbering {
 	
 	public static long globalValueNumbering(int i) {
 		  int x = i+4;
-		  int y = i+4;
-		  return x+y;
+		  return 2*x;
 	}
 	
 	public static void main(String[] args) {

@@ -1,7 +1,5 @@
 package pl.symentis.jit;
 
-import java.util.ArrayList;
-
 /**
  * 
  * -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:CompileCommand=print,*PointerCompare.pointerCompare
@@ -19,9 +17,7 @@ public class PointerCompare {
 		return -1;
 	}
 	
-	public static void doInLoop(){
-		new ArrayList<>().add("");
-	}
+	
 
 	public static void main(String[] args) {
 		int result = 0;

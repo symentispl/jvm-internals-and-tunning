@@ -37,6 +37,7 @@ public class MemoizeMethodTransformer implements ClassFileTransformer {
 				out.println("trying to transform: "+dottedClassname);
 				CtClass ctClass = classPool.get(dottedClassname);
 				if (generator.hasMemoizedMethods(ctClass)) {
+					out.println("has memoized methods");
 					CtClass transformedClass = generator.generateMemoizedMethods(ctClass);
 					return transformedClass.toBytecode();
 				}

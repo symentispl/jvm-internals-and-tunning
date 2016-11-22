@@ -20,12 +20,14 @@ public class NullCheckFolding {
 	}
 	
 	public static void main(String[] args) {
+		long time = System.currentTimeMillis();
 		NullCheckFolding ncf = new NullCheckFolding();
 		for (int i = 0; i < 250; ++i) {
 			for (int j = 0; j < CHUNK_SIZE; ++j) {
 				ncf.nullCheckFolding();
 			}
 		}
+		System.out.println(System.currentTimeMillis()-time);
 	}
 
 }
