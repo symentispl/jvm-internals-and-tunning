@@ -1,0 +1,241 @@
+= Mutants, xenomorphs and bytecode
+:idprefix:
+:stem: asciimath
+:backend: html
+:source-highlighter: pygments
+:pygments-style: tango
+:revealjs_history: true
+:revealjs_theme: white
+:imagesdir: images
+:customcss: css/custom.css
+
+== about me
+
+== !
+
+Java bytecode is an assembly language for a non existing CPU
+
+=== a JVM CPU
+
+stack +
+local variables +
+method area
+
+[%notitle]
+== !
+
+image::turtles.jpg[alt]
+
+image::http://www.ipadinfo.nl/wp-content/uploads/2011/10/blauwbord.jpg[]
+
+== !
+
+[source,java]
+----
+public class HelloWorld{
+  public static void main(String[] argv){
+    System.out.println("Hello world!");
+  }
+}
+----
+
+== hello javap
+
+a bundled with jdk bytecode disassembler
+
+== classfile
+
+Bytecode is stored in files, +
+which format is defined by
+link:http://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html[class file format spec] +
+
+Bytecode is a stream of single byte size opcodes followed by defined set operands
+
+=== !
+
+classname +
+modifiers +
+superclass +
+classpool +
+implemented interfaces +
+fields (and attributes) +
+methods (and attributes)
+
+=== classpool?
+
+kind of dictionary of all symbols used in a class like:
+
+* imported class names
+* methods names
+* string and other literals
+* bootstrap handles
+
+=== attributes?
+
+a place for future use :)
+
+* annotations
+* stack map table
+* exception table
+* source line table
+
+will comeback to it!
+
+=== example
+
+[code, nasm]
+----
+iload       #16
+  ^          ^
+  op   word size offset
+----
+
+== stack manipulation
+
+[source, nasm]
+----
+astore # store top of stack in variables
+aload  # load from variables to top of stack
+dup    # duplicate top of stack
+areturn # return top of stack from function
+----
+
+== invoke*
+
+[source, nasm]
+----
+invokevirtual     # store top of stack in variables
+invokestatic      # load from variables to top of stack
+invokespecial     # duplicate top of stack
+invokeinterface   # return top of stack from function
+invokedynamic     # oh my god, things are getting weird
+----
+
+== virtual methods table
+
+Java uses "single method dispatch", it means it uses single object (`this`) to
+resolve method. +
+
+Because of this it can use virtual methods technique.
+
+=== !
+
+[source, java]
+----
+class A {
+  void method1(){
+    System.out.println("A.method1");
+  }
+}
+
+class B extends A{
+  void method1(){
+    System.out.println("B.method1");
+  }
+
+  void method2(){
+    System.out.println("B.method1");
+  }
+
+}
+----
+
+=== !
+
+*class A vtable*
+|===
+| 0 | `System.out.println("A.method1");`
+|===
+
+*class B vtable*
+|===
+| 0 | `System.out.println("B.method1");`
+| 1 | `System.out.println("B.method2");`
+|===
+
+=== invokeinterface
+
+[source, java]
+----
+
+interface Intrf {
+  void method1();
+}
+
+class A implements Intrf{
+  void method1(){
+    System.out.println("A.method1");
+  }
+}
+
+class B  implements Intrf{
+
+  void method2(){
+    System.out.println("B.method1");
+  }
+
+  void method1(){
+    System.out.println("B.method1");
+  }
+
+}
+----
+
+=== !
+
+*class A vtable*
+|===
+| 0 | `System.out.println("A.method1");`
+|===
+
+*class B vtable*
+|===
+| 0 | `System.out.println("B.method2");`
+| 1 | `System.out.println("B.method1");`
+|===
+
+=== invokespecial
+
+because private methods and constructor calls are "statically bound"
+(target method known at compile) we don't need to lookup vtable at call site +
+
+yes, invokevirtual and invokeinterface are "late bound" so vtable lookup is
+required every time you hit call site, +
+
+there is large set of optimizations,including inline caching, +
+don't mess it up with inlining +
+(these things are combined at the end)
+
+=== invokedynamic
+
+image::https://media.giphy.com/media/3ohfFr0PcMTsonsgb6/giphy.gif[background]
+
+=== !
+
+it is like having vtable generated at runtime, +
+plus +
+you can have multiple dispatch (sort of)
+
+== asm
+
+== javaagent
+
+image::http://www.radio-banovina.hr/wp-content/uploads/2016/10/1280x720-Mz9.jpg[background]
+
+=== get you jar ready
+
+=== jvm with agent
+
+=== !
+
+image::http://i.giphy.com/gVE7nURcnD9bW.gif[background]
+
+== bytebuddy
+
+one example
+
+== byteman
+
+one example
+
+== q&a
