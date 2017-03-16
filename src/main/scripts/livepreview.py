@@ -62,8 +62,12 @@ def copy_resources(resource_dir):
 def process_output(line):
     print(line)
 
-def serve():
+def serve(logger):
+    # install_revealjs(logger)
+    # install_asciidoctor(logger)
     init_slides()
+    copy_resources("css")()
+    copy_resources("images")()
     server = Server()
     server.watch('src/main/slides/*.adoc', render_slides)
     server.watch('src/main/resources/css/*', copy_resources("css"))

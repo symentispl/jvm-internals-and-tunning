@@ -17,7 +17,7 @@ def slideon(logger):
     # check if asciidoctor and reveal.js are setup
     try:
         import livepreview
-        livepreview.serve()
+        livepreview.serve(logger)
     except:
         logger.error("e")
 
