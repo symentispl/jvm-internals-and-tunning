@@ -1,0 +1,23 @@
+= Mutants, xenomorphs and bytecode
+:idprefix:
+:stem: asciimath
+:backend: html
+:source-highlighter: pygments
+:pygments-style: tango
+:revealjs_history: true
+:revealjs_theme: white
+:imagesdir: images
+:customcss: css/custom.css
+
+== about me
+
+*Jarek Pałka*
+
+[options="step"]
+* Allegro.tech, doing stuff, back to coding, hell yeah!!!
+* JDD, 4Developers and one more conference (still under development) where I
+serve as a dictator for life
+* JVM, bytecode, parsers, graphs and other cool things (like ponies)
+* owner at Symentis trainings,
+* former chief architect, development manager, head of development,
+backend developer and performance guy
