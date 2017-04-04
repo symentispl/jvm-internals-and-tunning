@@ -1,10 +1,22 @@
 package pl.symentis.jvminternals.bytecode;
 
+import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
 import static org.objectweb.asm.Opcodes.ALOAD;
+import static org.objectweb.asm.Opcodes.ASTORE;
+import static org.objectweb.asm.Opcodes.GETSTATIC;
+import static org.objectweb.asm.Opcodes.H_INVOKESTATIC;
 import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
-import static org.objectweb.asm.Type.getMethodType;
+import static org.objectweb.asm.Opcodes.INVOKEVIRTUAL;
+import static org.objectweb.asm.Opcodes.RETURN;
+import static org.objectweb.asm.Opcodes.V1_8;
+import static org.objectweb.asm.Type.VOID_TYPE;
+import static org.objectweb.asm.Type.getDescriptor;
+import static org.objectweb.asm.Type.getInternalName;
+import static org.objectweb.asm.Type.getMethodDescriptor;
+import static org.objectweb.asm.Type.getType;
 import static pl.symentis.jvminternals.bytecode.ClassFileHelper.writeClassToFile;
 
+import java.io.PrintStream;
 import java.lang.invoke.CallSite;
 import java.lang.invoke.ConstantCallSite;
 import java.lang.invoke.MethodHandle;
@@ -24,13 +36,7 @@ import org.objectweb.asm.Type;
  * 
  */
 public class GenerateClassWithInvokeDynamic {
-
-	private static boolean linked;
 	
-	/**
-	 * @param args
-	 * @throws Exception
-	 */
 	public static void main(String[] args) throws Exception {
 
 		String classname = "ClassWithInvokeDynamic";
@@ -38,56 +44,88 @@ public class GenerateClassWithInvokeDynamic {
 		ClassWriter writer = new ClassWriter(0);
 
 		writer.visit(
-				Opcodes.V1_8,
-				Opcodes.ACC_PUBLIC,
+				V1_8,
+				ACC_PUBLIC,
 				classname,
 				null,
 				"java/lang/Object",
-				new String[] { Type.getType(Comparator.class).getInternalName() });
+				new String[] { getInternalName(Runnable.class) });
 
-		MethodVisitor constructor = writer.visitMethod(Opcodes.ACC_PUBLIC,
-				"<init>", getMethodType(Type.VOID_TYPE).getInternalName(),
-				null, null);
+		MethodVisitor constructor = writer.visitMethod(
+				ACC_PUBLIC,
+				"<init>", getMethodDescriptor(VOID_TYPE),
+				null, 
+				null);
 
+		// default constructor code
 		constructor.visitCode();
 		constructor.visitVarInsn(ALOAD, 0);
-		constructor.visitMethodInsn(INVOKESPECIAL, "java/lang/Object",
-				"<init>", getMethodType(Type.VOID_TYPE).getInternalName(),false);
-		constructor.visitInsn(Opcodes.RETURN);
+		constructor.visitMethodInsn(
+				INVOKESPECIAL, 
+				"java/lang/Object",
+				"<init>", 
+				getMethodDescriptor(Type.VOID_TYPE),
+				false);
+		constructor.visitInsn(RETURN);
 		constructor.visitMaxs(1, 1);
 		constructor.visitEnd();
 
+		// implementation of interface Runnable method run
 		MethodVisitor method = writer.visitMethod(
-				Opcodes.ACC_PUBLIC,
-				"greaterThan",
-				getMethodType(Type.getType(String.class), Type.INT_TYPE,
-						Type.INT_TYPE).getInternalName(), null, null);
+				ACC_PUBLIC,
+				"run", 
+				getMethodDescriptor(VOID_TYPE), 
+				null, 
+				null);
 		method.visitCode();
 
-		MethodType methodType = MethodType.methodType(CallSite.class,
-				MethodHandles.Lookup.class, String.class, MethodType.class);
+		// define invokedynamic bootstrap
+		MethodType methodType = MethodType.methodType(CallSite.class,MethodHandles.Lookup.class, String.class, MethodType.class);
 
-		Handle bootstrap = new Handle(Opcodes.H_INVOKESTATIC, Type.getType(
-				GenerateClassWithInvokeDynamic.class).getInternalName(),
-				"bootstrap", methodType.toMethodDescriptorString());
+		Handle bootstrap = new Handle(
+				H_INVOKESTATIC, 
+				getInternalName(GenerateClassWithInvokeDynamic.class),
+				"bootstrap", 
+				methodType.toMethodDescriptorString(),
+				false);
 
-		method.visitVarInsn(Opcodes.ILOAD, 1);
-		method.visitVarInsn(Opcodes.ILOAD, 2);
+		method.visitLdcInsn(1);
+		method.visitLdcInsn(1);
 
-		method.visitInvokeDynamicInsn("callMe", Type.getMethodDescriptor(
-				Type.getType(String.class), Type.INT_TYPE, Type.INT_TYPE),
+		// first call site where argument are int's
+		method.visitInvokeDynamicInsn(
+				"callMe", 
+				getMethodDescriptor(getType(String.class), Type.INT_TYPE, Type.INT_TYPE),
 				bootstrap);
 
-		method.visitInsn(Opcodes.POP);
+		// print result of invoke dynamic method call
+		method.visitVarInsn(ASTORE,1);
+		method.visitFieldInsn(GETSTATIC, getInternalName(System.class), "out", getDescriptor(PrintStream.class));
+		method.visitVarInsn(ALOAD,1);
+		method.visitMethodInsn(
+				INVOKEVIRTUAL, 
+				getInternalName(PrintStream.class), 
+				"println", 
+				getMethodDescriptor(VOID_TYPE, getType(String.class)),
+				false);
 		
-		method.visitVarInsn(Opcodes.ILOAD, 1);
-		method.visitVarInsn(Opcodes.ILOAD, 2);
+		
+		method.visitLdcInsn("Hello ");
+		method.visitLdcInsn(" world!");
 
-		method.visitInvokeDynamicInsn("callMe", Type.getMethodDescriptor(
-				Type.getType(String.class), Type.INT_TYPE, Type.INT_TYPE),
+		// second call site where arguments are String's
+		method.visitInvokeDynamicInsn(
+				"callMe", 
+				getMethodDescriptor(getType(String.class), getType(String.class), getType(String.class)),
 				bootstrap);
 
-		method.visitInsn(Opcodes.ARETURN);
+		// print result of invoke dynamic method call
+		method.visitVarInsn(Opcodes.ASTORE,1);
+		method.visitFieldInsn(Opcodes.GETSTATIC, Type.getInternalName(System.class), "out", Type.getDescriptor(PrintStream.class));
+		method.visitVarInsn(Opcodes.ALOAD,1);
+		method.visitMethodInsn(Opcodes.INVOKEVIRTUAL, Type.getInternalName(PrintStream.class), "println", Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(String.class)),false);
+
+		method.visitInsn(Opcodes.RETURN);
 
 		method.visitMaxs(2, 3);
 		method.visitEnd();
@@ -100,10 +138,11 @@ public class GenerateClassWithInvokeDynamic {
 
 		Class<?> class1 = new DefiningClassLoader().defineClass(classname,
 				classBuff);
-		Comparator object = (Comparator) class1.newInstance();
+		Runnable object = (Runnable) class1.newInstance();
 		
 		for(int i=0;i<3;i++){
-			System.out.println(object.greaterThan(2, 2));			
+			System.out.println("--> calling run method");
+			object.run();			
 		}
 
 	}
@@ -113,38 +152,22 @@ public class GenerateClassWithInvokeDynamic {
 			MethodType type) throws NoSuchMethodException,
 			IllegalAccessException {
 		
-		System.out.println(".. and now linking call site");
+		System.out.println(".. and now linking call site of method type "+type);
+
+		MethodHandle methodHandle = caller.findStatic(GenerateClassWithInvokeDynamic.class, name, type);
 		
-		MethodHandles.Lookup lookup = MethodHandles.lookup();
-		Class<?> thisClass = lookup.lookupClass();
+		return new ConstantCallSite(methodHandle);
+		
+	}
+
+	public static String callMe(int i, int j){
+		System.out.println("calling me with ints");
+		return Integer.toString(i+j);
+	}
 	
-		
-		MethodHandle methodHandle;
-		if(!linked){
-		methodHandle = lookup
-				.findStatic(thisClass, "realMethod", MethodType.methodType(
-						String.class, Integer.TYPE, Integer.TYPE));
-			linked = true;
-		} else{
-			methodHandle = lookup
-					.findStatic(thisClass, "alwaysTrue", MethodType.methodType(
-							String.class, Integer.TYPE, Integer.TYPE));
-			
-		}
-		return new ConstantCallSite(methodHandle.asType(type));
+	public static String callMe(String i, String j){
+		System.out.println("calling me with String");
+		return i+j;
 	}
 
-	public static String alwaysTrue(int x, int y) {
-		System.out.println("calling alwaysTrue");
-		return "true";
-	}
-
-	public static String realMethod(int x, int y) {
-		System.out.println("calling realMethod");
-		if (x > y) {
-			return "true";
-		} else {
-			return "false";
-		}
-	}
 }

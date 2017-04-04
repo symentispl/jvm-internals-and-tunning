@@ -7,6 +7,10 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 
+/**
+ * This is example of fault injection testing with Byteman
+ *
+ */
 @RunWith(BMUnitRunner.class)
 public class FileProcessorTest {
 
@@ -18,14 +22,14 @@ public class FileProcessorTest {
 		targetClass = "FileInputStream", 
 		targetMethod = "<init>(File)", 
 		condition = "$1.getName().equals(\"badname.txt\")", 
-		action = "throw new NullPointerException(\"bad name!\")")
+		action = "throw new FileNotFoundException()")
 	@Test
 	public void testSecurityException() throws Exception {
-		FileProcessor myTestObj = new FileProcessor();
+		FileProcessor fileProcessor = new FileProcessor();
 		
-		expectedException.expect(NullPointerException.class);
+		expectedException.expect(IllegalArgumentException.class);
 		
-		myTestObj.processFile("badname.txt");
+		fileProcessor.processFile("badname.txt");
 	}
 
 }

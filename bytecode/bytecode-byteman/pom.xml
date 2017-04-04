@@ -8,6 +8,124 @@
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 	<artifactId>bytecode-byteman</artifactId>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<version>3.0.0</version>
+				<executions>
+					<execution>
+						<id>unpack</id>
+						<phase>generate-resources</phase>
+						<goals>
+							<goal>unpack</goal>
+						</goals>
+						<configuration>
+							<artifactItems>
+								<artifactItem>
+									<groupId>org.jboss.byteman</groupId>
+									<artifactId>byteman-download</artifactId>
+									<version>3.0.8</version>
+									<classifier>full</classifier>
+									<type>zip</type>
+								</artifactItem>
+							</artifactItems>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.jboss.byteman</groupId>
+				<artifactId>byteman-rulecheck-maven-plugin</artifactId>
+				<version>3.0.8</version>
+				<executions>
+					<execution>
+						<id>rulecheck-test</id>
+						<goals>
+							<goal>rulecheck</goal>
+						</goals>
+						<configuration>
+							<scriptDir>src/main/byteman</scriptDir>
+							<packages>
+								<package>pl.symentis.bytecode.byteman</package>
+							</packages>
+							<includes>
+								<include>*.btm</include>
+							</includes>
+							<verbose>true</verbose>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<version>3.0.0</version>
+				<executions>
+					<execution>
+						<id>uberjar</id>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<version>2.5</version>
+				<configuration>
+					<archive>
+						<manifest>
+							<mainClass>pl.symentis.bytecode.byteman.Main</mainClass>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+		</plugins>
+
+		<pluginManagement>
+			<plugins>
+				<!--This plugin's configuration is used to store Eclipse m2e settings 
+					only. It has no influence on the Maven build itself. -->
+				<plugin>
+					<groupId>org.eclipse.m2e</groupId>
+					<artifactId>lifecycle-mapping</artifactId>
+					<version>1.0.0</version>
+					<configuration>
+						<lifecycleMappingMetadata>
+							<pluginExecutions>
+								<pluginExecution>
+									<pluginExecutionFilter>
+										<groupId>
+											org.jboss.byteman
+										</groupId>
+										<artifactId>
+											byteman-rulecheck-maven-plugin
+										</artifactId>
+										<versionRange>
+											[3.0.8,)
+										</versionRange>
+										<goals>
+											<goal>rulecheck</goal>
+										</goals>
+									</pluginExecutionFilter>
+									<action>
+										<ignore></ignore>
+									</action>
+								</pluginExecution>
+							</pluginExecutions>
+						</lifecycleMappingMetadata>
+					</configuration>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+	</build>
+
 	<dependencies>
 
 		<dependency>
@@ -16,10 +134,18 @@
 			<version>2.0.1</version>
 		</dependency>
 
+
 		<dependency>
 			<groupId>org.jboss.byteman</groupId>
 			<artifactId>byteman-bmunit</artifactId>
-			<version>3.0.6</version>
+			<version>3.0.8</version>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.jboss.byteman</groupId>
+			<artifactId>byteman</artifactId>
+			<version>3.0.8</version>
 			<scope>test</scope>
 		</dependency>
 
