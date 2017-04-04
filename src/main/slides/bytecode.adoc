@@ -14,7 +14,7 @@
 
   Java Virtual Machine bytecode is a low level language for non existing CPU
 
-=== bytece and .class file
+=== bytecode and .class file
 
 Bytecode is stored in files, which format is defined by
 link:http://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html[class file format spec]
