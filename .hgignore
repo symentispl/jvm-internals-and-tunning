@@ -1,4 +1,7 @@
-syntax: regexp
+syntax: glob
+target/
+*~
+*pyc
 .springBeans
 target
 .settings/

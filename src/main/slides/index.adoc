@@ -1,0 +1,25 @@
+= JVM internals and tuning
+:idprefix:
+:backend: revealjs
+:highlighter: pygments
+:stem: asciimath
+:source-highlighter: pygments
+:pygments-css: style
+:revealjs_theme: serif
+:revealjs_history: true
+:imagesdir: images
+
+== about me
+
+* Allegro.tech, data streams with Kafka, Hazelcast, RXJava and tons of JVM tuning
+* JDD/4Developers, naczelny sprawca zamieszania czyli człowiek od kłopotów,
+* a tak poza tym jeśli cokolwiek ma związek z JVM i HotSpot, bytecode'em, parserami, językami programowania na JVM oraz technikami JIT, wcześniej czy później się tym zainteresuje :)
+* były architekt, manager, sysadmin i człowiek od wydajności,
+
+
+== agenda
+
+* http://localhost:5500/bytecode.html[Java bytecode]
+* http://localhost:5500/jit.html[Just in time compiler]
+* http://localhost:5500/garbage-collection.html[Garbage collection]
+* http://localhost:5500/jmm-concurrency.html[Concurrency and Java memory model]
