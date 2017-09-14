@@ -8,5 +8,7 @@ image: openjdk:8u141-jdk
 pipelines:
   default:
     - step:
+        caches:
+          - maven
         script: # Modify the commands below to build your repository.
-          - ./mvnw verify
+          - ./mvnw -B verify
