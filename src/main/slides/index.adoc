@@ -1,13 +1,14 @@
-= Mutants, xenomorphs and bytecode
+= Voyeurs in the JVM land
 :idprefix:
 :stem: asciimath
 :backend: html
 :source-highlighter: pygments
 :pygments-style: tango
 :revealjs_history: true
-:revealjs_theme: white
+:revealjs_theme: night
 :imagesdir: images
 :customcss: css/custom.css
+:title-slide-background-image: https://i.ytimg.com/vi/_TQYpKSMVhw/maxresdefault.jpg
 
 == about me
 
@@ -21,3 +22,124 @@ serve as a dictator for life
 * owner at Symentis trainings,
 * former chief architect, development manager, head of development,
 backend developer and performance guy
+
+== agenda
+
+* JDK with batteries included
+* JVM logging and tracking
+* Linux tools for curious
+* other tools for weirdos
+
+== JDK with batteries included
+
+* jps
+* jmap
+* jstack
+* jcmd
+
+=== how it works
+
+JVM stores metrics in memory mapped files
+
+_+++/tmp/hsperfdata_[username]/[pid]+++_
+
+=== test
+
+_lsof +d /tmp/hsperfdata_jarek_
+
+=== jps
+
+lists all running JVM processes
+
+=== jstack
+
+dumps stacks of all JVM threads (in a selected process)
+
+_jstack -l [pid] # to include locks info_
+
+=== jmap
+
+prints heap information, histogram or dump heap content to a file
+
+=== !
+
+_jmap -heap [pid] # to print heap usage_
+
+_jmap -histo [pid] # to print histogram_
+
+_jmap -dump:file=jvm.dump # to dump heap_
+
+=== jstat
+
+samples running JVM for selected metrics
+
+=== jcmd
+
+image::https://static.pexels.com/photos/60029/pepperoni-red-sharp-cut-60029.jpeg[background,size=cover]
+
+[%notitle]
+=== jcmd - options
+
+one tool to rule them all, +
+one stop shop for all commands available in JVM
+
+=== let's play with it
+
+== JVM logging and tracking
+
+=== JVM has tons of diagnostic options
+
+image::https://s3.amazonaws.com/images.thestar.com/content/dam/thestar/entertainment/movies/2016/01/08/the-forest-gets-lost-in-the-trees-review/forest--horizontal.jpg.size-custom-crop.1086x0.jpg[background, size=cover]
+
+=== garbage collection
+
+=== safepoint
+
+=== just in time compilation
+
+=== native memory tracking
+
+== Linux tools for curious
+
+* sysstat
+* sysdig
+* perf
+
+== a weapon of massive distraction
+
+image::https://static.pexels.com/photos/358559/pexels-photo-358559.jpeg[background,size=cover]
+
+=== or pair made in heaven
+
+=== FlightRecorder
+
+=== Java Mission Control
+
+== tools for weirdos
+
+* honest profiler
+* flamegraphs
+* PrintAssembly?
+
+=== honest profiler
+
+it uses unofficial JVM API call `AsyncGetCallTrace` +
+as opposed to other profilers which use JVMTI (JVM tool interface)
+
+=== !
+
+here goes long boring discussion about complexity of OpenJDK global safepoint mechanism
+
+[%notitle]
+=== honest profiler benefits
+
+[quote,,Honest profiler wiki]
+  It accurately profiles applications, avoiding an inherent bias towards places that have safepoints.
+  It profiles applications with significantly lower overhead than traditional profiling techniques, making it suitable for use in production.
+
+== tools I didn't mention
+
+* GCviewer
+* JITWatch
+
+== Q&A
