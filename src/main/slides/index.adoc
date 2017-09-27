@@ -93,17 +93,40 @@ image::https://s3.amazonaws.com/images.thestar.com/content/dam/thestar/entertain
 
 === garbage collection
 
+_jstat -gc [pid] [interval]_
+
+-Xloggc:gc.log -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintTenuringDistribution -XX:+PrintGCApplicationStoppedTime -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=5 -XX:GCLogFileSize=10M -XX:+PrintClassHistogramAfterFullGC -XX:+PrintClassHistogramBeforeFullGC
+
 === safepoint
+
+-XX:+PrintSafepointStatistics
+-XX:PrintSafepointStatisticsCount=1
+
+https://www.cberner.com/2015/05/24/debugging-jvm-safepoint-pauses/
 
 === just in time compilation
 
+-XX:+UnlockDiagnosticVMOptions
+-XX:+PrintCompilation
+-XX:+PrintInlining
+
+-XX:+UnlockDiagnosticVMOptions
+-XX:+TraceClassLoading
+-XX:+LogCompilation
+-XX:LogFile=mylogfile.log
+-XX:+PrintAssembly
+
+=== TLAB
+
+-XX:+PrintTLAB
+
+https://blogs.oracle.com/jonthecollector/the-real-thing
+
 === native memory tracking
 
-== Linux tools for curious
+java -XX:NativeMemoryTracking=[off|summary|detail]
 
-* sysstat
-* sysdig
-* perf
+jcmd [pid] VM.native_memory summary
 
 == a weapon of massive distraction
 
@@ -113,7 +136,43 @@ image::https://static.pexels.com/photos/358559/pexels-photo-358559.jpeg[backgrou
 
 === FlightRecorder
 
+[quote,,Oracle Help Center]
+Java Flight Recorder (JFR) is a tool for collecting diagnostic and profiling data about a running Java application. It is integrated into the Java Virtual Machine (JVM) and causes almost no performance overhead, so it can be used even in heavily loaded production environments.
+
+[%notitle]
+=== enable JFR
+
+_java -XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:StartFlightRecording=duration=60s,filename=myrecording.jfr_
+
+=== warning
+
+as of now, you can't use it to analyse production systems
+
+=== !
+
+java -XX:+UnlockCommercialFeatures -XX:+FlightRecorder
+
+jcmd [pid] JFR.start name=recording
+
+jcmd [pid] JFR.start name=recording filename=recording.jfr
+
 === Java Mission Control
+
+== Linux tools for curious
+
+* sysstat
+* sysdig
+* perf
+
+=== sysstat
+
+pidstat -t -d -p 13558 -T TASK 1
+
+=== warning
+
+forget about `strace`, `ptrace` syscall is not what you want :)
+
+=== tracing syscalls
 
 == tools for weirdos
 

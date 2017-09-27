@@ -8,6 +8,8 @@
   <packaging>pom</packaging>
 
   <modules>
-    <module>jvm-voyeurs-client-server</module>
+    <module>jvm-voyeurs-io</module>
+    <module>jvm-voyeurs-gc</module>
+    <module>jvm-voyeurs-jit</module>
   </modules>
 </project>

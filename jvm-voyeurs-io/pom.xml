@@ -10,7 +10,7 @@
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 
-	<artifactId>jvm-voyeurs-client-server</artifactId>
+	<artifactId>jvm-voyeurs-io</artifactId>
 	<packaging>jar</packaging>
 
 	<properties>
