@@ -35,6 +35,7 @@ backend developer and performance guy
 * jps
 * jmap
 * jstack
+* jstat
 * jcmd
 
 === how it works
@@ -73,6 +74,8 @@ _jmap -dump:file=jvm.dump # to dump heap_
 
 samples running JVM for selected metrics
 
+_jstat -gc [pid] 1000_
+
 === jcmd
 
 image::https://static.pexels.com/photos/60029/pepperoni-red-sharp-cut-60029.jpeg[background,size=cover]
@@ -85,6 +88,8 @@ one stop shop for all commands available in JVM
 
 === let's play with it
 
+_jcmd [pid] help_
+
 == JVM logging and tracking
 
 === JVM has tons of diagnostic options
@@ -93,42 +98,98 @@ image::https://s3.amazonaws.com/images.thestar.com/content/dam/thestar/entertain
 
 === garbage collection
 
+image::https://static.pexels.com/photos/128421/pexels-photo-128421.jpeg[background,size=cover]
+
+=== !
+
 _jstat -gc [pid] [interval]_
 
--Xloggc:gc.log -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintTenuringDistribution -XX:+PrintGCApplicationStoppedTime -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=5 -XX:GCLogFileSize=10M -XX:+PrintClassHistogramAfterFullGC -XX:+PrintClassHistogramBeforeFullGC
+or
+
+=== !
+
+_-Xloggc:gc.log_ +
+_-XX:+PrintGCDetails_ +
+_-XX:+PrintGCDateStamps_ +
+_-XX:+PrintTenuringDistribution_ +
+_-XX:+PrintGCApplicationStoppedTime_ +
+_-XX:+PrintClassHistogramAfterFullGC_ +
+_-XX:+PrintClassHistogramBeforeFullGC_ +
+_-XX:+UseGCLogFileRotation_ +
+_-XX:NumberOfGCLogFiles=5_ +
+_-XX:GCLogFileSize=10M_
 
 === safepoint
 
--XX:+PrintSafepointStatistics
--XX:PrintSafepointStatisticsCount=1
+image::https://static.pexels.com/photos/186537/pexels-photo-186537.jpeg[background,size=cover]
 
-https://www.cberner.com/2015/05/24/debugging-jvm-safepoint-pauses/
+=== what?
+
+[quote,Nitsan Wakart,]
+  Imagine if you will a JVM full of mutator threads, all busy, sweating, mutating the heap. Some of them have <gasp> shared mutable state. They're mutating each others state, concurrently, like animals. Some stand in corners mutating their own state (go blind they will). Suddenly a neon sign flashes the word PINEAPPLES. One by one the mutators stop their rampant heap romping and wait, sweat dripping. When the last mutator stops, a bunch of elves come in, empty the ashtrays, fill up all the drinks, mop up the puddles, and quickly as they can they vanish back to the north pole. The sign is turned off and the threads go back to it
+
+=== !
+
+[quote,Nitsan Wakart,]
+  At a safepoint the mutator thread is at a known and well defined point in it's interaction with the heap. This means that all the references on the stack are mapped (at known locations) and the JVM can account for all of them. As long as the thread remains at a safepoint we can safely manipulate the heap + stack such that the thread's view of the world remains consistent when it leaves the safepoint.
+
+=== !
+
+_-XX:+PrintSafepointStatistics_ +
+_-XX:PrintSafepointStatisticsCount=1_
+
+https://www.cberner.com/2015/05/24/debugging-jvm-safepoint-pauses/[Debugging JVM safepoint pauses]
 
 === just in time compilation
 
--XX:+UnlockDiagnosticVMOptions
--XX:+PrintCompilation
--XX:+PrintInlining
+image::https://static.pexels.com/photos/404972/pexels-photo-404972.jpeg[background,size=cover]
 
--XX:+UnlockDiagnosticVMOptions
--XX:+TraceClassLoading
--XX:+LogCompilation
--XX:LogFile=mylogfile.log
--XX:+PrintAssembly
+=== !
+
+_-XX:+UnlockDiagnosticVMOptions_ +
+_-XX:+PrintCompilation_ +
+_-XX:+PrintInlining_
+
+_-XX:+UnlockDiagnosticVMOptions_ +
+_-XX:+TraceClassLoading_ +
+_-XX:+LogCompilation_ +
+_-XX:LogFile=mylogfile.log_ +
+_-XX:+PrintAssembly_
 
 === TLAB
 
+image::https://static.pexels.com/photos/533353/pexels-photo-533353.jpeg[background,size=cover]
+
+=== what?
+
+[quote,Ross K,]
+  A Thread Local Allocation Buffer (TLAB) is a region of Eden that is used for allocation by a single thread.  It enables a thread to do object allocation using thread local top and limit pointers, which is faster than doing an atomic operation on a top pointer that is shared across threads. A thread acquires a TLAB at it's first object allocation after a GC scavenge. The size of the TLAB is computed via a somewhat complex process discribed below.  The TLAB is released when it is full (or nearly so), or the next GC scavenge occurs. TLABs are allocated only in Eden, never from From-Space or the OldGen.
+
+=== should I care?
+
+you want as much of allocations to happen in TLABs, period
+
+=== !
+
 -XX:+PrintTLAB
 
-https://blogs.oracle.com/jonthecollector/the-real-thing
+https://blogs.oracle.com/jonthecollector/the-real-thing[The Real Thing]
 
 === native memory tracking
 
-java -XX:NativeMemoryTracking=[off|summary|detail]
+image::https://static.pexels.com/photos/47090/baby-tears-small-child-sad-47090.jpeg[background,size=cover]
 
-jcmd [pid] VM.native_memory summary
+=== Stackoverflow
 
-== a weapon of massive distraction
+https://stackoverflow.com/questions/24670316/java-process-taking-more-memory-than-its-max-heap-size[Java process taking more memory than its max heap size]
+
+=== !
+
+_java -XX:NativeMemoryTracking=[off|summary|detail]_
+
+_jcmd [pid] VM.native_memory summary_
+
+== a weapon of mass destruction
 
 image::https://static.pexels.com/photos/358559/pexels-photo-358559.jpeg[background,size=cover]
 
@@ -146,17 +207,21 @@ _java -XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:StartFlightRecording
 
 === warning
 
-as of now, you can't use it to analyse production systems
+as of now, you can't use it to analyze production systems
 
 === !
 
-java -XX:+UnlockCommercialFeatures -XX:+FlightRecorder
+_java -XX:+UnlockCommercialFeatures -XX:+FlightRecorder_
 
-jcmd [pid] JFR.start name=recording
+_jcmd [pid] JFR.start name=recording_
 
-jcmd [pid] JFR.start name=recording filename=recording.jfr
+_jcmd [pid] JFR.start name=recording filename=recording.jfr_
 
 === Java Mission Control
+
+image::https://static.pexels.com/photos/20258/pexels-photo.jpg[background,size=cover]
+
+
 
 == Linux tools for curious
 
@@ -166,7 +231,8 @@ jcmd [pid] JFR.start name=recording filename=recording.jfr
 
 === sysstat
 
-pidstat -t -d -p 13558 -T TASK 1
+_pidstat -t -d -p [pid] -T TASK 1_ +
+_pidstat -t -w -p [pid] -T TASK 1_
 
 === warning
 
@@ -174,11 +240,24 @@ forget about `strace`, `ptrace` syscall is not what you want :)
 
 === tracing syscalls
 
+image::https://static.pexels.com/photos/258510/pexels-photo-258510.jpeg[background,size=cover]
+
+=== sysdig
+
+_sysdig prod.pid=[pid] -w [pid].scap # record events_
+
+_csysdig -r [pid].scap # analyze_
+
+=== perf
+
+_perf record -p [pid] -o [pid].perf # record events_
+
+_perf report -i [pid].perf # analyze_
+
 == tools for weirdos
 
 * honest profiler
 * flamegraphs
-* PrintAssembly?
 
 === honest profiler
 
@@ -196,9 +275,21 @@ here goes long boring discussion about complexity of OpenJDK global safepoint me
   It accurately profiles applications, avoiding an inherent bias towards places that have safepoints.
   It profiles applications with significantly lower overhead than traditional profiling techniques, making it suitable for use in production.
 
+=== !
+
+http://psy-lob-saw.blogspot.co.za/2016/06/the-pros-and-cons-of-agct.html[The Pros and Cons of AGCT]
+
+=== !
+
+_java -agentpath:../honest-profiler/liblagent.so=logPath=honest.logs Main_
+
 == tools I didn't mention
 
 * GCviewer
 * JITWatch
+* PrintAssembly
+* Solaris Studio
+* Censum
+* and all application level tracing tools
 
 == Q&A

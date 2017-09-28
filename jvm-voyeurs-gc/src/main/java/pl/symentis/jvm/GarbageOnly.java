@@ -4,8 +4,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class GarbageOnly {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(GarbageOnly.class);
+	
 	private final static Object[] memory = new Object[8192];
 
 	// object size in bytes
@@ -27,7 +32,8 @@ public class GarbageOnly {
 				objectSize = Integer.parseInt(args[1]);
 			}
 		}
-		System.out.println("Creating objects of size " + objectSize + " with " + numberOfThreads + " threads");
+		
+		LOGGER.info("Creating objects of size " + objectSize + " with " + numberOfThreads + " threads");
 
 		ExecutorService executorService = Executors.newCachedThreadPool();
 
@@ -36,7 +42,7 @@ public class GarbageOnly {
 			executorService.submit(new GCProducer());
 		}
 
-		Thread.sleep(300000);
+		Thread.sleep(600000);
 		running = false;
 		executorService.shutdown();
 		executorService.awaitTermination(10, TimeUnit.SECONDS);
@@ -46,6 +52,7 @@ public class GarbageOnly {
 
 		@Override
 		public void run() {
+			LOGGER.info("{} is ready making garbage", Thread.currentThread());
 			int osize = objectSize;
 			int i = 0;
 			while (true) {
@@ -53,7 +60,8 @@ public class GarbageOnly {
 				if (i >= memory.length) {
 					i = 0;
 				}
-				if (i % 100 == 0) {
+				if (i % 1000 == 0) {
+					LOGGER.info("{} produced {} bytes of garbage so far", Thread.currentThread(),(i+1)*osize);
 					synchronized (memory) {
 						if (!running) {
 							break;
