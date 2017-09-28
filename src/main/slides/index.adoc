@@ -221,8 +221,6 @@ _jcmd [pid] JFR.start name=recording filename=recording.jfr_
 
 image::https://static.pexels.com/photos/20258/pexels-photo.jpg[background,size=cover]
 
-
-
 == Linux tools for curious
 
 * sysstat
@@ -290,6 +288,17 @@ _java -agentpath:../honest-profiler/liblagent.so=logPath=honest.logs Main_
 * PrintAssembly
 * Solaris Studio
 * Censum
+* Memory Analyzer Tool
 * and all application level tracing tools
 
 == Q&A
+
+== links
+
+https://shipilev.net/jvm-anatomy-park/[JVM Anatomy Park] +
+http://psy-lob-saw.blogspot.com/[Nitsan's blog] +
+https://www.chrisnewland.com/index[Chris Newland blog, JITwatch author] +
+http://hirt.se/blog/[Marcus Hirt blog, all stuff JMC] +
+https://0xax.gitbooks.io/linux-insides/content/SysCall/syscall-1.html[System calls in the Linux kernel] +
+https://www.sysdig.org/[sysdig] +
+https://perf.wiki.kernel.org/index.php/Main_Page[perf: Linux profiling with performance counters]
