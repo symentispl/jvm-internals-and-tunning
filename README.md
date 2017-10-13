@@ -1,12 +1,9 @@
-# because live is to short to use power point
+# because live is to short to setup environment manually
 
-in few easy steps:
+bootstrap instances
 
-  hg clone https://bitbucket.org/kcrimson/slideon [presentation_name]
-  mkvirtualenv --no-site-packages -p  /usr/bin/python3.5 [presentation_name]
-  workon [presentation_name]
-  pip install pybuilder
-  pyb install_dependencies
-  pyb slideon
+    tail -n +2 inv | xargs -I hostname ssh root@hostname "apt-get update && apt-get -y install python"
 
-Happy slides !!!
+and run playbook
+
+    ansible-playbook -i inv warsztat.yaml -u root

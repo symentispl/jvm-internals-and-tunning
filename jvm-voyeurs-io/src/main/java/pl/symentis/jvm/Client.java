@@ -10,12 +10,15 @@ import java.io.OutputStreamWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 
-import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.text.RandomStringGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Client {
 
+	private final static Logger LOGGER = LoggerFactory.getLogger(Client.class);
+	
 	public static void main(String[] args) throws IOException {
 
 		while (true) {
@@ -33,13 +36,13 @@ public class Client {
 
 					String line = reader.readLine();
 
-					System.out.println("line: " + line);
-
 					if ("NEXT".equals(line)) {
+						LOGGER.info("server {} said give me more",socket);
 						continue;
 					}
 
 					if ("BYE".equals(line)) {
+						LOGGER.info("server {} said bye",socket);
 						break;
 					}
 				}
@@ -51,7 +54,7 @@ public class Client {
 	private static void storeFile(OutputStream outputStream, BufferedWriter writer) throws IOException {
 		
 		int size = RandomUtils.nextInt(16*1024, 32*1024);
-		String filename = new RandomStringGenerator.Builder().withinRange('a', 'z').build().generate(32);
+		String filename = "client_"+new RandomStringGenerator.Builder().withinRange('a', 'z').build().generate(32);
 		
 		writer.write(String.format("STORE %s %d",filename,size));
 		writer.newLine();
