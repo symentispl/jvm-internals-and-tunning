@@ -28,5 +28,6 @@
 		<module>jvm-voyeurs-jit</module>
 		<module>jvm-voyeurs-bin</module>
 		<module>jvm-voyeurs-concurrency</module>
+		<module>jvm-voyeurs-journal</module>
 	</modules>
 </project>
