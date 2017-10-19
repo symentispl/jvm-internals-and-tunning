@@ -39,7 +39,7 @@ public class Server {
 				LOGGER.info("accepted new client connection {}", socket);
 
 				InputStream inputStream = socket.getInputStream();
-				BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream,"ISO-8859-1"));
+				BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "ISO-8859-1"));
 
 				OutputStream outputStream = socket.getOutputStream();
 				BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream));
@@ -55,6 +55,7 @@ public class Server {
 			OutputStream outputStream, BufferedWriter writer) {
 		return () -> {
 			try {
+				int i = 0;
 				while (true) {
 					String line = reader.readLine();
 					LOGGER.info("parsing command {}", line);
@@ -75,13 +76,23 @@ public class Server {
 						e.printStackTrace();
 					}
 					reader.readLine();
-					LOGGER.info("waiting for next file");
-					writer.write("NEXT");
-					writer.newLine();
-					writer.flush();
+
+					if (i < 10) {
+						LOGGER.info("waiting for next file");
+						writer.write("NEXT");
+						writer.newLine();
+						writer.flush();
+					} else {
+						LOGGER.info("enough files, bye");
+						writer.write("BYE");
+						writer.newLine();
+						writer.flush();
+						break;
+					}
+					i++;
 				}
 			} catch (IOException e) {
-				e.printStackTrace();
+				LOGGER.error("I/O is not that simple", e);
 			}
 
 		};

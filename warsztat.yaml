@@ -1,0 +1,11 @@
+---
+- hosts: maszyny
+  tasks:
+  - name: install packages
+    apt: name={{ item }}
+    with_items:
+      - sysdig
+      - sysstat
+      - openjdk-8-jdk
+  - name: copy examples
+    copy: src=jvm-voyeurs-bin/target/appassembler/ dest=/root/warsztaty

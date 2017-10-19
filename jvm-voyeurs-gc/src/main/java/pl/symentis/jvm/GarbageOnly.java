@@ -27,7 +27,7 @@ public class GarbageOnly {
 		// first (optional) argument is the number of threads to run
 		if (args.length > 0) {
 			numberOfThreads = Integer.parseInt(args[0]);
-			// second (otpional) argument is the size of the objects
+			// second (optional) argument is the size of the objects
 			if (args.length > 1) {
 				objectSize = Integer.parseInt(args[1]);
 			}
@@ -61,7 +61,7 @@ public class GarbageOnly {
 					i = 0;
 				}
 				if (i % 1000 == 0) {
-					LOGGER.info("{} produced {} bytes of garbage so far", Thread.currentThread(),(i+1)*osize);
+//					LOGGER.info("{} produced {} bytes of garbage so far", Thread.currentThread(),(i+1)*osize);
 					synchronized (memory) {
 						if (!running) {
 							break;

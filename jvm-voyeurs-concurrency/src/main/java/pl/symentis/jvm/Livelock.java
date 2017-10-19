@@ -4,11 +4,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Livelock {
-	
+
 	static class Spoon {
-	
+
 		final static Logger LOGGER = LoggerFactory.getLogger(Spoon.class);
-		
+
 		private Diner owner;
 
 		public Spoon(Diner d) {
@@ -29,9 +29,9 @@ public class Livelock {
 	}
 
 	static class Diner {
-		
+
 		final static Logger LOGGER = LoggerFactory.getLogger(Diner.class);
-		
+
 		private String name;
 		private boolean isHungry;
 
@@ -62,7 +62,7 @@ public class Livelock {
 
 				// If spouse is hungry, insist upon passing the spoon.
 				if (spouse.isHungry()) {
-					LOGGER.info("{}: You eat first my darling {}!", name, spouse.getName());
+					LOGGER.debug("{}: You eat first my darling {}!", name, spouse.getName());
 					spoon.setOwner(spouse);
 					continue;
 				}
@@ -70,7 +70,7 @@ public class Livelock {
 				// Spouse wasn't hungry, so finally eat
 				spoon.use();
 				isHungry = false;
-				LOGGER.info("{}: I am stuffed, my darling {}!", name, spouse.getName());
+				LOGGER.debug("{}: I am stuffed, my darling {}!", name, spouse.getName());
 				spoon.setOwner(spouse);
 			}
 		}
@@ -87,6 +87,7 @@ public class Livelock {
 				husband.eatWith(s, wife);
 			}
 		}).start();
+
 		new Thread(new Runnable() {
 			public void run() {
 				wife.eatWith(s, husband);
