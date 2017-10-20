@@ -1,4 +1,4 @@
-package pl.symentis.jvm;
+package pl.symentis.jvm.example3;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -15,9 +15,9 @@ import org.apache.commons.text.RandomStringGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Client {
+public class Example3c {
 
-	private final static Logger LOGGER = LoggerFactory.getLogger(Client.class);
+	private final static Logger LOGGER = LoggerFactory.getLogger(Example3c.class);
 	
 	public static void main(String[] args) throws IOException {
 

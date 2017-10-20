@@ -1,4 +1,4 @@
-package pl.symentis.jvm;
+package pl.symentis.jvm.example1;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -7,9 +7,9 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class GarbageOnly {
+public class Main {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(GarbageOnly.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
 	
 	private final static Object[] memory = new Object[8192];
 
@@ -49,7 +49,7 @@ public class GarbageOnly {
 	}
 
 	public static class GCProducer implements Runnable {
-
+		
 		@Override
 		public void run() {
 			LOGGER.info("{} is ready making garbage", Thread.currentThread());

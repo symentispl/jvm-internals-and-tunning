@@ -1,25 +1,25 @@
-package pl.symentis.jvm;
+package pl.symentis.jvm.example2;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Livelock {
+public class Main {
 
 	static class Spoon {
 
 		final static Logger LOGGER = LoggerFactory.getLogger(Spoon.class);
 
-		private Diner owner;
+		private Person owner;
 
-		public Spoon(Diner d) {
+		public Spoon(Person d) {
 			owner = d;
 		}
 
-		public Diner getOwner() {
+		public Person getOwner() {
 			return owner;
 		}
 
-		public synchronized void setOwner(Diner d) {
+		public synchronized void setOwner(Person d) {
 			owner = d;
 		}
 
@@ -28,14 +28,14 @@ public class Livelock {
 		}
 	}
 
-	static class Diner {
+	static class Person {
 
-		final static Logger LOGGER = LoggerFactory.getLogger(Diner.class);
+		final static Logger LOGGER = LoggerFactory.getLogger(Person.class);
 
 		private String name;
 		private boolean isHungry;
 
-		public Diner(String n) {
+		public Person(String n) {
 			name = n;
 			isHungry = true;
 		}
@@ -48,7 +48,7 @@ public class Livelock {
 			return isHungry;
 		}
 
-		public void eatWith(Spoon spoon, Diner spouse) {
+		public void eatWith(Spoon spoon, Person spouse) {
 			while (isHungry) {
 				// Don't have the spoon, so wait patiently for spouse.
 				if (spoon.owner != this) {
@@ -77,8 +77,8 @@ public class Livelock {
 	}
 
 	public static void main(String[] args) {
-		final Diner husband = new Diner("Bob");
-		final Diner wife = new Diner("Alice");
+		final Person husband = new Person("Bob");
+		final Person wife = new Person("Alice");
 
 		final Spoon s = new Spoon(husband);
 

@@ -1,4 +1,4 @@
-package pl.symentis.jvm;
+package pl.symentis.jvm.example4;
 
 import java.io.Serializable;
 

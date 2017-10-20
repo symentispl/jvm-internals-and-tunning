@@ -1,0 +1,15 @@
+---
+- hosts: maszyny
+  tasks:
+  - name: install packages
+    apt: name={{ item }}
+    with_items:
+      - sysdig
+      - sysstat
+      - openjdk-8-jdk
+      - lsof
+      - procps
+  - name: new dir
+    file: path=/root/warsztaty state=directory
+  - name: copy examples
+    unarchive: src=../jvm-voyeurs-bin/target/jvm-voyeurs-bin-1.0-SNAPSHOT-bin.zip dest=/root/warsztaty

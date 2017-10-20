@@ -1,4 +1,4 @@
-package pl.symentis.jvm;
+package pl.symentis.jvm.example3;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -21,9 +21,9 @@ import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Server {
+public class Example3s {
 
-	private final static Logger LOGGER = LoggerFactory.getLogger(Server.class);
+	private final static Logger LOGGER = LoggerFactory.getLogger(Example3s.class);
 
 	public static void main(String[] args) throws IOException {
 
