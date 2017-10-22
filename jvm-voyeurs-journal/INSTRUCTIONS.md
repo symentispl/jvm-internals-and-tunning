@@ -11,7 +11,7 @@ but there is no iowait).
 High sys time, suggests some strange kernel activity, it is usually connected with I/O operations
 (iowait says it's not, this time, but let's check it).
 
-	pidstat -d -p [pid]
+	pidstat -d -p [pid] 1
 	
 we will see that this application writes tons of bytes, and there is no read activity. So why, we don't see wait time?
 
@@ -24,7 +24,7 @@ there is I/O activity, but no syscalls? What the heck?
 
 Memory mapped files? Let's see pidstat one more time, this time with different option:
 
-	pidstat -r -p [pid]
+	pidstat -r -p [pid] 1
 	
 gosh, so many minor page faults?
 
