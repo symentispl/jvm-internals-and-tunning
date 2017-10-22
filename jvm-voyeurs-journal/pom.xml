@@ -7,7 +7,7 @@
 		<version>1.0-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
-	
+
 	<artifactId>jvm-voyeurs-journal</artifactId>
 
 	<build>
@@ -25,9 +25,9 @@
 				</executions>
 				<configuration>
 					<options>
--keep public class pl.symentis.jvm.example4.Main {
-	public static void main(java.lang.String[]);
-}
+						-keep public class pl.symentis.jvm.example4.Main {
+						public static void main(java.lang.String[]);
+						}
 					</options>
 					<libs>
 						<lib>${java.home}/lib/rt.jar</lib>
@@ -47,6 +47,11 @@
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-simple</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.javasimon</groupId>
+			<artifactId>javasimon-core</artifactId>
+			<version>4.1.3</version>
 		</dependency>
 	</dependencies>
 

@@ -1,17 +1,15 @@
 package pl.symentis.jvm.example4;
 
-import java.io.Serializable;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 
-public class Record implements Serializable {
+public class Record implements KryoSerializable {
 
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 4133010573809141870L;
+	private int value;
 
-	private Integer value;
-
-	public Record(Integer i) {
+	public Record(int i) {
 		this.value = i;
 	}
 
@@ -19,12 +17,22 @@ public class Record implements Serializable {
 		super();
 	}
 
-	public Integer getValue() {
+	public int getValue() {
 		return value;
 	}
 
-	public void setValue(Integer value) {
+	public void setValue(int value) {
 		this.value = value;
+	}
+
+	@Override
+	public void read(Kryo kryo, Input input) {
+		value = input.readInt();
+	}
+
+	@Override
+	public void write(Kryo kryo, Output output) {
+		output.writeInt(value);
 	}
 
 }

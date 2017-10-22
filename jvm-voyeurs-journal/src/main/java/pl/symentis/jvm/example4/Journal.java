@@ -8,28 +8,36 @@ import java.nio.channels.FileChannel.MapMode;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.function.BiFunction;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.ByteBufferInput;
 import com.esotericsoftware.kryo.io.ByteBufferOutput;
-import com.esotericsoftware.kryo.pool.KryoCallback;
-import com.esotericsoftware.kryo.pool.KryoPool;
 
 class Journal {
 
 	private static final int PAGE_SIZE = 4 * 1024/* kB, default Linux page size */;
 
-	private static final int JOURNAL_SIZE = 10 * 1024 * 1024/* 10 MBs */;
-	
-	private final KryoPool kryoPool;
+	private static final int JOURNAL_SIZE = Integer.MAX_VALUE;
+
+	// don't use KryoPool to remove pressure from GC
+	private static final ThreadLocal<Kryo> KRYO_LOCAL = new ThreadLocal<Kryo>() {
+
+		@Override
+		protected Kryo initialValue() {
+			Kryo kryo = new Kryo();
+			// make sure we don't process refs, to make serialization process faster
+			kryo.setReferences(false);
+			return kryo;
+		}
+
+	};
+
 	private final FileChannel fileChannel;
 	private final MappedByteBuffer mappedByteBuffer;
 
 	private volatile int position;
 
 	Journal(Path baseDir) throws IOException {
-		kryoPool = new KryoPool.Builder(Kryo::new).build();
 
 		Path filePath = baseDir.resolve(Paths.get("00000001"));
 
@@ -51,21 +59,24 @@ class Journal {
 	 * @return
 	 * @throws IOException
 	 */
-	Location append(Record record) throws IOException {
+	int append(Record record) throws IOException {
 		// serialize record, and check if we have enough space
-		try (ByteBufferOutput output = kryoPool.run(serialize(record))) {
+		try (ByteBufferOutput output = serialize(record)) {
+			
 			ByteBuffer buffer = output.getByteBuffer();
 			buffer.flip();
+			
 			if (mappedByteBuffer.remaining() < buffer.limit()) {
 				mappedByteBuffer.rewind();
 			}
+			
 			mappedByteBuffer.put(buffer);
+			
 			position = mappedByteBuffer.position();
 		}
 
-		return null;
+		return position;
 	}
-
 
 	/**
 	 * this method applies fold function on all recored in journal from oldest to
@@ -75,30 +86,33 @@ class Journal {
 	 * @return
 	 * @throws IOException
 	 */
-	Integer fold(BiFunction<Integer, Record, Integer> function) throws IOException {
+	long fold(LongAccumulatorFunction function) throws IOException {
 		int currentPosition = position;
-		MappedByteBuffer readOnlymappedByteBuffer = fileChannel.map(MapMode.READ_ONLY, 0, JOURNAL_SIZE);
+		
+		MappedByteBuffer readOnlymappedByteBuffer = fileChannel.map(
+				MapMode.READ_ONLY, 
+				0, 
+				JOURNAL_SIZE);
+		
 		readOnlymappedByteBuffer.limit(currentPosition);
 
 		ByteBufferInput input = new ByteBufferInput(readOnlymappedByteBuffer);
-		Integer folded = 0;
+		long folded = 0;
 		while (wasNotBufferRewinded(currentPosition) && readOnlymappedByteBuffer.hasRemaining()) {
-			folded = function.apply(folded, deserialize(input));
+			folded = function.fold(folded, deserialize(input));
 		}
 
 		return folded;
 	}
 
-	private static KryoCallback<ByteBufferOutput> serialize(Record record) {
-		return k -> {
-			ByteBufferOutput output = new ByteBufferOutput(PAGE_SIZE);
-			k.writeObject(output, record);
-			return output;
-		};
+	private static ByteBufferOutput serialize(Record record) {
+		ByteBufferOutput output = new ByteBufferOutput(PAGE_SIZE);
+		KRYO_LOCAL.get().writeObject(output, record);
+		return output;
 	}
 
 	private Record deserialize(ByteBufferInput input) {
-		return kryoPool.run(k -> k.readObject(input, Record.class));
+		return KRYO_LOCAL.get().readObject(input, Record.class);
 	}
 
 	private boolean wasNotBufferRewinded(int currentPosition) {

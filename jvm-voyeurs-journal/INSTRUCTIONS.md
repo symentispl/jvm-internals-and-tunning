@@ -1,0 +1,38 @@
+## how to run it?
+
+	export JAVA_OPTS="-XX:+UseConcMarkSweepGC"
+	./example4 &> /dev/null
+	
+## how to diagnose it?
+
+first check `top`, and see that this application consumes CPU (significant amount of sys time, 
+but there is no iowait).
+
+High sys time, suggests some strange kernel activity, it is usually connected with I/O operations
+(iowait says it's not, this time, but let's check it).
+
+	pidstat -d -p [pid]
+	
+we will see that this application writes tons of bytes, and there is no read activity. So why, we don't see wait time?
+
+Let's take a look at syscalls
+
+	 sysdig -c topprocs_file
+	 sysdig proc.pid=[pid] and evt.is_io=true
+	 
+there is I/O activity, but no syscalls? What the heck?
+
+Memory mapped files? Let's see pidstat one more time, this time with different option:
+
+	pidstat -r -p [pid]
+	
+gosh, so many minor page faults?
+
+Let's have final confirmation, run recording of `mmap` syscalls.
+
+	sysdig proc.name=java and evt.type=mmap
+	
+## why there is no io read?
+
+Because OS is able to keep all pages in memory, so it only needs to flush memory once you write to it (that's why we see io writes). (If we run this application with `-Xms1g and -Xmx1g`, we should also see major page faults plus read activity.
+
