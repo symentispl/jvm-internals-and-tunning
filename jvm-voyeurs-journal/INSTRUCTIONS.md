@@ -15,7 +15,7 @@ High sys time, suggests some strange kernel activity, it is usually connected wi
 	
 we will see that this application writes tons of bytes, and there is no read activity. So why, we don't see wait time?
 
-Let's take a look at syscalls
+Let's take a look at io activity
 
 	 sysdig -c topprocs_file
 	 sysdig proc.pid=[pid] and evt.is_io=true

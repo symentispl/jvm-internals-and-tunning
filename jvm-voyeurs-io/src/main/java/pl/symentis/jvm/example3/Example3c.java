@@ -9,6 +9,8 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.text.RandomStringGenerator;
@@ -17,10 +19,23 @@ import org.slf4j.LoggerFactory;
 
 public class Example3c {
 
-	private final static Logger LOGGER = LoggerFactory.getLogger(Example3c.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(Example3c.class);
+
+	private static final int MIN_SIZE = 16*1024; // 16 kB
+	private static final int MAX_SIZE= 32*1024;  // 32 kB
+	
+	private static final RandomStringGenerator RANDOM_STRING_GEN = new RandomStringGenerator.Builder().withinRange('a', 'z').build();
 	
 	public static void main(String[] args) throws IOException {
 
+		ExecutorService threadPool = Executors.newCachedThreadPool();
+		
+		threadPool.execute(command);
+		
+		
+	}
+	
+	private static void runClientConnection() throws IOException {
 		while (true) {
 			try (Socket socket = new Socket()) {
 				socket.connect(new InetSocketAddress("localhost", 7777));
@@ -37,24 +52,23 @@ public class Example3c {
 					String line = reader.readLine();
 
 					if ("NEXT".equals(line)) {
-						LOGGER.info("server {} said give me more",socket);
+						LOGGER.debug("server {} said give me more",socket);
 						continue;
 					}
 
 					if ("BYE".equals(line)) {
-						LOGGER.info("server {} said bye",socket);
-						break;
+						LOGGER.debug("server {} said bye",socket);
+						break; // close connection, and open new one
 					}
 				}
-
 			}
 		}
 	}
 
 	private static void storeFile(OutputStream outputStream, BufferedWriter writer) throws IOException {
 		
-		int size = RandomUtils.nextInt(16*1024, 32*1024);
-		String filename = "client_"+new RandomStringGenerator.Builder().withinRange('a', 'z').build().generate(32);
+		int size = RandomUtils.nextInt(MIN_SIZE, MAX_SIZE);
+		String filename = "client_"+RANDOM_STRING_GEN.generate(32);
 		
 		writer.write(String.format("STORE %s %d",filename,size));
 		writer.newLine();

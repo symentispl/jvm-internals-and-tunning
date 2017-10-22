@@ -12,8 +12,11 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -25,18 +28,26 @@ public class Example3s {
 
 	private final static Logger LOGGER = LoggerFactory.getLogger(Example3s.class);
 
+	private static final int MAX_FILES = 10;
+
+	private static ExecutorService janitorExecutor;
+
+	private static ExecutorService clientConnectionsPool;
+
 	public static void main(String[] args) throws IOException {
 
-		ExecutorService threadPool = Executors.newCachedThreadPool();
+		janitorExecutor = Executors.newSingleThreadExecutor();
+		
+		clientConnectionsPool = Executors.newCachedThreadPool();
 
 		try (ServerSocket serverSocket = new ServerSocket()) {
 
 			serverSocket.bind(new InetSocketAddress("localhost", 7777));
-			LOGGER.info("bound to socket {}", serverSocket);
+			LOGGER.debug("bound to socket {}", serverSocket);
 
 			while (true) {
 				Socket socket = serverSocket.accept();
-				LOGGER.info("accepted new client connection {}", socket);
+				LOGGER.debug("accepted new client connection {}", socket);
 
 				InputStream inputStream = socket.getInputStream();
 				BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "ISO-8859-1"));
@@ -44,49 +55,58 @@ public class Example3s {
 				OutputStream outputStream = socket.getOutputStream();
 				BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream));
 
-				threadPool.execute(newConnectedClient(inputStream, reader, outputStream, writer));
+				clientConnectionsPool.execute(newConnectedClient(inputStream, reader, outputStream, writer));
 
 			}
 		}
 
 	}
 
-	private static Runnable newConnectedClient(InputStream inputStream, BufferedReader reader,
-			OutputStream outputStream, BufferedWriter writer) {
+	private static Runnable newConnectedClient(
+			InputStream inputStream, 
+			BufferedReader reader,
+			OutputStream outputStream, 
+			BufferedWriter writer) {
 		return () -> {
 			try {
-				int i = 0;
+				int i = 1;
+				List<String> storedFiles = new ArrayList<>();
 				while (true) {
 					String line = reader.readLine();
-					LOGGER.info("parsing command {}", line);
+					LOGGER.debug("parsing command {}", line);
 
 					Command cmd = parseLine(line);
 
 					char[] buffer = new char[cmd.size];
-					LOGGER.info("about to read {} byte(s)", cmd.size);
+					LOGGER.debug("about to read {} byte(s)", cmd.size);
 					IOUtils.readFully(reader, buffer);
 
-					LOGGER.info("writing to a file {}", cmd.filename);
-					try (Writer fileWriter = new OutputStreamWriter(Files.newOutputStream(
-							Paths.get("/tmp", cmd.filename), StandardOpenOption.CREATE, StandardOpenOption.WRITE))) {
+					LOGGER.debug("writing to a file {}", cmd.filename);
+					try (Writer fileWriter = new OutputStreamWriter(newFileOutput(cmd.filename))) {
 
 						fileWriter.write(buffer);
 
 					} catch (Throwable e) {
-						e.printStackTrace();
+						LOGGER.error("failed to write file {}",cmd.filename,e);
+					} finally {
+						storedFiles.add(cmd.filename);
 					}
+					
 					reader.readLine();
 
-					if (i < 10) {
-						LOGGER.info("waiting for next file");
+					if ((i % MAX_FILES)!=0) {
+						LOGGER.debug("waiting for next file");
 						writer.write("NEXT");
 						writer.newLine();
 						writer.flush();
 					} else {
-						LOGGER.info("enough files, bye");
+						LOGGER.debug("enough files, bye");
 						writer.write("BYE");
 						writer.newLine();
 						writer.flush();
+						i=0;
+						scheduleJanitor(new ArrayList<>(storedFiles));
+						storedFiles.clear();
 						break;
 					}
 					i++;
@@ -96,6 +116,30 @@ public class Example3s {
 			}
 
 		};
+	}
+
+	private static void scheduleJanitor(List<String> filenames) {
+		janitorExecutor.execute(() -> 
+			filenames
+			.stream()
+			.map(Example3s::newPath)
+			.forEach(Example3s::deleteIfExists));
+	}
+
+	private static void deleteIfExists(Path f) {
+		try {
+			Files.deleteIfExists(f);
+		} catch (IOException e) {
+			LOGGER.error("failed to remove file {}",f,e);
+		}
+	}
+
+	private static Path newPath(String filename) {
+		return Paths.get("/tmp", filename);
+	}
+
+	private static OutputStream newFileOutput(String filename) throws IOException {
+		return Files.newOutputStream(newPath(filename), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 	}
 
 	private static Command parseLine(String line) {
