@@ -229,8 +229,9 @@ image::https://static.pexels.com/photos/20258/pexels-photo.jpg[background,size=c
 
 === sysstat
 
-_pidstat -t -d -p [pid] -T TASK 1_ +
-_pidstat -t -w -p [pid] -T TASK 1_
+_pidstat -t -d -p [pid] 1 # IO usage per thread_ +
+_pidstat -t -w -p [pid] 1 # task switching per thread_ +
+_pidstat -r -p [pid] 1 # page faults per process_
 
 === warning
 

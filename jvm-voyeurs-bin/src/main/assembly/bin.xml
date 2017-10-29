@@ -34,5 +34,9 @@
 			</includes>
 			<lineEnding>dos</lineEnding>
 		</fileSet>
+		<fileSet>
+			<directory>../honest-profiler</directory>
+			<outputDirectory>honest-profiler</outputDirectory>
+		</fileSet>
 	</fileSets>
 </assembly>
