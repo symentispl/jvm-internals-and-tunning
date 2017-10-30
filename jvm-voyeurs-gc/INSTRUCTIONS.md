@@ -1,0 +1,33 @@
+## how to run it?
+
+	./example1 &> /dev/null &
+
+## how to diagnose it?
+
+first check `top`, and see that this application consumes CPU, both sys and user time
+
+let's check what the process does:
+
+	jstack [pid]
+	
+you will see a couple of threads, busy and spinning.
+
+let's see heap usage.
+
+	jmap -heap [pid]
+	jmap -histo [pid]
+	
+nothing unusual.
+
+So no IO activity, so let's take look what the process does:
+
+	sysdig proc.pid=[pid]
+	
+lots of `futex` and `mprotect` calls.
+
+futex means locks, this confirms as we have many threads running, but what is `mprotect`.
+It is use for "safepoint" mechanism. When safepoints are used? GC?
+
+Let's check GC activity.
+
+	jstat -gcutil [pid] 1000

@@ -36,3 +36,13 @@ Let's have final confirmation, run recording of `mmap` syscalls.
 
 Because OS is able to keep all pages in memory, so it only needs to flush memory once you write to it (that's why we see io writes). (If we run this application with `-Xms1g and -Xmx1g`, we should also see major page faults plus read activity.
 
+We can also set `vm.dirty_ratio` to lower value, so OS will sync dirty pages more often.
+
+	sysctl vm.dirty_ratio
+	
+you can also diagnose it with, 
+
+	pmap -X [pid]
+	
+where you can see number of dirty pages in a process.
+
