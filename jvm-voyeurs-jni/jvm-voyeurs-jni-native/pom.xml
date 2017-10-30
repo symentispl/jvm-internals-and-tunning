@@ -75,5 +75,13 @@
 			</plugins>
 		</pluginManagement>
 	</build>
+	
+	<dependencies>
+		<dependency>
+			<groupId>pl.symentis.jvm</groupId>
+			<artifactId>jvm-voyeurs-jni-process</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+	</dependencies>
 
 </project>
