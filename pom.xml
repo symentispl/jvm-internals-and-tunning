@@ -34,7 +34,7 @@
 	</build>
 
 	<modules>
-		<module>jvm-voyeurs-io</module>
+		<module>jvm-voyeurs-net</module>
 		<module>jvm-voyeurs-gc</module>
 		<module>jvm-voyeurs-jit</module>
 		<module>jvm-voyeurs-bin</module>
@@ -42,6 +42,7 @@
 		<module>jvm-voyeurs-journal</module>
 		<module>jvm-voyeurs-jmh</module>
 		<module>jvm-voyeurs-nio</module>
+		<module>jvm-voyeurs-jni</module>
 	</modules>
 
 	<dependencyManagement>

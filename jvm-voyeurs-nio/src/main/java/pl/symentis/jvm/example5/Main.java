@@ -1,4 +1,8 @@
 package pl.symentis.jvm.example5;
+
+import static java.nio.file.Files.createFile;
+import static java.nio.file.Files.newOutputStream;
+import static java.nio.file.Paths.get;
 import static java.util.concurrent.CompletableFuture.allOf;
 import static java.util.concurrent.CompletableFuture.supplyAsync;
 import static java.util.stream.Collectors.toList;
@@ -37,10 +41,9 @@ public class Main {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
-	private static final byte[] BUFFER = new byte[128 * 1024];
+	private static final byte[] BUFFER = new byte[512 * 1024];
 
-	private static final RandomStringGenerator RANDOM_STRING_GEN = new RandomStringGenerator.Builder()
-			.withinRange('a', 'z').build();
+	private static final RandomStringGenerator RANDOM_STRING_GEN = new RandomStringGenerator.Builder().withinRange('a', 'z').build();
 
 	private static ScheduledExecutorService scheduledExecutorService;
 
@@ -67,7 +70,8 @@ public class Main {
 		WatchKey watchKey = inputPath.register(watcher, StandardWatchEventKinds.ENTRY_CREATE);
 
 		// watch for new files
-		scheduledExecutorService.schedule(watchNewFiles(watchKey, new ArrayList<Path>()), FS_WATCH_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+		scheduledExecutorService.schedule(watchNewFiles(watchKey, new ArrayList<Path>()), FS_WATCH_TIMEOUT_MS,
+				TimeUnit.MILLISECONDS);
 
 		// generate files
 		scheduledExecutorService.scheduleAtFixedRate(newFiles(inputPath), 1000, 10, TimeUnit.MILLISECONDS);
@@ -77,7 +81,7 @@ public class Main {
 	private static void scheduleWatchNewFiles(WatchKey watchKey, ArrayList<Path> files) {
 		scheduledExecutorService.schedule(watchNewFiles(watchKey, files), FS_WATCH_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 	}
-	
+
 	private static void triggerMergeOfFiles(List<Path> files) {
 		ioExecutorService.execute(() -> mergeFiles(files));
 	}
@@ -106,42 +110,39 @@ public class Main {
 		};
 	}
 
-	
 	private static void mergeFiles(List<Path> files) {
+
 		LOGGER.debug("merging files {}", files);
 
 		List<CompletableFuture<ByteBuffer>> ioTasks = files
-			.stream()
-			.map(inputPath::resolve)
-			.map(path -> supplyAsync(() -> readByteBuffer(path)))
-			.collect(toList());
-		
-		allOf(asTasks(ioTasks))
-		.thenRunAsync(() ->readBuffersAndWrite(ioTasks),ioExecutorService)
-		.thenRunAsync(() -> triggerDeleteOfMergedFiles(files),ioExecutorService);
-		
+				.stream()
+				.map(inputPath::resolve)
+				.map(path -> supplyAsync(() -> readByteBuffer(path), ioExecutorService))
+				.collect(toList());
 
-		
+		allOf(asTasks(ioTasks))
+			.thenRunAsync(() -> readBuffersAndWrite(ioTasks), ioExecutorService)
+			.thenRunAsync(() -> triggerDeleteOfMergedFiles(files), ioExecutorService);
+
 	}
 
 	private static CompletableFuture<?>[] asTasks(List<CompletableFuture<ByteBuffer>> ioTasks) {
-		return ioTasks.toArray(new CompletableFuture<?>[ioTasks.size()] );
+		return ioTasks.toArray(new CompletableFuture<?>[ioTasks.size()]);
 	}
 
 	private static void readBuffersAndWrite(List<CompletableFuture<ByteBuffer>> ioTasks) {
 		List<Buffer> buffers = ioTasks
-			.stream()
-			.map(buffer -> Try.of(()->buffer.get()))
-			.map(Try::get)
-			.map(ByteBuffer::flip)
-			.map(ByteBuffer.class::cast)
-			.collect(toList());
-		
+				.stream()
+				.map(buffer -> Try.of(() -> buffer.get()))
+				.map(Try::get)
+				.map(ByteBuffer::flip)
+				.map(ByteBuffer.class::cast).collect(toList());
+
 		Path filename = outputPath.resolve(Paths.get(RANDOM_STRING_GEN.generate(32)));
-		
-		LOGGER.debug("merging files into {}",filename);
-		
-		try(FileChannel file = FileChannel.open(filename, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)){
+
+		LOGGER.debug("merging files into {}", filename);
+
+		try (FileChannel file = FileChannel.open(filename, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
 			file.write(buffers.toArray(new ByteBuffer[] {}));
 		} catch (IOException e) {
 			LOGGER.error("cannot write merged buffers", e);
@@ -153,7 +154,7 @@ public class Main {
 			long size = file.size();
 			ByteBuffer byteBuffer = ByteBuffer.allocateDirect((int) size);
 			int readSize = file.read(byteBuffer);
-			LOGGER.debug("read bytes {} from file {}", readSize,path);			
+			LOGGER.debug("read bytes {} from file {}", readSize, path);
 			return byteBuffer;
 		} catch (IOException e) {
 			LOGGER.error("cannot read byte buffer from file {}", path, e);
@@ -162,28 +163,30 @@ public class Main {
 	}
 
 	private static void triggerDeleteOfMergedFiles(List<Path> files) {
+		files
+			.stream()
+			.map(inputPath::resolve)
+			.map(Main::deleteFile)
+			.forEach(ioExecutorService::execute);
+	}
 
-		files.stream().map(inputPath::resolve).map((path) -> (Runnable) ((() -> {
+	private static Runnable deleteFile(Path path) {
+		return () -> {
 			LOGGER.debug("removing files {}", path);
 			try {
 				Files.delete(path);
 			} catch (IOException e) {
 				LOGGER.error("cannot remove file {}", path);
 			}
-		}))).forEach(ioExecutorService::execute);
-
+		};
 	}
 
 	private static Runnable newFiles(Path inputPath) {
 		return () -> {
-			try {
-				Path file = Files.createFile(inputPath.resolve(Paths.get(RANDOM_STRING_GEN.generate(8))));
-				try (OutputStream out = Files.newOutputStream(file, StandardOpenOption.APPEND)) {
-					out.write(BUFFER);
-				}
+			try (OutputStream out = newOutputStream(createFile(inputPath.resolve(get(RANDOM_STRING_GEN.generate(8)))), StandardOpenOption.APPEND)) {
+				out.write(BUFFER);
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				LOGGER.error("cannot write new files in {}", inputPath, e);
 			}
 		};
 	}

@@ -27,6 +27,10 @@
 				<configuration>
 					<programs>
 						<program>
+							<mainClass>pl.symentis.jvm.example0.Main</mainClass>
+							<id>example0</id>
+						</program>
+						<program>
 							<mainClass>pl.symentis.jvm.example1.Main</mainClass>
 							<id>example1</id>
 						</program>
@@ -78,32 +82,43 @@
 		<dependency>
 			<groupId>pl.symentis.jvm</groupId>
 			<artifactId>jvm-voyeurs-jit</artifactId>
-			<version>1.0-SNAPSHOT</version>
+			<version>${project.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>pl.symentis.jvm</groupId>
-			<artifactId>jvm-voyeurs-io</artifactId>
-			<version>1.0-SNAPSHOT</version>
+			<artifactId>jvm-voyeurs-net</artifactId>
+			<version>${project.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>pl.symentis.jvm</groupId>
 			<artifactId>jvm-voyeurs-gc</artifactId>
-			<version>1.0-SNAPSHOT</version>
+			<version>${project.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>pl.symentis.jvm</groupId>
 			<artifactId>jvm-voyeurs-concurrency</artifactId>
-			<version>1.0-SNAPSHOT</version>
+			<version>${project.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>pl.symentis.jvm</groupId>
 			<artifactId>jvm-voyeurs-journal</artifactId>
-			<version>1.0-SNAPSHOT</version>
+			<version>${project.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>pl.symentis.jvm</groupId>
 			<artifactId>jvm-voyeurs-nio</artifactId>
-			<version>1.0-SNAPSHOT</version>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>pl.symentis.jvm</groupId>
+			<artifactId>jvm-voyeurs-jni-jar</artifactId>
+			<version>${project.version}</version>
+			<classifier>bin</classifier>
+		</dependency>		
+		<dependency>
+			<groupId>pl.symentis.jvm</groupId>
+			<artifactId>jvm-voyeurs-jni-main</artifactId>
+			<version>${project.version}</version>
 		</dependency>
 	</dependencies>
 
