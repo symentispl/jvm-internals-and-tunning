@@ -303,3 +303,137 @@ http://hirt.se/blog/[Marcus Hirt blog, all stuff JMC] +
 https://0xax.gitbooks.io/linux-insides/content/SysCall/syscall-1.html[System calls in the Linux kernel] +
 https://www.sysdig.org/[sysdig] +
 https://perf.wiki.kernel.org/index.php/Main_Page[perf: Linux profiling with performance counters]
+
+== Java Microbenchmark Harness
+
+image::https://static.pexels.com/photos/45202/brownie-dessert-cake-sweet-45202.jpeg[background]
+
+== !
+
+[quote,,Wes Dyer]
+  Make it correct, make it clear, make it concise, make it fast. In that order.
+
+== !
+
+[quote,JMH wiki,]
+  JMH is a Java harness for building, running, and analysing nano/micro/milli/macro benchmarks written in Java and other languages targetting the JVM.
+
+== !
+
+mvn archetype:generate \ +
+       -DinteractiveMode=false \ +
+       -DarchetypeGroupId=org.openjdk.jmh \ +
+       -DarchetypeArtifactId=jmh-java-benchmark-archetype \ +
+       -DgroupId=org.sample \ +
+       -DartifactId=test \ +
+       -Dversion=1.0
+
+== benchmarks
+
+these are public non-static methods annotated with `@Benchmark`
+
+[source, java]
+----
+import org.openjdk.jmh.annotations.Benchmark;
+
+public class CodeBenchmark {
+
+  @Benchmark
+  public void testMethod(){
+  }
+
+}
+----
+
+== managing state & life cycle
+
+more complex examples will need to work with some data (state), +
+this is what for state objects are for
+
+[%notitle]
+=== state objects
+
+[source,java]
+----
+@State(Scope.Benchmark)
+public class CodeBenchmarkState{
+
+  public final ArrayList<Integer> list = new ArrayList<>();
+
+}
+----
+
+[%notitle]
+=== injecting state objects
+
+[source,java]
+----
+public class CodeBenchmark{
+
+  @Benchmark
+  public void testMethod(CodeBenchmarkState state){
+    state.add(0);
+  }
+
+}
+----
+
+=== note on scopes
+
+=== Scope.Benchmark
+
+With benchmark scope, all instances of the same type will be shared across all worker threads
+
+=== Scope.Group
+
+With group scope, all instances of the same type will be shared across all threads within the same group. Each thread group will be supplied with its own state object
+
+=== Scope.Thread
+
+With thread scope, all instances of the same type are distinct, even if multiple  state objects are injected in the same benchmark
+
+=== lifecycle
+
+every state object can have `@Setup` and `@TearDown` fixture methods
+
+== time for first benchmark
+
+let's compare iteration speed over primitive array, `ArrayList` and `LinkedList`
+
+== running benchmarks
+
+[source, console]
+----
+java -jar benchmark.jar
+----
+
+=== forks, warm ups and iterations
+
+by default JMH forks JVM for each run of benchmark, +
+
+== command line
+
+== asymmetric tests
+
+== time for second benchmark
+
+compare performance of interleaved put and get operations for synchronized `HashMap`
+and `ConcurrentHashMap`
+
+== parameterized tests
+
+== black holes
+
+== profilers
+
+[source, console]
+----
+java -jar benchmark.jar -lprof
+----
+
+== reporters
+
+== tips and tricks
+
+on laptops governors can trick you, +
+it's easy to control them on linux with `cpufreq-set`

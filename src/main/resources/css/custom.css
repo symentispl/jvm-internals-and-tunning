@@ -48,6 +48,11 @@
   color: white;
 }
 
+#java_microbenchmark_harness h2 {
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+}
+
 .reveal pre code {
   background: white;
 }

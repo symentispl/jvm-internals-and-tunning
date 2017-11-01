@@ -8,6 +8,7 @@
 JNIEXPORT jint JNICALL Java_pl_symentis_jvm_example0_Process_getPid
   (JNIEnv *env, jobject obj){
 
+  int daughter_status;
   pid_t pid = fork();
   
   if(pid!=0){
@@ -15,7 +16,9 @@ JNIEXPORT jint JNICALL Java_pl_symentis_jvm_example0_Process_getPid
 	sleep(5);
   	int killed = kill(pid,9);
 	if(killed==0){
-		printf("process %d was killed\n", pid);	
+		printf("process %d was killed\n", pid);
+		waitpid(pid,&daughter_status,0);
+		printf("process %d was terminated with status %d\n", pid, daughter_status);
 	} else{
 		perror("cannot kill your daughter, she becomes zombie\n");
 	}

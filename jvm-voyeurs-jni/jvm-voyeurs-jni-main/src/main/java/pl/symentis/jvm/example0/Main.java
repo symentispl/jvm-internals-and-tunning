@@ -11,7 +11,7 @@ public class Main {
 		ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
 		
 		Process process = new Process();
-		scheduledExecutor.scheduleAtFixedRate(() -> process.getPid(), 10, 10, TimeUnit.SECONDS);
+		scheduledExecutor.scheduleAtFixedRate(() -> process.getPid(), 1000, 1, TimeUnit.MILLISECONDS);
 		
 	}
 
