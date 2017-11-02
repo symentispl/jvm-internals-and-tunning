@@ -1,13 +1,13 @@
 = Automatyczne zarządzanie pamięcią czyli GC
 :idprefix:
-:backend: revealjs
-:highlighter: pygments
 :stem: asciimath
+:backend: html
 :source-highlighter: pygments
-:pygments-css: style
-:revealjs_theme: serif
+:pygments-style: tango
 :revealjs_history: true
+:revealjs_theme: white
 :imagesdir: images
+:customcss: css/custom.css
 
 == Automatyczne zarządzenie pamięcią
 
