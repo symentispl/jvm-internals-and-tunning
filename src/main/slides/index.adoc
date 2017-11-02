@@ -320,6 +320,8 @@ image::https://static.pexels.com/photos/45202/brownie-dessert-cake-sweet-45202.j
 
 == !
 
+http://openjdk.java.net/projects/code-tools/jmh/[http://openjdk.java.net/projects/code-tools/jmh/]
+
 mvn archetype:generate \ +
        -DinteractiveMode=false \ +
        -DarchetypeGroupId=org.openjdk.jmh \ +
@@ -327,6 +329,8 @@ mvn archetype:generate \ +
        -DgroupId=org.sample \ +
        -DartifactId=test \ +
        -Dversion=1.0
+
+
 
 == benchmarks
 
@@ -404,31 +408,93 @@ let's compare iteration speed over primitive array, `ArrayList` and `LinkedList`
 
 [source, console]
 ----
-java -jar benchmark.jar
+mvn package
+java -jar target/benchmark.jar
 ----
 
 === forks, warm ups and iterations
 
 by default JMH forks JVM for each run of benchmark, +
+within each fork you have two phases
+
+* warm up
+* iteration
+
+number of repetitions of each phase can be controlled over command line
 
 == command line
 
-== asymmetric tests
+-f  - number of forks +
+-wi - number of warm ups +
+-i  -  number of iterations
 
-== time for second benchmark
+[%notitle]
+=== command line example
 
-compare performance of interleaved put and get operations for synchronized `HashMap`
-and `ConcurrentHashMap`
+[source,console]
+----
+java -jar target/benchmark.jar -f 1 -i 5 -wi 5
+----
 
 == parameterized tests
 
 == black holes
+
+== asymmetric tests
+
+sometimes you want to benchmark your concurrent code, +
+like performance of read and write paths +
+this is where `@Group` and `@GroupThreads` come in
+
+[%notitle]
+=== asymetric tests example
+
+[source, java]
+----
+@State(Scope.Benchmark)
+public class CodeBenchmark {
+
+	@Benchmark
+	@Group("benchmarkGroup")
+	@GroupThreads(1)
+	public void testWrites() {
+	}
+
+	@Benchmark
+	@Group("bechmarkGroup")
+	@GroupThreads(1)
+	public void testReads(Blackhole blackhole) {
+	}
+
+}
+----
+
+== time for third benchmark
+
+compare performance of various thread-safe counter implementations
+
+[source, java]
+----
+public class Counter {
+
+	private long counter;
+
+	public void inc() {
+		++counter;
+	}
+
+	public long counter() {
+		return counter;
+	}
+}
+----
 
 == profilers
 
 [source, console]
 ----
 java -jar benchmark.jar -lprof
+java -jar benchmark.jar -prof hs_gc
 ----
 
 == reporters
