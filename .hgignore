@@ -1,5 +1,9 @@
 syntax: glob
 target/
 *~
-__pycache__
 *pyc
+.springBeans
+target
+.settings/
+.classpath
+.project

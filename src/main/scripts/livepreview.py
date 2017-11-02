@@ -42,9 +42,9 @@ def render_slides(logger):
         def _log_output(line):
             logger.debug(line)
         return _log_output
-
+        
     def _render_slides():
-        sh.asciidoctor_revealjs("src/main/slides/*.adoc", \
+        sh.asciidoctor_revealjs("src/main/slides/index.adoc", \
             attribute="revealjsdir=%s" % REVEAL_JS_TARGET, \
             require="asciidoctor-diagram", \
             destination_dir=SLIDES_TARGET, \
