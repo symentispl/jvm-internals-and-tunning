@@ -438,10 +438,64 @@ java -jar target/benchmark.jar -f 1 -i 5 -wi 5
 
 == parameterized tests
 
-== black holes
+JMH supports parameterized tests through `@Param` annotation +
+Test parameters should be public non-final fields on state objects +
+they are injected right before call to setup fixture methods
+
+[%notitle]
+=== parameterized tests example
+
+[source, java]
+----
+@State(Scope.Benchmark)
+public class CodeBenchmark {
+
+  @Param{"0.1","0.2","0.5","0.75","1.0"}
+  public float loadFactor;
+
+  private Map<String,String> map;
+
+  @Setup
+  public void setUp(){
+    map = new HashMap<>(16,loadFactor);
+  }
+
+}
+----
+
+=== controlling parameters
+
+you overwrite values of the parameters with command line options
+
+[source, console]
+----
+java -jar target/benchmarks.jar -p loadFactor=0.8,0.9
+----
+
+== dead code
+
+image::https://static.pexels.com/photos/34153/pexels-photo.jpg[background, size=cover]
+
+== ... and black holes
+
+=== !
+
+one of the dangers JMH tries to mitigate is dead code optimization from JIT, +
+to avoid it, consume return values from functions with black holes
+
+[source, java]
+----
+@Benchmark
+public void testMethod(Blackhole blackhole){
+  blackhole.consume(codeBenchmark());
+}
+----
 
 == asymmetric tests
 
+image::https://static.pexels.com/photos/632445/pexels-photo-632445.jpeg[background, size=cover]
+
+=== !
 sometimes you want to benchmark your concurrent code, +
 like performance of read and write paths +
 this is where `@Group` and `@GroupThreads` come in
@@ -491,6 +545,8 @@ public class Counter {
 
 == profilers
 
+they can provide some insights into your code
+
 [source, console]
 ----
 java -jar benchmark.jar -lprof
@@ -498,6 +554,14 @@ java -jar benchmark.jar -prof hs_gc
 ----
 
 == reporters
+
+and last but not least, writing test results to files
+
+[source, console]
+----
+java -jar benchmark.jar -lr
+java -jar benchmark.jar -rf csv -rff results.csv
+----
 
 == tips and tricks
 
