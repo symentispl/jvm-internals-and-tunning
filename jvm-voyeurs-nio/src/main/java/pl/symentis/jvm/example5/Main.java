@@ -59,11 +59,9 @@ public class Main {
 
 		scheduledExecutorService = Executors.newScheduledThreadPool(2);
 
-		inputPath = Paths.get("/tmp", RANDOM_STRING_GEN.generate(8));
-		Files.createDirectory(inputPath);
+		inputPath = Files.createTempDirectory("example5i").toAbsolutePath();
 
-		outputPath = Paths.get("/tmp", RANDOM_STRING_GEN.generate(8));
-		Files.createDirectory(outputPath);
+		outputPath = Files.createTempDirectory("example5o").toAbsolutePath();
 
 		WatchService watcher = FileSystems.getDefault().newWatchService();
 
