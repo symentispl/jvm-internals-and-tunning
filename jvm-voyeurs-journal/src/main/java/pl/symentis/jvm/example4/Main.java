@@ -1,7 +1,7 @@
 package pl.symentis.jvm.example4;
 
 import java.io.IOException;
-import java.nio.file.Paths;
+import java.nio.file.Files;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -25,7 +25,7 @@ public class Main {
 			LOGGER.info("accumulated journal query time is {}", STOPWATCH);								
 		}, 1, 10, TimeUnit.SECONDS);
 
-		Journal journal = new Journal(Paths.get("/tmp"));
+		Journal journal = new Journal(Files.createTempDirectory("example4"));
 
 		ScheduledExecutorService scheduledThreadPool = Executors.newScheduledThreadPool(4);
 

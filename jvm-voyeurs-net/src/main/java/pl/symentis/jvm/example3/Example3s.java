@@ -135,7 +135,11 @@ public class Example3s {
 	}
 
 	private static Path newPath(String filename) {
-		return Paths.get("/tmp", filename);
+		try {
+			return Files.createTempDirectory("example3").toAbsolutePath().resolve(filename);
+		} catch (IOException e) {
+			throw new RuntimeException("unable to create temporary directory",e);
+		}
 	}
 
 	private static OutputStream newFileOutput(String filename) throws IOException {
