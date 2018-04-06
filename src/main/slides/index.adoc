@@ -23,6 +23,11 @@ serve as a dictator for life
 * former chief architect, development manager, head of development,
 backend developer and performance guy
 
+
+== You are all invited!
+
+image::http://segfault.events/img/segfaultPoziomeLogo.svg[SegFault,300,200]
+
 == agenda
 
 * JDK with batteries included
@@ -208,6 +213,11 @@ _java -XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:StartFlightRecording
 === warning
 
 as of now, you can't use it to analyze production systems
+
+=== !
+
+until JDK 10 comes out, +
+this is official statement now
 
 === !
 

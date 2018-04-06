@@ -43,6 +43,7 @@
 		<module>jvm-voyeurs-jmh</module>
 		<module>jvm-voyeurs-nio</module>
 		<module>jvm-voyeurs-jni</module>
+		<module>jvm-voyeurs-zero-copy</module>
 	</modules>
 
 	<dependencyManagement>

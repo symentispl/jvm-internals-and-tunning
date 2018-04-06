@@ -1,0 +1,7 @@
+## Example 2 (concurrency)
+
+### how to run it?
+
+	./example2 &> /dev/null &
+
+### how to diagnose it?

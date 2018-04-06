@@ -54,6 +54,10 @@
 							<mainClass>pl.symentis.jvm.example5.Main</mainClass>
 							<id>example5</id>
 						</program>
+						<program>
+							<mainClass>pl.symentis.jvm.examplex.Main</mainClass>
+							<id>examplex</id>
+						</program>
 					</programs>
 				</configuration>
 			</plugin>
@@ -118,6 +122,11 @@
 		<dependency>
 			<groupId>pl.symentis.jvm</groupId>
 			<artifactId>jvm-voyeurs-jni-main</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>pl.symentis.jvm</groupId>
+			<artifactId>jvm-voyeurs-zero-copy</artifactId>
 			<version>${project.version}</version>
 		</dependency>
 	</dependencies>

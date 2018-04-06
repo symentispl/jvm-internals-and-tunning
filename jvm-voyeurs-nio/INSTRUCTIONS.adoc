@@ -1,42 +1,44 @@
-## how to run it?
+## example 5 (NIO (vectored IO))
+
+### how to run it?
 
 	./example5 &> /dev/null &
 
-## how to diagnose it?
+### how to diagnose it?
 
 first run `top` and you will see, that this process generates a lot of iowait.
 
 if this io wait, this can be only one ;)
 
 	pidstat -d -p [pid] 1
-	
+
 you will see a loads of writes, but not reads, good so this process is only writing files.
 Seriously? don't believe everything you see:).
 
 Let's dig deeper,
 
 	sysdig proc.pid=[pid] and event.type=write
-	
+
 shit... ok, we have writes that's cool, but what about reads:
 
 	sysdig proc.pid=[pid] and event.type=read
-	
+
 oops we have a lots of `read`, but process (pidstat) doesn't consume IOPS. We love you Linux (caching).
 
-# a twist
+### a twist
 
 is this all? unfortunately not ;). let's see which files and directories are being read and written
 
 	lsof -p 13702
-	
+
 bang, nothing.
 
 	sysdig -c spy_file proc.pid=[pid]
-	
-we see that this process writes 0.5MB files to one directory, and 5MB to another, let's try to see it, 
-	
+
+we see that this process writes 0.5MB files to one directory, and 5MB to another, let's try to see it,
+
 	sysdig proc.pid=[pid] and evt.type=write and fd.directory=[directory]
-	
+
 wait, why there are no writes to a second directory?
 
 	sysdig proc.pid=[pid] and evt.is_write_io=true and fd.directory=[directory]

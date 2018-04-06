@@ -1,4 +1,4 @@
-i---
+---
 - hosts: maszyny
   tasks:
   - name: add Oracle JDK repository
@@ -15,7 +15,10 @@ i---
       - oracle-java8-installer
       - lsof
       - procps
-  - name: create directory
+      - unzip
+  - name: remove warsztaty
+    file: path=/root/warsztaty state=absent
+  - name: create warsztaty
     file: path=/root/warsztaty state=directory
   - name: copy examples
     unarchive: src=../jvm-voyeurs-bin/target/jvm-voyeurs-bin-1.0-SNAPSHOT-bin.zip dest=/root/warsztaty
