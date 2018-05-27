@@ -65,12 +65,12 @@
 	</dependencyManagement>
 
 	<modules>
-		<module>bytecode</module>
-		<module>gc</module>
-		<module>io</module>
-		<module>concurrency</module>
-		<module>jit</module>
-    <module>jmh</module>
+		<module>modules/gc-in-openjdk</module>
+		<module>modules/java-io-wars</module>
+		<module>modules/jit-me-baby</module>
+		<module>modules/jmm-and-concurrency</module>
+		<module>modules/mutants-xenomorphs-and-bytecode</module>
+		<module>modules/voyeurs-in-jvm-land</module>
   </modules>
 
 </project>

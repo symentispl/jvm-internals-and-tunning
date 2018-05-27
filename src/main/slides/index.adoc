@@ -16,10 +16,11 @@
 * a tak poza tym jeśli cokolwiek ma związek z JVM i HotSpot, bytecode'em, parserami, językami programowania na JVM oraz technikami JIT, wcześniej czy później się tym zainteresuje :)
 * były architekt, manager, sysadmin i człowiek od wydajności,
 
-
 == agenda
 
-* http://localhost:5500/bytecode.html[Java bytecode]
-* http://localhost:5500/jit.html[Just in time compiler]
-* http://localhost:5500/garbage-collection.html[Garbage collection]
-* http://localhost:5500/jmm-concurrency.html[Concurrency and Java memory model]
+* http://localhost:5500/mutants-xenomorphs-and-bytecode/index.html[JVM bytecode]
+* http://localhost:5500/jit-me-baby/index.html[Just in time compiler]
+* http://localhost:5500/java-io-wars/index.html[Java IO]
+* http://localhost:5500/gc-in-openjdk/index.html[Garbage collection]
+* http://localhost:5500/jmm-and-concurrency/index.html[Concurrency and Java memory model]
+* http://localhost:5500/voyeurs-in-jvm-land/index.html[JVM tracing and profiling]

@@ -1,7 +1,0 @@
-RULE trace file processor
-CLASS FileProcessor
-METHOD processFile
-AT ENTRY
-IF true
-DO traceln("processing text file "+$1)
-ENDRULE
