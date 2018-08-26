@@ -18,9 +18,16 @@
 
 == agenda
 
-* http://localhost:5500/mutants-xenomorphs-and-bytecode/index.html[JVM bytecode]
-* http://localhost:5500/jit-me-baby/index.html[Just in time compiler]
-* http://localhost:5500/java-io-wars/index.html[Java IO]
-* http://localhost:5500/gc-in-openjdk/index.html[Garbage collection]
-* http://localhost:5500/jmm-and-concurrency/index.html[Concurrency and Java memory model]
-* http://localhost:5500/voyeurs-in-jvm-land/index.html[JVM tracing and profiling]
+<<mutants_xenomorphs_and_bytecode>> +
+<<jit_me_baby_one_more_time>> +
+<<java_io>> +
+<<garbage_collection>> +
+<<java_memory_model_and_concurrency>> +
+<<voyeurs_in_the_jvm_land>>
+
+include::bytecode.adoc[]
+include::jit.adoc[]
+include::io.adoc[]
+include::gc.adoc[]
+include::concurrency.adoc[]
+include::observability.adoc[]

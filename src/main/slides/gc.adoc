@@ -1,13 +1,4 @@
-= Automatyczne zarządzanie pamięcią czyli GC
-:idprefix:
-:stem: asciimath
-:backend: html
-:source-highlighter: pygments
-:pygments-style: tango
-:revealjs_history: true
-:revealjs_theme: white
-:imagesdir: images
-:customcss: css/custom.css
+== Garbage collection
 
 == Automatyczne zarządzenie pamięcią
 
@@ -500,14 +491,49 @@ są alokowane w specjalnych przestrzeniach zwanych „humongous”
 i obiekty kopiowane są do „to-space”, lub też w zależności od wieku obiektu
 (tenured threshold) do przestrzeni „old”
 
-=== Fazy współbieżnego odśmiecania w G1
+=== "young GC" phases
 
-* initial mark (stop the world)
-* root region scanning
-* concurrent marking
-* remark (stop the world)
-* cleanup (stop the world)
-* copying (stop the world)
+* External Root Scanning: The time spent by the parallel GC worker threads in scanning the external roots such as registers, thread stacks, etc that point into the Collection Set.
+* Update Remembered Sets (RSets): RSets aid G1 GC in tracking reference that point into a region. The time shown here is the amount of time the parallel worker threads spent in updating the RSets.
+* Processed Buffers: The count shows how many ‘Update Buffers’ were processed by the worker threads.
+
+=== "young GC" phases
+
+* Scan RSets: The time spent in Scanning the RSets for references into a region. This time will depend on the “coarseness” of the RSet data structures.
+* Object Copy: During every young collection, the GC copies all live data from the eden and ‘from-space’ survivor, either to the regions in the ‘to-space’ survivor or to the old generation regions. The amount of time it takes the worker threads to complete this task is listed here.
+
+=== "young GC" phases
+
+* Termination: After completing their particular work (e.g. object scan and copy), each worker thread enters its ‘termination protocol’. Prior to terminating, the worker thread looks for work from the other threads to steal and terminates when there is none. The time listed here indicates the time spent by the worker threads offering to terminate.
+* Parallel worker ‘Other’ time: Time spent by the worker threads that was not accounted in any of the parallel activities listed above.
+
+=== concurrent GC phases
+
+When the occupancy of the total heap crosses this threshold,
+G1 GC will trigger a multi-phased concurrent marking cycle.
+The command line option that sets the threshold is
+`–XX:InitiatingHeapOccupancyPercent` and it defaults to 45 percent of the total
+Java heap size.
+
+=== !
+
+The Initial Mark Phase – G1 GC marks the roots during the initial-mark phase. This is what the first line of output above is telling us. The initial-mark phase is piggy backed (done at the same time) on a normal (STW) young garbage collection. Hence, the output is similar to what you see during a young evacuation pause.
+
+=== !
+
+The Root Region Scanning Phase – During this phase, G1 GC scans survivor regions of the initial mark phase for references into the old generation and marks the referenced objects. This phase runs concurrently (not STW) with the application. It is important that this phase complete before the next young garbage collection happens.
+
+=== !
+
+The Concurrent Marking Phase – During this phase, G1 GC looks for reachable (live) objects across the entire Java heap. This phase happens concurrently with the application and a young garbage collection can interrupt the concurrent marking phase (shown above).
+
+=== !
+
+The Remark Phase – The remark phase helps the completion of marking. During this STW phase, G1 GC drains any remaining SATB buffers and traces any as-yet unvisited live objects. G1 GC also does reference processing during the remark phase.
+
+=== !
+
+The Cleanup Phase – This is the final phase of the multi-phase marking cycle. It is partly STW when G1 GC does live-ness accounting (to identify completely free regions and mixed garbage collection candidate regions) and when G1 GC scrubs the RSets. It is partly concurrent when G1 GC resets and returns the empty regions to the free list.
 
 === initial mark
 
@@ -545,7 +571,82 @@ unused regions. This can be done with young generation regions which are logged
 as [GC pause (young)]. Or both young and old generation regions which are logged
 as [GC Pause (mixed)].
 
-http://www.oracle.com/technetwork/tutorials/tutorials-1876574.html
+http://www.oracle.com/technetwork/tutorials/tutorials-1876574.html[Getting Started with the G1 Garbage Collector]
+
+=== marking algorithm
+
+G1 GC uses a marking algorithm called Snapshot-At-The-Beginning (SATB) that takes a logical snapshot of the set of live objects in the heap at the ‘beginning’ of the marking cycle. This algorithm uses a pre-write barrier to record and mark the objects that are a part of the logical snapshot
+
+=== mixed collection
+
+Once G1 GC successfully completes the concurrent marking cycle, it has the information that it needs to start the old generation collection. Up until now, the collection of the old regions was not possible since G1 GC did not have any marking information associated with those regions. A collection that facilitates the compaction and evacuation of old generation is appropriately called a 'mixed' collection since G1 GC not only collects the eden and the survivor regions, but also (optionally) adds old regions to the mix. Let us now discuss some details that are important to understand a mixed collection.
+
+=== !
+
+A mixed collection can (and usually does) happen over multiple mixed garbage collection cycles. When a sufficient number of old regions are collected, G1 GC reverts to performing the young garbage collections until the next marking cycle completes. A number of flags listed and defined here control the exact number of old regions added to the CSets:
+
+=== !
+
+`–XX:G1MixedGCLiveThresholdPercent`: The occupancy threshold of live objects in the old region to be included in the mixed collection.
+
+`–XX:G1HeapWastePercent`: The threshold of garbage that you can tolerate in the heap.
+
+
+=== !
+
+`–XX:G1MixedGCCountTarget`: The target number of mixed garbage collections within which the regions with at most G1MixedGCLiveThresholdPercent live data should be collected.
+
+`–XX:G1OldCSetRegionThresholdPercent`: A limit on the max number of old regions that can be collected during a mixed collection.
+
+=== even more on tuning
+
+`-XX:G1ConcRefinementThreads` or even `-XX:ParallelGCThreads`. If the concurrent refinement threads cannot keep up with the amount of filled buffers, then the mutator threads own and handle the processing of the buffers - usually something that you should strive to avoid.
+
+=== !
+
+-XX:+G1SummarizeRSetStats with the period set to one -XX:G1SummarizeRSetStatsPeriod=1, will
+print RSet stats.
+
+=== !
+
+`-XX:G1RSetUpdatingPauseTimePercent=10`. This flag sets a percent target amount (defaults to 10 percent of the pause time goal) that G1 GC should spend in updating RSets during a GC evacuation pause. You can increase or decrease the percent value, so as to spend more or less (respectively) time in updating the RSets during the stop-the-world (STW) GC pause and let the concurrent refinement threads deal with the update buffers accordingly.
+
+=== !
+
+If you see high times during reference processing then please turn on parallel reference processing by enabling the following option on the command line `-XX:+ParallelRefProcEnabled`.
+
+=== !
+
+When there are no more free regions to promote to the old generation or to copy to the survivor space, and the heap cannot expand since it is already at its maximum, an evacuation failure occurs.
+
+This is **REALLY EXPENSIVE**
+
+=== !
+
+Find out if the failures are a side effect of over-tuning - Get a simple baseline with min and max heap and a realistic pause time goal: Remove any additional heap sizing such as -Xmn, -XX:NewSize, -XX:MaxNewSize, -XX:SurvivorRatio, etc. Use only -Xms, -Xmx and a pause time goal -XX:MaxGCPauseMillis.
+
+=== !
+
+If the problem persists even with the baseline run and if humongous allocations (see next section below) are not the issue - the corrective action is to increase your Java heap size, if you can, of course
+
+=== !
+
+If increasing the heap size is not an option and if you notice that the marking cycle is not starting early enough for G1 GC to be able to reclaim the old generation then drop your -XX:InitiatingHeapOccupancyPercent. The default for this is 45% of your total Java heap. Dropping the value will help start the marking cycle earlier. Conversely, if the marking cycle is starting early and not reclaiming much, you should increase the threshold above the default value to make sure that you are accommodating for the live data set for your application.
+
+=== !
+
+If concurrent marking cycles are starting on time, but are taking a lot of time to finish; and hence are delaying the mixed garbage collection cycles which will eventually lead to an evacuation failure since old generation is not timely reclaimed; increase the number of concurrent marking threads using the command line option: -XX:ConcGCThreads.
+
+=== !
+
+If "to-space" survivor is the issue, then increase the -XX:G1ReservePercent. The default is 10% of the Java heap. G1 GC creates a false ceiling and reserves the memory, in case there is a need for more "to-space". Of course, G1 GC caps it off at 50%, since we do not want the end-user to set it to a very large value.
+
+=== !
+
+To help explain the cause of evacuation failure, we should use a very useful
+option: `-XX:+PrintAdaptiveSizePolicy`.
+This option will provide many ergonomic details that are purposefully kept out
+of the `-XX:+PrintGCDetails` option.
 
 == Podsumowanie algorytmów
 
@@ -749,3 +850,5 @@ brak pragmatyzmu w architekturze systemu
 * http://www.dynatrace.com/en/javabook/how-garbage-collection-works.html[Garbage collectors at DynaTrace]
 * http://gchandbook.org[The Garbage Collection Handbook]
 * http://www.cs.kent.ac.uk/people/staff/rej/gcbib/[the Garbage Collection Bibliography]
+
+== q&a

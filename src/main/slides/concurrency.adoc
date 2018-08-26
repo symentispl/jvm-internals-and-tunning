@@ -1,0 +1,321 @@
+== Java Memory Model and concurrency
+
+== things you need to know about CPU
+
+=== the primer
+
+* processor microarchitecture
+* load and store buffers
+* out of order execution
+* cache hierarchy (and coherence protocols)
+
+=== the loop
+
+[ditaa]
+----
++--------------------+
+|      fetch         |<---+
++--------------------+    |
+          |               |
+          v               |
++--------------------+    |
+|      decode        |    |
++--------------------+    |
+          |               |
+          v               |
++--------------------+    |
+|      schedule      |    |
++--------------------+    |
+          |               |
+          v               |
++--------------------+    |
+|     execute        |----+
++--------------------+
+          |
+          v
++--------------------+
+|     retirement     |
++--------------------+
+----
+
+=== how single cpu works?
+
+*WARNING* +
+it's oversimplified view of the reality, +
+it's much more complex +
+but it should help you understand basic concepts
+
+=== !
+
+[ditaa]
+----
+                       +-------------------------+
+                       |   fetch and predecode   |<--------+
+                       +-------------------------+         |
+                                   |                       |
+                                   v                       v
+                       +-------------------------+      +------+   +----------------------+
+                       |   instruction queue     |      | iTLB |-->| L1 instruction cache |
+                       +-------------------------+      +------+   +----------------------+
+                                   |                       ^                 ^
+                                   v                       |                 |
+                       +-------------------------+         |                 |
+                       |         decode          |         |                 v
+                       +-------------------------+      +--------+   +----------------------+    +---------------+
+                                   |                    | L2 TLB |-->|       L2 cache       |--->| L3 and beyond |
+                                   v                    +--------+   +----------------------+    +---------------+
+                       +-------------------------+         |                 ^
+      +----------------|     rename/allocate     |         |                 |
+      |                +-------------------------+         |                 |
+      |                            |                       |                 |
+      |                            v                       v                 v
+      |                +-------------------------+     +------+   +-----------------------+
+      |                |       scheduler         |     | dTLB |-->|    L1 data cache      |
+      |                +-------------------------+     +------+   +-----------------------+
+      |                            |                      ^
+      v                            v                      |
++----------+           +-------------------------+        |
+|retirement|<----------|     execution units     |--------+
++----------+           +-------------------------+
+----
+
+=== fetch and decode
+
+* also called Front-End Pipeline, retrieves instructions from L1 instruction
+cache, uses decoders to decode them into micro-ops and buffers them for down
+stream stages
+* it handles decoding "in order"
+* consists of the Instruction Translation Look-aside Buffer,
+an instruction pre-fetcher, the L1 instruction cache and the pre-decode logic
+
+=== micro-ops?
+
+A simple instruction such as
+
+[source,asm]
+----
+add eax,ebx
+----
+generates only one μop,
+
+=== !
+
+while an instruction like
+[source,asm]
+----
+add eax,[var]
+----
+may generate two: one for reading from memory into a temporary (unnamed) register,
+and one for adding the contents of the temporary register to eax
+
+=== !
+
+The instruction
+[source,asm]
+----
+add [var],eax
+----
+may generate three μops: one for reading from memory, one for adding, and one
+for writing the result back to memory.
+
+The advantage of this is that the μops can be executed out of order.
+
+=== in-order vs out-of-order
+
+* old CPUs only had in-order pipelines
+* it caused stalls in execution, CPU was waiting until data was available
+* modern CPUs still have in-order pipeline (fetch->decode)
+* as we have reached limits of CPU clocks, we get more speed by
+** parelizing execution (more execution units)
+** bigger caches
+** mesh architectures (more interconnected cores)
+
+=== things get weird
+
+=== load and store buffers
+
+=== out of order execution
+
+=== cache coherence
+
+=== false sharing
+
+=== help me!
+
+image::intel_skylake.jpg[]
+
+== memory model
+
+* in multiprocessor systems, processors generally have one or more layers of
+memory cache, which improves performance both by speeding access to data and
+reducing traffic on the shared memory bus
+* a memory model defines necessary and sufficient conditions for knowing that
+writes to memory by other processors are visible to the current processor,
+and writes by the current processor are visible to other processors
+
+=== barriers and reordering
+
+* special instructions, called memory barriers, are required to flush or
+invalidate the local processor cache in order to see writes made by other
+processors or make writes by this processor visible to others. These memory
+barriers are usually performed when lock and unlock actions are taken
+
+=== jebany rysunek z czasami dostępów
+
+=== barriers and reordering
+
+the compiler might decide that it is more efficient to move a write operation
+later in the program; as long as this code motion does not change the program's
+semantics, it is free to do so.  If a compiler defers an operation, another
+thread will not see it until it is performed; this mirrors the effect of caching.
+
+=== reordering
+
+[source,java]
+----
+class Reordering {
+  int x = 0, y = 0;
+  public void writer() {
+    x = 1;
+    y = 2;
+  }
+
+  public void reader() {
+    int r1 = y;
+    int r2 = x;
+  }
+}
+----
+
+== java memory model
+
+== memory fences
+
+== false sharing, cache lines and memory aligement (padding)
+
+== java.util.concurrent
+
+== synchronized vs locks
+
+=== synchronized
+
+* uses `monitorenter` and `monitorexit` bytecodes
+* this forces to wrap critical section into `try-catch-finally` blocks (done by javac)
+* underneath it uses fields in object header
+* whole locking mechanism is implemented in JVM code
+
+=== locks
+
+* part of java.util.concurrent package, since Java 5
+* advantages over `synchronized` construct
+** fairness
+** `tryLock()`
+** `lockInterruptibly()`
+** `newCondition()`, is like `wait()/notify()` on steroids
+
+=== locks
+
+* `ReentrantLock`,
+* `ReentrantReadWriteLock`,
+* `StampedLock` (Java 8)
+
+=== atomic operations
+
+is it safe on multiprocessor systems?
+
+[source,java]
+----
+int i = 0;
+i++;
+----
+
+=== ... or better in bytecode
+
+[source,bytecode]
+----
+iconst_0
+istore_1
+iload_1
+iconst_1
+iadd
+----
+
+=== ... or in assembly
+
+[source,nasm]
+----
+global _start
+
+section .data
+  i: DW 0
+
+section .bss
+
+section .text
+  _start:
+
+  inc dword [i];
+  ; required on Linux exit syscall
+  mov     ebx, 0          ; Arg one: the status
+  mov     eax, 1          ; Syscall number:
+  int     0x80
+----
+
+single `inc` instruction, should work, shouldn't it?
+
+remember &#xb5;ops?
+
+=== compare-exchange
+
+CPU to the rescure with `cmpxchg` instruction and others like `xadd`
+
+[quote]
+Compares the value in the AL, AX, or EAX register (depending on the
+size of the operand) with the first operand (destination operand).
+If the two values are equal, the second operand (source operand)
+is loaded into the destination operand. Otherwise, the destination
+operand is loaded into the AL, AX, or EAX register.
+This instruction can be used with a LOCK prefix to allow the
+instruction to be executed atomically.
+
+
+=== java.util.concurrent.atomic
+
+* classes like `AtomicLong` or `AtomicInteger` provide compare-exchange semantic
+for Java
+
+== lock free programming
+
+=== o co chodzi (transactional methods)
+
+=== ABA problem
+
+=== spin loops
+
+=== !
+
+[quote, Stackoverflow]
+This is an entirely different thing than the CPU LOCK prefix feature which
+guards a single instruction only and thus might hold other threads for the
+duration of that single instruction only. Since this is implemented by the
+CPU itself, it doesn’t require additional software efforts.
+Therefore the challenge of developing lock-free algorithms is not the removal
+of synchronization entirely, it boils down to reduce the critical section of
+the code to a single atomic operation which will be provided by the CPU itself.
+
+=== !
+
+fancy example of lock-free, maybe MPSC queue, whatever
+
+=== yeld, PAUSE and other stuff (mention Gil Tene JEP)
+
+=== Queues are every where JCTools and other concurrent libs
+
+== other concurrency models
+
+* data flow programming, _java.util.concurrent.CompletableFuture_
+* actor model, aka "true OOP" (Erlang, Pony, http://akka.io/[Akka])
+* communicating sequential processes (Go, http://docs.paralleluniverse.co/quasar/[Quasar])
+* software transactional memory (http://clojure.org/about/concurrent_programming[Clojure])
+
+== q&a

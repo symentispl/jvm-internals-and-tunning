@@ -6,12 +6,14 @@ use_bldsup(build_support_dir="src/main/scripts")
 
 default_task = ["slideon"]
 
+
 @init
 def initialize(project):
     project.depends_on("sh")
     project.depends_on("livereload")
     project.depends_on("requests")
     project.depends_on("clint")
+
 
 @task
 def slideon(logger):
@@ -21,7 +23,3 @@ def slideon(logger):
     except Exception as e:
         logging.exception("unable to render slides")
         raise e
-
-@task
-def assembly():
-    pass

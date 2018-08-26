@@ -1,25 +1,4 @@
-= new File("geecon.json")
-:idprefix:
-:stem: asciimath
-:backend: html
-:source-highlighter: pygments
-:pygments-style: tango
-:revealjs_history: true
-:revealjs_theme: white
-:revealjs_controls: false
-:imagesdir: images
-:customcss: css/custom.css
-
-== about me
-
-*Jarek Pałka*
-
-[options="step"]
-* Allegro.tech, doing stuff, back to coding, hell yeah!!!
-* JDD, 4Developers, SegFault and CoreDump conferences where I
-serve as a dictator for life and head of program committee
-* JVM, bytecode, parsers, graphs and other cool things (like ponies)
-* owner at Symentis trainings,
+== Java I/O
 
 === !
 

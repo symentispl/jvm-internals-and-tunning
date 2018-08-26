@@ -1,32 +1,6 @@
-= Voyeurs in the JVM land
-:idprefix:
-:stem: asciimath
-:backend: html
-:source-highlighter: pygments
-:pygments-style: tango
-:revealjs_history: true
-:revealjs_theme: night
-:imagesdir: images
-:customcss: css/custom.css
-:title-slide-background-image: https://i.ytimg.com/vi/_TQYpKSMVhw/maxresdefault.jpg
+== Voyeurs in the JVM land
 
-== about me
-
-*Jarek Pałka*
-
-[options="step"]
-* Allegro.tech, doing stuff, back to coding, hell yeah!!!
-* JDD, 4Developers and one more conference (still under development) where I
-serve as a dictator for life
-* JVM, bytecode, parsers, graphs and other cool things (like ponies)
-* owner at Symentis trainings,
-* former chief architect, development manager, head of development,
-backend developer and performance guy
-
-
-== You are all invited!
-
-image::http://segfault.events/img/segfaultPoziomeLogo.svg[SegFault,300,200]
+image::https://i.ytimg.com/vi/_TQYpKSMVhw/maxresdefault.jpg[background, size=cover]
 
 == agenda
 
@@ -81,6 +55,7 @@ samples running JVM for selected metrics
 
 _jstat -gc [pid] 1000_
 
+[role="highlight_title"]
 === jcmd
 
 image::https://static.pexels.com/photos/60029/pepperoni-red-sharp-cut-60029.jpeg[background,size=cover]
@@ -97,10 +72,13 @@ _jcmd [pid] help_
 
 == JVM logging and tracking
 
+
+[role="highlight_title"]
 === JVM has tons of diagnostic options
 
 image::https://s3.amazonaws.com/images.thestar.com/content/dam/thestar/entertainment/movies/2016/01/08/the-forest-gets-lost-in-the-trees-review/forest--horizontal.jpg.size-custom-crop.1086x0.jpg[background, size=cover]
 
+[role="highlight_title"]
 === garbage collection
 
 image::https://static.pexels.com/photos/128421/pexels-photo-128421.jpeg[background,size=cover]
@@ -145,6 +123,7 @@ _-XX:PrintSafepointStatisticsCount=1_
 
 https://www.cberner.com/2015/05/24/debugging-jvm-safepoint-pauses/[Debugging JVM safepoint pauses]
 
+[role="highlight_title"]
 === just in time compilation
 
 image::https://static.pexels.com/photos/404972/pexels-photo-404972.jpeg[background,size=cover]
@@ -161,6 +140,7 @@ _-XX:+LogCompilation_ +
 _-XX:LogFile=mylogfile.log_ +
 _-XX:+PrintAssembly_
 
+[role="highlight_title"]
 === TLAB
 
 image::https://static.pexels.com/photos/533353/pexels-photo-533353.jpeg[background,size=cover]
@@ -180,6 +160,7 @@ you want as much of allocations to happen in TLABs, period
 
 https://blogs.oracle.com/jonthecollector/the-real-thing[The Real Thing]
 
+[role="highlight_title"]
 === native memory tracking
 
 image::https://static.pexels.com/photos/47090/baby-tears-small-child-sad-47090.jpeg[background,size=cover]
@@ -194,6 +175,7 @@ _java -XX:NativeMemoryTracking=[off|summary|detail]_
 
 _jcmd [pid] VM.native_memory summary_
 
+[role="highlight_title"]
 == a weapon of mass destruction
 
 image::https://static.pexels.com/photos/358559/pexels-photo-358559.jpeg[background,size=cover]
@@ -216,7 +198,7 @@ as of now, you can't use it to analyze production systems
 
 === !
 
-until JDK 10 comes out, +
+until JDK 11 comes out, +
 this is official statement now
 
 === !
@@ -227,6 +209,7 @@ _jcmd [pid] JFR.start name=recording_
 
 _jcmd [pid] JFR.start name=recording filename=recording.jfr_
 
+[role="highlight_title"]
 === Java Mission Control
 
 image::https://static.pexels.com/photos/20258/pexels-photo.jpg[background,size=cover]
@@ -247,6 +230,7 @@ _pidstat -r -p [pid] 1 # page faults per process_
 
 forget about `strace`, `ptrace` syscall is not what you want :)
 
+[role="highlight_title"]
 === tracing syscalls
 
 image::https://static.pexels.com/photos/258510/pexels-photo-258510.jpeg[background,size=cover]
@@ -314,6 +298,7 @@ https://0xax.gitbooks.io/linux-insides/content/SysCall/syscall-1.html[System cal
 https://www.sysdig.org/[sysdig] +
 https://perf.wiki.kernel.org/index.php/Main_Page[perf: Linux profiling with performance counters]
 
+[role="highlight_title"]
 == Java Microbenchmark Harness
 
 image::https://static.pexels.com/photos/45202/brownie-dessert-cake-sweet-45202.jpeg[background]
@@ -576,4 +561,4 @@ java -jar benchmark.jar -rf csv -rff results.csv
 == tips and tricks
 
 on laptops governors can trick you, +
-it's easy to control them on linux with `cpufreq-set`
+it's easy to control them on Linux with `cpufreq-set`
