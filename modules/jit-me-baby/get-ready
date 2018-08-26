@@ -1,0 +1,11 @@
+#!/bin/bash
+
+export PS1="> "
+alias Fibonacci="./run-class -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining Fibonacci"
+alias NullCheckFolding="./run-class -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining -XX:CompileCommand=\"print,*NullCheckFolding.nullCheckFolding\" NullCheckFolding"
+alias UncommonTrap="./run-class -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining UncommonTrap"
+alias UncommonTrapCHA="./run-class -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining UncommonTrapCHA"
+alias ConstantPropagation="./run-class -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining -XX:CompileCommand=\"print,*ConstantPropagation.constantPropagation\" ConstantPropagation"
+alias PointerCompare="./run-class -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining -XX:CompileCommand=\"print,*PointerCompare.pointerCompare\" PointerCompare"
+alias Intrinsic="./run-class -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining -XX:CompileCommand=\"print,*Intrinsic.intrinsic\" Intrinsic"
+alias LockEllision="./run-class -XX:+UnlockDiagnosticVMOptions -XX:+PrintCompilation -XX:+PrintInlining -XX:CompileCommand=\"print,*LockEllision.lockEllision\" LockEllision"

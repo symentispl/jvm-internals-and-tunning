@@ -1,0 +1,24 @@
+---
+- hosts: maszyny
+  tasks:
+  - name: add Oracle JDK repository
+    apt_repository: repo=ppa:webupd8team/java state=present
+  - name: uninstall OpenJDK
+    apt: name=openjdk-8-jdk state=absent
+  - name: Accept Java 8 License
+    debconf: name='oracle-java8-installer' question='shared/accepted-oracle-license-v1-1' value='true' vtype='select'
+  - name: install packages
+    apt: name={{ item }}
+    with_items:
+      - sysdig
+      - sysstat
+      - oracle-java8-installer
+      - lsof
+      - procps
+      - unzip
+  - name: remove warsztaty
+    file: path=/root/warsztaty state=absent
+  - name: create warsztaty
+    file: path=/root/warsztaty state=directory
+  - name: copy examples
+    unarchive: src=../jvm-voyeurs-bin/target/jvm-voyeurs-bin-1.0-SNAPSHOT-bin.zip dest=/root/warsztaty

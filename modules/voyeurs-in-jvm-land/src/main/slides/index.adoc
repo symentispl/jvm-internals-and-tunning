@@ -1,0 +1,579 @@
+= Voyeurs in the JVM land
+:idprefix:
+:stem: asciimath
+:backend: html
+:source-highlighter: pygments
+:pygments-style: tango
+:revealjs_history: true
+:revealjs_theme: night
+:imagesdir: images
+:customcss: css/custom.css
+:title-slide-background-image: https://i.ytimg.com/vi/_TQYpKSMVhw/maxresdefault.jpg
+
+== about me
+
+*Jarek Pałka*
+
+[options="step"]
+* Allegro.tech, doing stuff, back to coding, hell yeah!!!
+* JDD, 4Developers and one more conference (still under development) where I
+serve as a dictator for life
+* JVM, bytecode, parsers, graphs and other cool things (like ponies)
+* owner at Symentis trainings,
+* former chief architect, development manager, head of development,
+backend developer and performance guy
+
+
+== You are all invited!
+
+image::http://segfault.events/img/segfaultPoziomeLogo.svg[SegFault,300,200]
+
+== agenda
+
+* JDK with batteries included
+* JVM logging and tracking
+* Linux tools for curious
+* other tools for weirdos
+
+== JDK with batteries included
+
+* jps
+* jmap
+* jstack
+* jstat
+* jcmd
+
+=== how it works
+
+JVM stores metrics in memory mapped files
+
+_+++/tmp/hsperfdata_[username]/[pid]+++_
+
+=== test
+
+_lsof +d /tmp/hsperfdata_jarek_
+
+=== jps
+
+lists all running JVM processes
+
+=== jstack
+
+dumps stacks of all JVM threads (in a selected process)
+
+_jstack -l [pid] # to include locks info_
+
+=== jmap
+
+prints heap information, histogram or dump heap content to a file
+
+=== !
+
+_jmap -heap [pid] # to print heap usage_
+
+_jmap -histo [pid] # to print histogram_
+
+_jmap -dump:file=jvm.dump # to dump heap_
+
+=== jstat
+
+samples running JVM for selected metrics
+
+_jstat -gc [pid] 1000_
+
+=== jcmd
+
+image::https://static.pexels.com/photos/60029/pepperoni-red-sharp-cut-60029.jpeg[background,size=cover]
+
+[%notitle]
+=== jcmd - options
+
+one tool to rule them all, +
+one stop shop for all commands available in JVM
+
+=== let's play with it
+
+_jcmd [pid] help_
+
+== JVM logging and tracking
+
+=== JVM has tons of diagnostic options
+
+image::https://s3.amazonaws.com/images.thestar.com/content/dam/thestar/entertainment/movies/2016/01/08/the-forest-gets-lost-in-the-trees-review/forest--horizontal.jpg.size-custom-crop.1086x0.jpg[background, size=cover]
+
+=== garbage collection
+
+image::https://static.pexels.com/photos/128421/pexels-photo-128421.jpeg[background,size=cover]
+
+=== !
+
+_jstat -gc [pid] [interval]_
+
+or
+
+=== !
+
+_-Xloggc:gc.log_ +
+_-XX:+PrintGCDetails_ +
+_-XX:+PrintGCDateStamps_ +
+_-XX:+PrintTenuringDistribution_ +
+_-XX:+PrintGCApplicationStoppedTime_ +
+_-XX:+PrintClassHistogramAfterFullGC_ +
+_-XX:+PrintClassHistogramBeforeFullGC_ +
+_-XX:+UseGCLogFileRotation_ +
+_-XX:NumberOfGCLogFiles=5_ +
+_-XX:GCLogFileSize=10M_
+
+=== safepoint
+
+image::https://static.pexels.com/photos/186537/pexels-photo-186537.jpeg[background,size=cover]
+
+=== what?
+
+[quote,Nitsan Wakart,]
+  Imagine if you will a JVM full of mutator threads, all busy, sweating, mutating the heap. Some of them have <gasp> shared mutable state. They're mutating each others state, concurrently, like animals. Some stand in corners mutating their own state (go blind they will). Suddenly a neon sign flashes the word PINEAPPLES. One by one the mutators stop their rampant heap romping and wait, sweat dripping. When the last mutator stops, a bunch of elves come in, empty the ashtrays, fill up all the drinks, mop up the puddles, and quickly as they can they vanish back to the north pole. The sign is turned off and the threads go back to it
+
+=== !
+
+[quote,Nitsan Wakart,]
+  At a safepoint the mutator thread is at a known and well defined point in it's interaction with the heap. This means that all the references on the stack are mapped (at known locations) and the JVM can account for all of them. As long as the thread remains at a safepoint we can safely manipulate the heap + stack such that the thread's view of the world remains consistent when it leaves the safepoint.
+
+=== !
+
+_-XX:+PrintSafepointStatistics_ +
+_-XX:PrintSafepointStatisticsCount=1_
+
+https://www.cberner.com/2015/05/24/debugging-jvm-safepoint-pauses/[Debugging JVM safepoint pauses]
+
+=== just in time compilation
+
+image::https://static.pexels.com/photos/404972/pexels-photo-404972.jpeg[background,size=cover]
+
+=== !
+
+_-XX:+UnlockDiagnosticVMOptions_ +
+_-XX:+PrintCompilation_ +
+_-XX:+PrintInlining_
+
+_-XX:+UnlockDiagnosticVMOptions_ +
+_-XX:+TraceClassLoading_ +
+_-XX:+LogCompilation_ +
+_-XX:LogFile=mylogfile.log_ +
+_-XX:+PrintAssembly_
+
+=== TLAB
+
+image::https://static.pexels.com/photos/533353/pexels-photo-533353.jpeg[background,size=cover]
+
+=== what?
+
+[quote,Ross K,]
+  A Thread Local Allocation Buffer (TLAB) is a region of Eden that is used for allocation by a single thread.  It enables a thread to do object allocation using thread local top and limit pointers, which is faster than doing an atomic operation on a top pointer that is shared across threads. A thread acquires a TLAB at it's first object allocation after a GC scavenge. The size of the TLAB is computed via a somewhat complex process discribed below.  The TLAB is released when it is full (or nearly so), or the next GC scavenge occurs. TLABs are allocated only in Eden, never from From-Space or the OldGen.
+
+=== should I care?
+
+you want as much of allocations to happen in TLABs, period
+
+=== !
+
+-XX:+PrintTLAB
+
+https://blogs.oracle.com/jonthecollector/the-real-thing[The Real Thing]
+
+=== native memory tracking
+
+image::https://static.pexels.com/photos/47090/baby-tears-small-child-sad-47090.jpeg[background,size=cover]
+
+=== Stackoverflow
+
+https://stackoverflow.com/questions/24670316/java-process-taking-more-memory-than-its-max-heap-size[Java process taking more memory than its max heap size]
+
+=== !
+
+_java -XX:NativeMemoryTracking=[off|summary|detail]_
+
+_jcmd [pid] VM.native_memory summary_
+
+== a weapon of mass destruction
+
+image::https://static.pexels.com/photos/358559/pexels-photo-358559.jpeg[background,size=cover]
+
+=== or pair made in heaven
+
+=== FlightRecorder
+
+[quote,,Oracle Help Center]
+Java Flight Recorder (JFR) is a tool for collecting diagnostic and profiling data about a running Java application. It is integrated into the Java Virtual Machine (JVM) and causes almost no performance overhead, so it can be used even in heavily loaded production environments.
+
+[%notitle]
+=== enable JFR
+
+_java -XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:StartFlightRecording=duration=60s,filename=myrecording.jfr_
+
+=== warning
+
+as of now, you can't use it to analyze production systems
+
+=== !
+
+until JDK 10 comes out, +
+this is official statement now
+
+=== !
+
+_java -XX:+UnlockCommercialFeatures -XX:+FlightRecorder_
+
+_jcmd [pid] JFR.start name=recording_
+
+_jcmd [pid] JFR.start name=recording filename=recording.jfr_
+
+=== Java Mission Control
+
+image::https://static.pexels.com/photos/20258/pexels-photo.jpg[background,size=cover]
+
+== Linux tools for curious
+
+* sysstat
+* sysdig
+* perf
+
+=== sysstat
+
+_pidstat -t -d -p [pid] 1 # IO usage per thread_ +
+_pidstat -t -w -p [pid] 1 # task switching per thread_ +
+_pidstat -r -p [pid] 1 # page faults per process_
+
+=== warning
+
+forget about `strace`, `ptrace` syscall is not what you want :)
+
+=== tracing syscalls
+
+image::https://static.pexels.com/photos/258510/pexels-photo-258510.jpeg[background,size=cover]
+
+=== sysdig
+
+_sysdig prod.pid=[pid] -w [pid].scap # record events_
+
+_csysdig -r [pid].scap # analyze_
+
+=== perf
+
+_perf record -p [pid] -o [pid].perf # record events_
+
+_perf report -i [pid].perf # analyze_
+
+== tools for weirdos
+
+* honest profiler
+* flamegraphs
+
+=== honest profiler
+
+it uses unofficial JVM API call `AsyncGetCallTrace` +
+as opposed to other profilers which use JVMTI (JVM tool interface)
+
+=== !
+
+here goes long boring discussion about complexity of OpenJDK global safepoint mechanism
+
+[%notitle]
+=== honest profiler benefits
+
+[quote,,Honest profiler wiki]
+  It accurately profiles applications, avoiding an inherent bias towards places that have safepoints.
+  It profiles applications with significantly lower overhead than traditional profiling techniques, making it suitable for use in production.
+
+=== !
+
+http://psy-lob-saw.blogspot.co.za/2016/06/the-pros-and-cons-of-agct.html[The Pros and Cons of AGCT]
+
+=== !
+
+_java -agentpath:../honest-profiler/liblagent.so=logPath=honest.logs Main_
+
+== tools I didn't mention
+
+* GCviewer
+* JITWatch
+* PrintAssembly
+* Solaris Studio
+* Censum
+* Memory Analyzer Tool
+* and all application level tracing tools
+
+== Q&A
+
+== links
+
+https://shipilev.net/jvm-anatomy-park/[JVM Anatomy Park] +
+http://psy-lob-saw.blogspot.com/[Nitsan's blog] +
+https://www.chrisnewland.com/index[Chris Newland blog, JITwatch author] +
+http://hirt.se/blog/[Marcus Hirt blog, all stuff JMC] +
+https://0xax.gitbooks.io/linux-insides/content/SysCall/syscall-1.html[System calls in the Linux kernel] +
+https://www.sysdig.org/[sysdig] +
+https://perf.wiki.kernel.org/index.php/Main_Page[perf: Linux profiling with performance counters]
+
+== Java Microbenchmark Harness
+
+image::https://static.pexels.com/photos/45202/brownie-dessert-cake-sweet-45202.jpeg[background]
+
+== !
+
+[quote,,Wes Dyer]
+  Make it correct, make it clear, make it concise, make it fast. In that order.
+
+== !
+
+[quote,JMH wiki,]
+  JMH is a Java harness for building, running, and analysing nano/micro/milli/macro benchmarks written in Java and other languages targetting the JVM.
+
+== !
+
+http://openjdk.java.net/projects/code-tools/jmh/[http://openjdk.java.net/projects/code-tools/jmh/]
+
+mvn archetype:generate \ +
+       -DinteractiveMode=false \ +
+       -DarchetypeGroupId=org.openjdk.jmh \ +
+       -DarchetypeArtifactId=jmh-java-benchmark-archetype \ +
+       -DgroupId=org.sample \ +
+       -DartifactId=test \ +
+       -Dversion=1.0
+
+
+
+== benchmarks
+
+these are public non-static methods annotated with `@Benchmark`
+
+[source, java]
+----
+import org.openjdk.jmh.annotations.Benchmark;
+
+public class CodeBenchmark {
+
+  @Benchmark
+  public void testMethod(){
+  }
+
+}
+----
+
+== managing state & life cycle
+
+more complex examples will need to work with some data (state), +
+this is what for state objects are for
+
+[%notitle]
+=== state objects
+
+[source,java]
+----
+@State(Scope.Benchmark)
+public class CodeBenchmarkState{
+
+  public final ArrayList<Integer> list = new ArrayList<>();
+
+}
+----
+
+[%notitle]
+=== injecting state objects
+
+[source,java]
+----
+public class CodeBenchmark{
+
+  @Benchmark
+  public void testMethod(CodeBenchmarkState state){
+    state.add(0);
+  }
+
+}
+----
+
+=== note on scopes
+
+=== Scope.Benchmark
+
+With benchmark scope, all instances of the same type will be shared across all worker threads
+
+=== Scope.Group
+
+With group scope, all instances of the same type will be shared across all threads within the same group. Each thread group will be supplied with its own state object
+
+=== Scope.Thread
+
+With thread scope, all instances of the same type are distinct, even if multiple  state objects are injected in the same benchmark
+
+=== lifecycle
+
+every state object can have `@Setup` and `@TearDown` fixture methods
+
+== time for first benchmark
+
+let's compare iteration speed over primitive array, `ArrayList` and `LinkedList`
+
+== running benchmarks
+
+[source, console]
+----
+mvn package
+java -jar target/benchmark.jar
+----
+
+=== forks, warm ups and iterations
+
+by default JMH forks JVM for each run of benchmark, +
+within each fork you have two phases
+
+* warm up
+* iteration
+
+number of repetitions of each phase can be controlled over command line
+
+== command line
+
+-f  - number of forks +
+-wi - number of warm ups +
+-i  -  number of iterations
+
+[%notitle]
+=== command line example
+
+[source,console]
+----
+java -jar target/benchmark.jar -f 1 -i 5 -wi 5
+----
+
+== parameterized tests
+
+JMH supports parameterized tests through `@Param` annotation +
+Test parameters should be public non-final fields on state objects +
+they are injected right before call to setup fixture methods
+
+[%notitle]
+=== parameterized tests example
+
+[source, java]
+----
+@State(Scope.Benchmark)
+public class CodeBenchmark {
+
+  @Param{"0.1","0.2","0.5","0.75","1.0"}
+  public float loadFactor;
+
+  private Map<String,String> map;
+
+  @Setup
+  public void setUp(){
+    map = new HashMap<>(16,loadFactor);
+  }
+
+}
+----
+
+=== controlling parameters
+
+you overwrite values of the parameters with command line options
+
+[source, console]
+----
+java -jar target/benchmarks.jar -p loadFactor=0.8,0.9
+----
+
+== dead code
+
+image::https://static.pexels.com/photos/34153/pexels-photo.jpg[background, size=cover]
+
+== ... and black holes
+
+=== !
+
+one of the dangers JMH tries to mitigate is dead code optimization from JIT, +
+to avoid it, consume return values from functions with black holes
+
+[source, java]
+----
+@Benchmark
+public void testMethod(Blackhole blackhole){
+  blackhole.consume(codeBenchmark());
+}
+----
+
+== asymmetric tests
+
+image::https://static.pexels.com/photos/632445/pexels-photo-632445.jpeg[background, size=cover]
+
+=== !
+sometimes you want to benchmark your concurrent code, +
+like performance of read and write paths +
+this is where `@Group` and `@GroupThreads` come in
+
+[%notitle]
+=== asymetric tests example
+
+[source, java]
+----
+@State(Scope.Benchmark)
+public class CodeBenchmark {
+
+	@Benchmark
+	@Group("benchmarkGroup")
+	@GroupThreads(1)
+	public void testWrites() {
+	}
+
+	@Benchmark
+	@Group("bechmarkGroup")
+	@GroupThreads(1)
+	public void testReads(Blackhole blackhole) {
+	}
+
+}
+----
+
+== time for third benchmark
+
+compare performance of various thread-safe counter implementations
+
+[source, java]
+----
+public class Counter {
+
+	private long counter;
+
+	public void inc() {
+		++counter;
+	}
+
+	public long counter() {
+		return counter;
+	}
+}
+----
+
+== profilers
+
+they can provide some insights into your code
+
+[source, console]
+----
+java -jar benchmark.jar -lprof
+java -jar benchmark.jar -prof hs_gc
+----
+
+== reporters
+
+and last but not least, writing test results to files
+
+[source, console]
+----
+java -jar benchmark.jar -lr
+java -jar benchmark.jar -rf csv -rff results.csv
+----
+
+== tips and tricks
+
+on laptops governors can trick you, +
+it's easy to control them on linux with `cpufreq-set`

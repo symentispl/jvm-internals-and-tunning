@@ -1,0 +1,17 @@
+# tiered compilation
+-XX:TieredStopAtLevel=1
+
+-XX:+PrintTieredEvents
+
+-XX:Tier2CompileThreshold=
+
+# inlining
+-XX:MaxRecursiveInlineLevel=
+-XX:MaxInlineLevel=
+
+# assembly
+
+-XX:UnlockDiagnosticVMOptions -XX:+PrintStubCode
+-XX:UnlockDiagnosticVMOptions -XX:+PrintIntrinsics
+
+-XX:CompileCommand="print,*"

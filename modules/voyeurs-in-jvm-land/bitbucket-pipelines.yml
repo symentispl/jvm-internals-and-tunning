@@ -1,0 +1,9 @@
+image: cloudbees/java-build-tools:latest
+
+pipelines:
+  default:
+    - step:
+        caches:
+          - maven
+        script: # Modify the commands below to build your repository.
+          - ./mvnw -B verify # -B batch mode makes Maven less verbose

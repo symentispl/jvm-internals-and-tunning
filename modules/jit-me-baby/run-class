@@ -1,0 +1,7 @@
+#!/bin/bash
+
+JVMARGS="${@:1:$(($# - 1))}"
+CLASSNAME="${@:$#}"
+CLASSPATH="target/classes"
+
+java -cp "${CLASSPATH}" $JVMARGS pl.symentis.jit."${CLASSNAME}"

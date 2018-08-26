@@ -1,0 +1,584 @@
+= JIT me baby one more time
+Jarek Pałka (@j_palka)
+:stem: asciimath
+:backend: html
+:source-highlighter: pygments
+:pygments-style: tango
+:revealjs_history: true
+:revealjs_theme: night
+:imagesdir: images
+:customcss: css/custom.css
+
+
+== about me
+
+*Jarek Pałka*
+
+[options="step"]
+* Allegro.tech, doing stuff, back to coding, hell yeah!!!
+* JDD, 4Developers and one more conference (still under development) where I serve as a dictator for life
+* JVM, bytecode, parsers, graphs and other cool things (like ponies)
+* owner at Symentis trainings,
+* former chief architect, development manager, head of development, backend developer and performance guy
+
+== prologue
+
+I am not in any sense, a JVM expert +
+what you will see is months of +
+OpenJDK source code traversing, +
+forum discussions +
+and hundreds of try and error tests
+
+
+== what's all this for?
+
+I have a feeling our industry lost its tracks +
+in zillions of frameworks and abstraction layers
+
+== the truth
+
+*is deep,* +
+*beneath* +
+*all this* +
+*bullshit*
+
+== what's jit
+
+Just In Time compiler, +
+is a technique of code compilation during runtime, +
+as oposed to Ahead Of Time compilation +
+like C or C++, or Go or Rust
+
+[%notille]
+== smalltalk and lisp
+
+first time used in LISP and than later on expanded during development of
+Smalltalk +
+(including Strongtalk and Self languages)
+
+== JVM is not revolution its evolution, baby
+
+
+[%notitle]
+== we fucked up
+
+image::Cif5ryKUUAAiSSJ.jpg[background, size=contain]
+
+[.highlight_section_title]
+== it's huge
+
+image::lhc10.jpg[background, size=cover]
+
+[%notitle]
+=== JDK SLOC
+
+image::JDK9SLOC.png[]
+
+[.highlight_section_title]
+== it's complex
+
+image::cms_detector_web_1024.jpg[background, size=cover]
+
+[.highlight_section_title]
+== it's fast
+
+image::lhc-particle-collision-523875355-f.jpg[background, size=cover]
+
+[%notitle]
+=== fibonacci code
+
+[source,java]
+----
+public static long fibonacci(int n) {
+    if (n <= 1) return n;
+    else return fibonacci(n-1) + fibonacci(n-2);
+}
+----
+
+[%notitle]
+=== fibonacci interpreted mode
+
+*# interpreted mode only*
+
+ $> java -cp target/classes -Xint pl.symentis.jit.Fibonacci
+ execute time is 2900 ms
+ result is 46368
+
+[%notitle]
+=== fibonacci compiled mode
+
+*# mixed mode (with JIT compiler)*
+
+ $> java -cp target/classes pl.symentis.jit.Fibonacci
+ execute time is 67 ms
+ result is 46368
+
+[.highlight_section_title]
+== it's magic
+
+image::bbb.jpg[background, size=cover]
+
+== a little bit of history
+
+* HotSpot JVM, default JVM since Java 1.3
+* a tale of two compilers C1 and C2, aka "client" and "server"
+
+=== C1
+
+* it's a fast compiler
+* trivial methods, up to 6 bytes (`MaxTrivialSize`), are inlined by default
+* and up 35 bytes (in bytecode) (`MaxInlineSize`) for not _hot code_
+* uses linear register allocation
+
+=== C2
+
+* is slow, but generates faster code (compared to C1)
+* by default limited by bytecode size of 325 (`FreqInlineSize`)
+* uses graph coloring algorithm for register allocation
+* based on templates, called Architecture Desciption Language
+
+=== tiered compliation
+
+enabled by default since Java 8, +
+uses both compilers for better JVM start up time
+
+becaused JVM suffered from so called _warmups_, +
+it didn't solve the problem, just made it less annoying
+
+[.highlight_section_title]
+== any questions?
+
+image::kdLCmqOWPMOSQ.gif[background, size=cover]
+
+== question number one
+
+when code is compiled?
+
+[%notitle]
+=== print compilation fibonacci
+
+*-XX:+PrintCompilation Fibonacci*
+
+ 63   16       3   Fibonacci::fibonacci (22 bytes)
+ 63   17       4   Fibonacci::fibonacci (22 bytes)
+ 64   16       3   Fibonacci::fibonacci (22 bytes) made not entrant
+ 145  24   !   3   java.io.BufferedReader::readLine (304 bytes)
+ 158  36     n 0   sun.misc.Unsafe::getObjectVolatile (native)
+ 160  38  s    3   java.io.BufferedInputStream::read (49 bytes)
+
+=== compilation attributes
+
+* %: The compilation is OSR
+* s: The method is synchronized
+* !: The method has an exception handler
+* b: Compilation occurred in blocking mode
+* n: Compilation occurred for a wrapper to a native method
+
+=== compilation level
+
+* 0: interpreter
+* 1: C1 with full optimization (no profiling)
+* 2: C1 with invocation and backedge counters
+* 3: C1 with full profiling (level 2 and `MethodData`)
+* 4: C2
+
+=== profiling?
+
+[%notitle]
+=== profiling explained
+
+JIT (and interpreter) +
+use `MethodCounter` and `MethodData` +
+to record invocations and other profiler data +
+(backedges, call sites profile, taken branches)
+
+=== which leads to next question
+
+== question number two
+
+what code gets compiled?
+
+=== a hot code
+
+a code which has reached invocation threasholds
+
+2000 invocations for C1 +
+10000 invocations for C2
+
+(and trivial methods)
+
+== question number three
+
+what does it make it so fast?
+
+=== optimizations
+
+optimizations are driven by hardware +
+which is designed +
+with these two design constraints in mind
+
+[.highlight_section_title]
+== the world is a magnetic tape
+
+image::audio-cassette.jpg[background, size=cover]
+
+[%notitle]
+=== inlining
+
+*inlining* +
+*branch prediction* +
+*type profile* (specific for OO languages)
+
+[.highlight_section_title]
+== data locality
+
+image::messy-desk_2637008b.jpg[background, size=cover]
+
+[%notitle]
+=== escape analisys
+
+*escape analisys* +
+*&* +
+*register allocation*
+
+[.highlight_section_title]
+== inlining: expanding optimizations horizon
+
+image::horizon-013.jpg[background]
+
+[%notitle]
+=== null check folding example
+
+[source,java]
+----
+public static void assertNotNull(Object obj) {
+  if (obj == null) {
+    out.println(format("%s is null", obj));
+  }
+}
+
+public void nullCheckFolding() {
+  assertNotNull(this);
+}
+----
+
+[%notitle]
+=== null check folding flags
+
+-XX:+UnlockDiagnosticVMOptions +
+-XX:+PrintCompilation +
+-XX:+PrintInlining
+
+[%notitle]
+=== after inline
+
+[source,java]
+----
+public void nullCheckFolding() {
+  if (this == null) {
+    out.println(format("%s is null", obj));
+  }
+}
+----
+
+[%notitle]
+=== null check folding
+
+[source,java]
+----
+public void nullCheckFolding() {
+  if (false) {
+    out.println(format("%s is null", obj));
+  }
+}
+----
+
+[%notitle]
+=== dead code elimination
+
+[source,java]
+----
+public void nullCheckFolding() {
+}
+----
+
+[.highlight_section_title]
+== we need to go deeper
+
+image::cave-light-2.gif[background, size=cover]
+
+=== eye of the beholder
+
+HotSpot DISassembler aka hsdis and compiler flags
+
+[%notitle]
+=== null check folding assembly flags
+
+  -XX:+UnlockDiagnosticVMOptions +
+  -XX:+PrintCompilation +
+  -XX:+PrintInlining +
+  -XX:CompileCommand="print,*NullCheckFolding.nullCheckFolding"
+
+[%notitle]
+=== disassembled null check folding
+
+[source,nasm]
+----
+sub    $0x18,%rsp
+mov    %rbp,0x10(%rsp)    ;*synchronization entry
+                              ; - NullCheckFolding::nullCheckFolding@-1 (line 19)
+
+add    $0x10,%rsp
+pop    %rbp
+test   %eax,0x16b74929(%rip)        # 0x00007f6cd3c86000
+                                                ;   {poll_return}
+retq
+----
+
+[.highlight_section_title]
+== JIT is speculating
+
+image::tumblr_nu2sk1SnbJ1snwccbo2_500.gif[background]
+
+[%notitle]
+=== JIT is speculating explained
+
+JIT not only compiles hot methods +
+but also optimizes `hot paths`, +
+so it speculates which part of your code is actually executed
+
+(so, compilations don't dominate your application time)
+
+[%notitle]
+=== uncommong trap - branch prediction
+
+[source,java]
+----
+private static Object uncommonTrap(Object trap){
+  if (trap != null) {
+    System.out.println("I am being trapped!");
+  }
+  return null;
+}
+
+public static void main(String[] argv) {
+  Object trap = null;
+  for (int i = 0; i < 250; ++i) {
+    for (int j = 0; j < CHUNK_SIZE; ++j) {
+      trap = uncommonTrap(trap);
+    }
+    if (i == 200) {
+      trap = new Object();
+    }
+  }
+}
+----
+
+[%notitle]
+=== type profile
+
+or when type profile changes
+
+[%notitle]
+=== class hierarchy analisys
+
+[source,java]
+----
+Calculator trap = new Sum(1, 1);
+int result = 0;
+for (int i = 0; i < 250; ++i) {
+  for (int j = 0; j < CHUNK_SIZE; ++j) {
+    result = trap.calculate();
+  }
+  if (i == 200) {
+    System.out.println("I am being trapped!");
+    trap = new Multiply(1, 1);
+  }
+}
+----
+
+== the loop
+
+[ditaa]
+----
+
++--------------+                       +-----------+
+|  Interpreter |---------------------->|  Profile  |
++--------------+                       +-----------+
+       ^                                     |
+       |                                     |
+       |                                     |
+       |                                     |
+       |                                     v
++--------------+                       +-----------+
+|  Deoptimize  |<----------------------|  Compile  |
++--------------+                       +-----------+
+----
+
+=== deoptimization
+
+* when speculation fails, catched by uncommon trap
+* when CHA (class hierachy analisys) notices change in class hierarchy
+* when method is no longer "hot", profile traces method frequency invocation
+
+[.highlight_section_title]
+== made not entrant
+
+image::shall-not-pass.gif[background]
+
+=== constant folding and propagation
+
+[%notitle]
+=== constant folding and propagation example
+
+[source,java]
+----
+public static long constantPropagation() {
+    int x = 14;
+    int y = 7 - x / 2;
+    return y * (28 / x + 2);
+}
+----
+
+=== pointer compare
+
+[%notitle]
+=== pointer example
+
+[source,java]
+----
+public static int pointerCompare(Object obj) {
+  Object anotherObj = new Object();
+  if(obj == anotherObj){
+    return 0;
+  }
+  return -1;
+}
+----
+
+=== intrinsics
+
+  an intrinsic function is a function available for use in a given
+  programming language whose implementation is handled specially
+  by the compiler
+
+[%notitle]
+=== intrinsics in JVM
+
+in a context of JVM it means compiler generates specialized assembler
+instructions, +
+like atomic or vectorized (AVX2) operations
+
+[%notitle]
+=== system arraycopy
+
+[source,java]
+----
+private static long[] intrinsic(long[] arr){
+    long[] destArr = new long[arr.length];
+    System.arraycopy(arr, 0, destArr, 0, arr.length);
+    return destArr;
+}
+----
+
+[%notitle]
+=== call stub
+
+actually calls +
+`stubGenerator_x86_64``_jlong_disjoint_arraycopy` +
+stub, which is intrinsified code, generated by +
+`generate_disjoint_long_oop_copy`
+
+=== lock elission
+
+[%notitle]
+=== lock elission example
+
+[source,java]
+----
+public static int lockEllision(int j) {
+    Object lock = new Object();
+    synchronized (lock) {
+       j++;
+      }
+    return j;
+}
+----
+
+[%notitle]
+=== smoke and mirrors
+
+*it's all smoke and mirrors*
+
+[%notitle]
+=== to understand JIT
+
+if there is one thing you should take away from this presentation
+
+there are people who understand JIT, really, and will make every effort
+to make it produce code that is fast and CPU friendly
+
+but sometimes they will fail to do so
+
+[%notitle]
+=== code read by humans
+
+when your code is hard to read for humans, +
+it will be even harder to read for compilers
+
+=== small methods
+
+small methods will be inline ealier, no need to wait for profiling data
+
+`MaxTrivialSize` is 6 bytecode
+`MaxInlineSize` is 35, compiler level 2 +
+
+`private` and `final` are inlined
+
+[%notitle]
+=== too smart
+
+and don't try be too smart, +
+there can be only one smart guy in the room, +
+and it is not you :)
+
+focus on choosing the right data structures
+
+=== warning
+
+there is a limit on the size of compiled/native method +
+and there is a limit on inline level
+
+so choose your small and private methods wisely +
+choose _hot path_ in your application code
+
+and watch it with JITWatch
+
+=== more warnings
+
+* deep call stacks are killers for inlining, I am looking at you Spring, JEE and RxJava too
+* deep inheritance trees (aka `megamorphs`)
+* unpredictable branches are bad for ya! "let's kill the if"
+
+== it's not all so beatiful
+
+=== frame mangling
+
+each time we compile method (especially OSR) we need to do frame mangling
+
+* Java frame
+** interpreted frame
+** compiled frame
+* external frame
+** entry frame
+
+=== compiler code complexity
+
+=== new hope
+
+* graalVM and trufle
+* substrateVM aka JVM on Java
+
+== thanks
+
+== Q&A

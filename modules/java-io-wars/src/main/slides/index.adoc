@@ -1,0 +1,639 @@
+= new File("geecon.json")
+:idprefix:
+:stem: asciimath
+:backend: html
+:source-highlighter: pygments
+:pygments-style: tango
+:revealjs_history: true
+:revealjs_theme: white
+:revealjs_controls: false
+:imagesdir: images
+:customcss: css/custom.css
+
+== about me
+
+*Jarek Pałka*
+
+[options="step"]
+* Allegro.tech, doing stuff, back to coding, hell yeah!!!
+* JDD, 4Developers, SegFault and CoreDump conferences where I
+serve as a dictator for life and head of program committee
+* JVM, bytecode, parsers, graphs and other cool things (like ponies)
+* owner at Symentis trainings,
+
+=== !
+
+image::sleep.jpg[background, size=contain]
+
+=== !
+
+image::screenshot-twitter.com-2018-05-07-23-27-38.png[background,size=contain]
+
+== all that simple
+
+[source, java]
+----
+var file = new File("geecon.json");
+try (var input = new FileInputStream(file)) {
+  byte[] buff = new byte[512];
+  int fileSize=0, buffSize;
+  while ((buffSize = input.read(buff)) != -1) {
+    fileSize+=buffSize;
+  }
+  out.println(format("file size is = %d",fileSize));
+}
+----
+
+=== new File() actually opens file?
+
+* `File`, kind of, is here because it's legacy, use `Path`
+* `File` is not an operating system file descriptor
+* `File` mainly delegates calls to `Filesystem` implementation
+
+=== !
+
+in order to manipulate files +
+you need to talk with ....
+
+[role="highlight_section_title"]
+=== operating system
+
+image::pexels-photo-665194.jpeg[background]
+
+=== file descriptors
+
+[quote,,Linux man pages]
+	 an entry in the system-wide table of open files.  The open file description records the file offset and the file status flags (see below).  A
+       file descriptor is a reference to an open file description; this reference is unaffected if pathname is subsequently removed or modified to  refer to a different file
+
+=== where is my file descriptor?
+
+`java.io.FileDescriptor` is what you are looking for, +
+it doesn't only store file descriptor,
+
+=== !
+
+but also handles tricky mechanism +
+needed to close descriptor +
+when it is being garbage collected
+
+=== !
+
+because one `FileDescriptor` +
+can be shared by many `Input/OutputStream` +
+you don't want to close file descriptor
+
+[role="highlight_section_title"]
+== so what happens when you write to file?
+
+image::assemble-challenge-combine-269399.jpg[background]
+
+=== !
+
+[source]
+----
+FileOutputStream.write()
+FileOutputStream.writeBytes() <native wrapper>
+Java_java_io_FileOutputStream_writeBytes() <./unix/native/libjava/FileOutputStream_md.c)>
+writeBytes() <./share/native/libjava/io_util.c)>
+write() <syscall>
+----
+
+[role="highlight_section_title"]
+=== bumpy road
+
+image::a-bumpy-road-1-of-1.jpg[background, size=cover]
+
+=== !
+
+[source,c]
+----
+/* The maximum size of a stack-allocated buffer.
+ */
+#define BUF_SIZE 8192
+
+void
+writeBytes(JNIEnv *env, jobject this, jbyteArray bytes,
+           jint off, jint len, jboolean append, jfieldID fid)
+{
+    jint n;
+    char stackBuf[BUF_SIZE];
+    char *buf = NULL;
+    FD fd;
+----
+
+=== !
+
+[source, java]
+----
+    // fetching file descriptor
+    ...
+
+    if (len == 0) {
+        return;
+    } else if (len > BUF_SIZE) {
+        buf = malloc(len);
+        if (buf == NULL) {
+            JNU_ThrowOutOfMemoryError(env, NULL);
+            return;
+        }
+    } else {
+        buf = stackBuf;
+    }
+
+    // write to a file
+    ...
+----
+
+=== !
+
+[source,java]
+----
+    if (buf != stackBuf) {
+        free(buf);
+    }
+}
+----
+
+[role="highlight_section_title"]
+=== a moment of boundless sadness
+
+image::adult-alone-black-and-white-551588.jpg[background,]
+
+=== !
+
+every time you ask for more than 8k bytes +
+you pay non-heap memory allocation dues
+
+=== !
+
+[source,c]
+----
+   (*env)->
+    GetByteArrayRegion(env, bytes, off, len, (jbyte *)buf); // <1>
+
+   if (!(*env)->ExceptionOccurred(env)) {
+        off = 0;
+        while (len > 0) {
+            fd = GET_FD(this, fid);
+            if (fd == -1) {
+                JNU_ThrowIOException(env, "Stream Closed");
+                break;
+            }
+            if (append == JNI_TRUE) {
+                n = IO_Append(fd, buf+off, len);
+            } else {
+                n = IO_Write(fd, buf+off, len);
+            }
+            if (n == -1) {
+                JNU_ThrowIOExceptionWithLastError(env, "Write error");
+                break;
+            }
+            off += n;
+            len -= n;
+        }
+    }
+----
+<1> actually `memcpy()`
+
+=== !
+
+before writing content of Java buffer (heap allocated) +
+you have to copy it to a non heap buffer +
+but why? +
+because GC and JNI 😁
+
+=== !
+
+`GetByteArrayRegion` is actually `memcpy` +
+we just need to be sure that GC doesn't happen in +
+the meantime +
+(we are in JNI code anyway)
+
+=== !
+
+image::art-artistic-black-and-white-311391.jpg[background]
+
+=== !
+
+[source]
+----
+java.nio.channels.FileChannel.write()
+sun.nio.ch.FileChannelImpl.write()
+sun.nio.ch.IOUtil.write()
+sun.nio.ch.IOUtil.writeFromNativeBuffer() // <1>
+sun.nio.ch.FileDispatcherImpl.write()
+Java_sun_nio_ch_FileDispatcherImpl_write0 <unix/native/libnio/ch/FileDispatcherImpl.c>
+----
+<1> this solves the problem of `malloc` and `memcpy`
+
+=== !
+
+* it makes use of direct byte buffers
+* maintains cache of buffers, and reuses them
+* `jdk.nio.maxCachedBufferSize` property, controls max size of cache direct buffer
+* buffers cache is thread-local and uses LRU
+
+[role="highlight_section_title"]
+=== in a land of voyeurs
+
+image::https://i.ytimg.com/vi/_TQYpKSMVhw/maxresdefault.jpg[background]
+
+=== !
+
+	$ sysdig proc.name=java and fd.name contains "geecon.json"
+
+=== what happens?
+
+`20:33:34.445888720 < openat fd=4(<f>geecon.json)` +
+`20:33:34.445889433 > fstat fd=4(<f>geecon.json)` +
+`20:33:34.445890401 < fstat res=0` +
+`20:33:34.445900380 > read fd=4(<f>geecon.json) size=512` +
+
+=== it is not that simple
+
+=== !
+
+image::https://www.thomas-krenn.com/de/wikiDE/images/e/e0/Linux-storage-stack-diagram_v4.10.png[background, size=contain]
+
+=== !
+
+[ditaa]
+----
+      |
+      |
+      | read(),write(), etc.
+      |
+      v
++------------+       +--------------+
+|     VFS    |<----->|  page cache  |
++------------+       +--------------+
+      |
+      |
+      |
+      |
+      v
++------------+       +---------------+
+|  I/O queue |-------| I/O scheduler |
++------------+       +---------------+
+      |
+      |
+      |
+      |
+      v
++------------+
+|   driver   |
++------------+
+----
+
+=== !
+
+two things which are really important:
+
+* page cache
+* I/O scheduler
+
+=== page cache
+
+[quote,Page Cache the Affair Between Memory and Files,Many But Finite]
+  the page cache, where the kernel stores page-sized chunks of files
+
+=== !
+
+[ditaa]
+----
++-------------+      +----------------+      +----------------+      +----------------------+
+|cRED driver  |----->|cRED page cache |----->|cBLU JNI buffer |----->|cBLU Java heap buffer |
++-------------+      +----------------+      +----------------+      +----------------------+
+----
+
+=== tools for curious
+
+  $ sync; # syncs dirty pages with storage
+  $ sysctl -w vm.drop_caches=1; # invalidates all pages
+
+=== I/O scheduler
+
+[quote,Improving Linux System Performance with I/O Scheduler Tuning,Ben Cane]
+  I/O schedulers exist as a way to optimize disk access requests. They traditionally do this by merging I/O requests to similar locations on disk. By grouping requests located at similar sections of disk, the drive doesn’t need to “seek” as often, improving the overall response time for disk operations.
+
+=== ... and solid state drives?
+
+* multiqueue block layer,
+** submission queues are set up on a per-CPU
+** one or more hardware dispatch queues
+* reordering of requests for locality offers little or no benefit
+* but coalescing requests will reduce the total number of I/O operations
+
+[role="highlight_section_title"]
+== faster
+
+image::automobile-fast-number-248747.jpg[background,size=cover]
+
+=== buffered IO
+
+you can do buffered IO, +
+but it can trick you as well
+
+[role="highlight_section_title"]
+=== a moment of boundless sadness
+
+image::adult-alone-black-and-white-551588.jpg[background,]
+
+=== !
+
+watch out for reads and writes bigger then buffer size, +
+it makes buffered IO as poor as standard `FileInputStream\FileOutputStream`
+
+=== vectored I/O
+
+[source, java]
+----
+ByteBuffer[] buffers = {
+  ByteBuffer.allocate(1024),
+  ByteBuffer.allocate(1024)};
+
+var readSize = FileChannel
+  .open(Paths.get("geecon.json"),StandardOpenOption.READ)
+  .read(buffers);
+----
+
+=== ?
+
+=== !
+
+[quote,,Linux man pages]
+  The readv() system call reads iovcnt buffers from the file associated with the file descriptor fd into the buffers described by iov ("scatter input"). +
+  The data transfers performed by readv() and writev() are atomic.
+
+[role="highlight_section_title"]
+=== a moment of boundless sadness
+
+image::adult-alone-black-and-white-551588.jpg[background,]
+
+=== until this...
+
+[source, c]
+----
+JNIEXPORT jint JNICALL
+Java_sun_nio_ch_IOUtil_iovMax(JNIEnv *env, jclass this)
+{
+    jlong iov_max = sysconf(_SC_IOV_MAX);
+    if (iov_max == -1)
+        iov_max = 16;
+    return (jint)iov_max;
+}
+----
+
+=== !
+
+[quote,,Linux man pages]
+POSIX.1 allows an implementation to place a limit on the number of items that can be passed in iov.  An implementation can advertise its limit by defining IOV_MAX in <limits.h> or at  run  time  via
+     the return value from sysconf(_SC_IOV_MAX).  On modern Linux systems, the limit is 1024.  Back in Linux 2.0 days, this limit was 16.
+
+== beyond typical I/O workloads
+
+[role="highlight_section_title"]
+=== you need to go full steam
+
+image::https://media.giphy.com/media/oebgW4FQ4rpPq/giphy.gif[background, size=cover]
+
+=== memory mapped files
+
+* access file as a memory region
+* you don't need to call `read()`/`write()`, OS will take care (you have minor control)
+* less impact on application latency, writes are async in kernel space
+* changes in a file can be visible in another process, with `MAP_SHARED` flags and
+`msync()` syscall in oposite to `MAP_PRIVATE`, which is copy-on-write
+
+=== !
+
+[source, java]
+----
+var fileChannel = FileChannel.open(filePath,
+    StandardOpenOption.CREATE,
+    StandardOpenOption.READ,
+    StandardOpenOption.WRITE);
+
+var mappedByteBuffer = fileChannel.map(MapMode.READ_WRITE,
+                                       0, JOURNAL_SIZE);
+
+var buffer = output.getByteBuffer();
+buffer.flip();
+
+if (mappedByteBuffer.remaining() < buffer.limit()) {
+  mappedByteBuffer.rewind();
+}
+
+mappedByteBuffer.put(buffer);
+----
+
+=== page cache replacement
+
+it uses variant of LRU, it's called CLOCK-Pro +
+it, kind of, suggests design space +
+
+databases (Neo4j & Cassandra) +
+message brokers (Apache Kafka, Java Chronicle)
+
+[role="highlight_section_title"]
+=== a moment of boundless sadness
+
+image::adult-alone-black-and-white-551588.jpg[background,]
+
+=== !
+
+[source, java]
+----
+MappedByteBuffer map(MapMode mode,
+                     long position,
+                     long size) // <1>
+                     throws IOException;
+----
+<1> take a closer look at it
+
+=== in the meantime in javadocs
+
+[source,java]
+----
+/**
+ * @param  size
+ *         The size of the region to be mapped; must be non-negative and
+ *         no greater than {@link java.lang.Integer#MAX_VALUE}
+ */
+----
+
+=== !
+
+[quote,Memory-mapping >2gb of data in Java,Bryce Nyeggen]
+   Mmap is a beautiful abstraction and Java has seemingly sucked the fun right out of it with its 1995-vintage design decisions.
+
+=== !
+
+[quote,Memory-mapping >2gb of data in Java,Bryce Nyeggen]
+  Java standard library APIs have always been a little bit uneven, and unfortunately their mmap abstraction is to return a MappedByteBuffer. All ByteBuffers are constrained (same as arrays, unfortunately) to have fewer than < 2^31-1 elements
+
+=== !
+
+* use `sun.misc.Unsafe`, just call native `mmap0` wrapper 🙈
+* create many `MappedByteBuffers` with different offsets
+
+=== zero copy (sendfile)
+
+
+=== do you remember this picture?
+
+[ditaa]
+----
++-------------+      +----------------+      +----------------+      +----------------------+
+|cRED driver  |----->|cRED page cache |----->|cBLU JNI buffer |----->|cBLU Java heap buffer |
++-------------+      +----------------+      +----------------+      +----------------------+
+----
+
+=== how about this?
+
+[ditaa]
+----
++-------------+      +----------------+      +----------------+ read()  +----------------------+
+|cRED driver  |----->|cRED page cache |----->|cBLU JNI buffer |-------->|cBLU Java heap buffer |
++-------------+      +----------------+      +----------------+         +----------------------+
+                                                                                |
+                                                                                |
+                                                                                |
+                                                                                |
+                                                                                |
+                                                                                v
++-------------+      +----------------+      +----------------+ write() +----------------------+
+|cRED driver  |<-----|cRED page cache |<-----|cBLU JNI buffer |<--------|cBLU Java heap buffer |
++-------------+      +----------------+      +----------------+         +----------------------+
+----
+
+=== is this any better?
+
+[ditaa]
+----
++-------------+      +----------------+
+|cRED driver  |----->|cRED page cache |
++-------------+      +----------------+
+                             |
+                             |
+                             | sendfile()
+                             |
+                             |
+                             v
++-------------+      +----------------+
+|cRED driver  |<-----|cRED page cache |
++-------------+      +----------------+
+----
+
+=== welcome to the world of zero copy I/O
+
+`FileChannel.transferTo()` and `FileChannel.transferFrom()` +
+but as usual here is a trick +
+
+=== !
+
+[source,java]
+----
+var fromChannel = FileChannel.open(
+                  Paths.get("from-file.bin"), StandardOpenOption.READ);
+
+var toChannel = FileChannel.open(
+                  Paths.get("to-file.bin"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+
+fromChannel.transferTo(0, fromChannel.size(), toChannel);
+----
+
+=== direct I/O
+
+=== !
+
+[ditaa]
+----
+      |
+      |
+      | read(),write(), etc.
+      |
+      v
++------------+
+|     VFS    |
++-----+------+
+      |
+      |
+      |
+      |
+      v
++------------+       +---------------+
+|  I/O queue |-------| I/O scheduler |
++-----+------+       +---------------+
+      |
+      |
+      |
+      |
+      v
++------------+
+|   driver   |
++------------+
+----
+
+=== why do we need it?
+
+* every time we need data integrity, every write, needs to sync with storage,
+* when we have our own cache, optimized for specific workload,
+ and we don't want page cache
+
+=== (not supported in JVM)
+
+or is it?
+
+[role="highlight_section_title"]
+=== a moment of boundless sadness
+
+image::adult-alone-black-and-white-551588.jpg[background,]
+
+=== !
+
+[source, java]
+----
+package sun.nio.ch;
+
+public class FileChannelImpl extends FileChannel{
+  // Used by FileInputStream.getChannel(), FileOutputStream.getChannel
+  // and RandomAccessFile.getChannel()
+  public static FileChannel open(FileDescriptor fd, String path,
+                                 boolean readable, boolean writable,
+                                 boolean direct, Object parent)
+  {
+      return new FileChannelImpl(fd, path, readable, writable, direct, parent);
+  }
+
+}
+
+----
+
+=== !
+
+* if you do writes through `FileOutputStream`, remember about 8kb stack allocation limit
+* when using Buffered*Stream, remember ops bigger than buffer size are bad
+* vectored IO is limited to 16 `ByteBuffer`s, back to Linux 2.0
+* memory mapped files are limited to 2GB, but you can play around it
+* direct I/O is possible but requires use of unofficial API
+
+=== !
+
+is this all?
+
+I haven't event scratched concurrency with I/O, +
+locking and `pread()` and `pwrite()` syscalls
+
+=== !
+
+now it is time for
+
+=== !
+
+image::https://media.giphy.com/media/QKESIqxh398wo/giphy.gif[background]
+
+== thanks for your patience
+
+== Q&A
