@@ -1,5 +1,7 @@
 package introdb.heap;
 
+import java.io.IOException;
+import java.io.Serializable;
 import java.nio.file.Path;
 
 class UnorderedHeapFile implements Store{
@@ -8,17 +10,17 @@ class UnorderedHeapFile implements Store{
 	}
 
 	@Override
-	public void put(Entry entry) {
+	public void put(Entry entry) throws IOException, ClassNotFoundException {
 	}
-
+	
 	@Override
-	public Object get(String key) {
+	public Object get(Serializable key) throws IOException, ClassNotFoundException {
 		return null;
 	}
-
-	@Override
-	public Object remove(String key) {
+	
+	public Object remove(Serializable key) throws IOException, ClassNotFoundException {
 		return null;
 	}
 
 }
+
