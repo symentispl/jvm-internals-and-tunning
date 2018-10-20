@@ -1,0 +1,3 @@
+set datafile separator ","
+set xtics rotate by -45
+plot 'mwesolowski/output.csv' using 0:5:xticlabel(1) with boxes
