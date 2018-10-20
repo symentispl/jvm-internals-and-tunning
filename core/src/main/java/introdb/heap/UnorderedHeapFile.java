@@ -38,7 +38,7 @@ class UnorderedHeapFile implements Store{
 		Record record = Record.of(entry);
 
 		if(record.size()>pageSize) {
-			throw new RuntimeException("record to big");
+			throw new IllegalArgumentException("entry to big");
 		}
 		
 		ByteBuffer page = T_LOCAL_BUFFER.get();
@@ -118,6 +118,7 @@ class UnorderedHeapFile implements Store{
 				page.rewind();
 
 				do {
+					page.mark();
 					var record = Record.readExternal(() -> page);
 
 					if (record==null) {
@@ -125,7 +126,11 @@ class UnorderedHeapFile implements Store{
 					}
 					
 					if (isRecordFound(keySer, record)) {
-						return deserializeValue(record.value());
+						Object value = deserializeValue(record.value());
+						page.reset();
+						markAsRemoved(page);
+						writePage(page, pageNr);
+						return value;
 					}
 				} while (page.hasRemaining());
 				pageNr++;
