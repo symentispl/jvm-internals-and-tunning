@@ -14,7 +14,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Set;
 
-class UnorderedHeapFile {
+class UnorderedHeapFile implements Store{
 
 	private static final ThreadLocal<ByteBuffer> T_LOCAL_BUFFER = ThreadLocal.withInitial(() -> ByteBuffer.allocate(4 * 1024));
 
