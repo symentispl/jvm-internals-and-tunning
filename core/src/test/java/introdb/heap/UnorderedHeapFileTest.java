@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 class UnorderedHeapFileTest {
 
 
-	private UnorderedHeapFile heapFile;
+	private Store heapFile;
 
 	@BeforeEach
 	public void setUp() throws IOException {

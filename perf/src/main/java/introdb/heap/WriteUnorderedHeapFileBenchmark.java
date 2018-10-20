@@ -18,7 +18,7 @@ public class WriteUnorderedHeapFileBenchmark {
 	private static final byte[] mediumBuffer = new byte[1024];
 	private static final byte[] biggerBuffer = new byte[2048];
 	
-	private UnorderedHeapFile heapFile;
+	private Store heapFile;
 	private int key;
 	private Path tempFile;
 	

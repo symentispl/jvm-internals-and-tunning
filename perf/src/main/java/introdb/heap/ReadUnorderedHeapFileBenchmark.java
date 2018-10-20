@@ -20,7 +20,7 @@ public class ReadUnorderedHeapFileBenchmark {
 	@Param({"10","100","500"})
 	public String key;
 	
-	private UnorderedHeapFile heapFile;
+	private Store heapFile;
 	private Path tempFile;
 	
 	@Setup(Level.Trial)
