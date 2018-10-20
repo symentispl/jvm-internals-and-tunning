@@ -136,7 +136,6 @@ class UnorderedHeapFileTest {
 	}
 	
 	@Test
-	@Disabled
 	void throw_exception_when_entry_too_large() throws ClassNotFoundException, IOException {
 
 		// given
