@@ -71,7 +71,7 @@ class UnorderedHeapFileTest {
 	}
 
 	@Test
-	void put_and_update__record() throws IOException, ClassNotFoundException {
+	void put_and_update_record() throws IOException, ClassNotFoundException {
 
 		// given
 		var key = "1";
