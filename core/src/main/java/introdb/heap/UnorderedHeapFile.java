@@ -33,7 +33,8 @@ class UnorderedHeapFile implements Store{
 		this.zeroPage = new byte[pageSize];
 	}
 
-	void put(Entry entry) throws IOException, ClassNotFoundException {
+	@Override
+	public void put(Entry entry) throws IOException, ClassNotFoundException {
 		Record record = Record.of(entry);
 
 		if(record.size()>pageSize) {
@@ -53,7 +54,8 @@ class UnorderedHeapFile implements Store{
 		writePage(src, pageNr);
 	}
 	
-	Object get(Serializable key) throws IOException, ClassNotFoundException {
+	@Override
+	public Object get(Serializable key) throws IOException, ClassNotFoundException {
 
 		// serialize key
 		byte[] keySer = serializeKey(key);
@@ -93,7 +95,7 @@ class UnorderedHeapFile implements Store{
 		throw new EOFException();
 	}
 	
-	Object remove(Serializable key) throws IOException, ClassNotFoundException {
+	public Object remove(Serializable key) throws IOException, ClassNotFoundException {
 			// serialize key
 			byte[] keySer = serializeKey(key);
 
