@@ -12,7 +12,10 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.Set;
+
+import introdb.heap.Record.Mark;
 
 class UnorderedHeapFile implements Store{
 
@@ -226,6 +229,50 @@ class UnorderedHeapFile implements Store{
 		page.clear();
 		page.put(zeroPage);
 		page.rewind();
+	}
+	
+	private ByteBuffer zeroPage() {
+		ByteBuffer page = T_LOCAL_BUFFER.get();
+		clearPage(page);
+		return page;
+	}
+
+	class Cursor implements Iterator<ByteBuffer>{
+
+		int pageNr=0;
+		ByteBuffer page = null;
+		
+		@Override
+		public boolean hasNext() {
+			if(page==null) {
+				page=zeroPage();
+				int bytesRead = readPage(page, pageNr);
+				if (bytesRead==-1) {
+					return false;
+				}
+			}
+			
+			byte mark = 0;
+			do {
+				mark = page.get();
+				if(mark==Mark.PRESENT.ordinal()) {
+					return true;
+				}
+			} while(mark!=Mark.EMPTY.ordinal());
+			
+			
+			return false;
+		}
+
+
+		@Override
+		public ByteBuffer next() {
+			if(hasNext()) {
+				return page;
+			}
+			return null;
+		}
+		
 	}
 
 }

@@ -9,9 +9,22 @@ import java.util.function.Supplier;
 class Record {
 
 	enum Mark {
-		EMPTY,
-		PRESENT,
-		REMOVED
+		EMPTY((byte) 0), PRESENT((byte) 1), REMOVED((byte) 2);
+
+		private final byte mark;
+
+		Mark(byte mark) {
+			this.mark = mark;
+		}
+
+		static boolean isEmpty(byte b) {
+			return EMPTY.mark == b;
+		}
+
+		boolean isPresent(byte b) {
+			return PRESENT.mark == b;
+		}
+
 	}
 
 	private final Mark mark;
@@ -41,79 +54,79 @@ class Record {
 	byte[] value() {
 		return value;
 	}
-	
+
 	boolean isPresent() {
-		return mark==Mark.PRESENT;
+		return mark == Mark.PRESENT;
 	}
 
 	boolean isRemoved() {
-		return mark==Mark.REMOVED;
+		return mark == Mark.REMOVED;
 	}
 
 	int size() {
-		return Byte.SIZE+Integer.SIZE+key.length+Integer.SIZE+value.length;
+		return Byte.SIZE + Integer.SIZE + key.length + Integer.SIZE + value.length;
 	}
 
 	ByteBuffer writeExternal(Supplier<ByteBuffer> bufferSupplier) throws IOException {
-		
+
 		ByteBuffer buffer = bufferSupplier.get();
-//		System.out.println("buffer position: "+buffer.position());
-//		System.out.println("writing mark: "+mark);
-		buffer.put((byte)mark.ordinal());
-	
-//		System.out.println("writing key of length: "+key.length);
+		// System.out.println("buffer position: "+buffer.position());
+		// System.out.println("writing mark: "+mark);
+		buffer.put((byte) mark.ordinal());
+
+		// System.out.println("writing key of length: "+key.length);
 		buffer.putInt(key.length);
 		buffer.put(key);
-		
+
 		buffer.putInt(value.length);
 		buffer.put(value);
-		
+
 		return buffer;
 	}
 
 	static Record readExternal(Supplier<ByteBuffer> bufferSupplier) throws IOException {
-		
+
 		ByteBuffer buffer = bufferSupplier.get();
-		
+
 		byte mark = buffer.get();
-		
-		if(mark==Record.Mark.EMPTY.ordinal()) {
+
+		if (mark == Record.Mark.EMPTY.ordinal()) {
 			return null;
 		}
-		
+
 		Record.Mark markEnum = Record.Mark.PRESENT;
-		
-		if(mark==2) {
-			markEnum = Record.Mark.REMOVED;			
+
+		if (mark == 2) {
+			markEnum = Record.Mark.REMOVED;
 		}
-		
-		if(mark<0 || mark > 2) {
+
+		if (mark < 0 || mark > 2) {
 			throw new RuntimeException("invalid mark");
 		}
-		
+
 		int keyLength = buffer.getInt();
-				
+
 		byte[] key = new byte[keyLength];
 		buffer.get(key);
-		
+
 		int valueLength = buffer.getInt();
-		byte[] value= new byte[valueLength];
+		byte[] value = new byte[valueLength];
 		buffer.get(value);
-		
-		return new Record(key,value,markEnum);
+
+		return new Record(key, value, markEnum);
 	}
 
 	static Record of(Entry tuple) throws IOException {
 		var keyByteArrayOutput = new ByteArrayOutputStream();
-		try(var objectOutput = new ObjectOutputStream(keyByteArrayOutput)){
+		try (var objectOutput = new ObjectOutputStream(keyByteArrayOutput)) {
 			objectOutput.writeObject(tuple.key());
 		}
-		
+
 		var valueByteArrayOutput = new ByteArrayOutputStream();
-		try(var objectOutput = new ObjectOutputStream(valueByteArrayOutput)){
+		try (var objectOutput = new ObjectOutputStream(valueByteArrayOutput)) {
 			objectOutput.writeObject(tuple.value());
 		}
-		
+
 		return new Record(keyByteArrayOutput.toByteArray(), valueByteArrayOutput.toByteArray());
 	}
 
