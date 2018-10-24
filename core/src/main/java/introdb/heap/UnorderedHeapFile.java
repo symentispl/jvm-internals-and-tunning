@@ -2,7 +2,7 @@ package introdb.heap;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.EOFException;
+import java.io.IOError;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -13,24 +13,30 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Set;
 
 import introdb.heap.Record.Mark;
 
-class UnorderedHeapFile implements Store{
+class UnorderedHeapFile implements Store, Iterable<Record> {
 
 	private static final ThreadLocal<ByteBuffer> T_LOCAL_BUFFER = ThreadLocal.withInitial(() -> ByteBuffer.allocate(4 * 1024));
-
+	
+	private final PageCache pagecache;
 	private final int maxNrPages;
 	private final int pageSize;
-
+ 
 	private final byte[] zeroPage;
+	private ByteBuffer lastPage;
+	private int lastPageNumber=-1;
 
 	private final FileChannel file;
 
 	UnorderedHeapFile(Path path, int maxNrPages, int pageSize) throws IOException {
 		this.file = FileChannel.open(path,
 		        Set.of(StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE));
+		this.pagecache = new PageCache(maxNrPages,pageSize);
 		this.maxNrPages = maxNrPages;
 		this.pageSize = pageSize;
 		this.zeroPage = new byte[pageSize];
@@ -38,175 +44,99 @@ class UnorderedHeapFile implements Store{
 
 	@Override
 	public void put(Entry entry) throws IOException, ClassNotFoundException {
-		Record record = Record.of(entry);
+		
+		assertTooManyPages();
+		
+		Record newRecord = Record.of(entry);
 
-		if(record.size()>pageSize) {
-			throw new IllegalArgumentException("entry to big");
+		assertRecordSize(newRecord);
+
+		Cursor iterator = cursor();
+		while(iterator.hasNext()){
+			var record = iterator.next();
+			if(Arrays.equals(newRecord.key(),record.key())){
+				iterator.remove();
+				break;
+			}
+		}
+
+		if((lastPage!=null && lastPage.remaining()<newRecord.size()) || lastPage==null  ){
+			lastPage = ByteBuffer.allocate(pageSize);
+			lastPageNumber++;			
 		}
 		
-		ByteBuffer page = T_LOCAL_BUFFER.get();
+		ByteBuffer src = newRecord.write(() -> lastPage);
 
-		int pageNr = findAndMark(page, record.key(), record.size());
-
-		// at this point, we get page,  
-		// with suitable amount of space for record,
-		// pointing to next free region
-
-		ByteBuffer src = record.writeExternal(() -> page);
-
-		writePage(src, pageNr);
+		writePage(src, lastPageNumber);
 	}
-	
+
 	@Override
 	public Object get(Serializable key) throws IOException, ClassNotFoundException {
 
 		// serialize key
 		byte[] keySer = serializeKey(key);
-
-		var page = T_LOCAL_BUFFER.get();
-
-		int pageNr = 0;
-
-		while (pageNr<maxNrPages) {
-
-			var bytesRead = readPage(page, pageNr);
-
-			if (bytesRead == -1) {
-				return null;
-			}
-
-			if(bytesRead!=pageSize) {
-				throw new IllegalStateException("corrupted heap file, cannot read page");
-			}
-			
-			page.rewind();
-
-			do {
-				var record = Record.readExternal(() -> page);
-
-				if (record==null) {
-					break;
-				}
-				
-				if (isRecordFound(keySer, record)) {
-					return deserializeValue(record.value());
-				}
-			} while (page.hasRemaining());
-			pageNr++;
-		}
 		
-		throw new EOFException();
+		Cursor iterator = cursor();
+		while(iterator.hasNext()){
+			var record = iterator.next();
+			if(Arrays.equals(keySer, record.key())){
+				return deserializeValue(record.value());
+			}
+		}
+		return null;
+	}
+
+	public Object remove(Serializable key) throws IOException, ClassNotFoundException {
+		// serialize key
+		byte[] keySer = serializeKey(key);
+
+		Cursor iterator = cursor();
+		while(iterator.hasNext()){
+			var record = iterator.next();
+			if(Arrays.equals(keySer, record.key())){
+				Object value = deserializeValue(record.value());
+				iterator.remove();
+				return value;
+			}
+		}
+		return null;
 	}
 	
-	public Object remove(Serializable key) throws IOException, ClassNotFoundException {
-			// serialize key
-			byte[] keySer = serializeKey(key);
-
-			var page = T_LOCAL_BUFFER.get();
-
-			int pageNr = 0;
-
-			while (pageNr<maxNrPages) {
-
-				var bytesRead = readPage(page, pageNr);
-
-				if (bytesRead == -1) {
-					return null;
-				}
-
-				if(bytesRead!=pageSize) {
-					throw new IllegalStateException("corrupted heap file, cannot read page");
-				}
-				
-				page.rewind();
-
-				do {
-					page.mark();
-					var record = Record.readExternal(() -> page);
-
-					if (record==null) {
-						break;
-					}
-					
-					if (isRecordFound(keySer, record)) {
-						Object value = deserializeValue(record.value());
-						page.reset();
-						markAsRemoved(page);
-						writePage(page, pageNr);
-						return value;
-					}
-				} while (page.hasRemaining());
-				pageNr++;
-			}
-			
-			throw new EOFException();
-	}
-
-	private int findAndMark(ByteBuffer page, byte[] keySer, int recordSize) throws IOException, ClassNotFoundException {
-
-		int bytesRead = 0;
-		int pageNr = 0;
-
-		while (pageNr<maxNrPages) {
-			bytesRead = readPage(page, pageNr);
-
-			// we have reached end of file, 
-			// will append record at the end
-			if (bytesRead == -1) {
-				return pageNr;
-			}
-			
-			if(bytesRead!=pageSize) {
-				throw new IllegalStateException("corrupted heap file, cannot read page");
-			}
-			
-			page.rewind();
-
-			// next we scan whole page
-			do {
-				page.mark();
-				var record = Record.readExternal(() -> page);
-
-				if (record == null) {
-					// reset page to mark,
-					// so we can write record
-					// at beginning of page free space
-					page.reset();
-					return pageNr;
-				}
-
-				if (isRecordFound(keySer, record)) {
-					// mark record as deleted,
-					// and flush page
-					page.reset();
-					markAsRemoved(page);
-					writePage(page, pageNr);
-					continue;
-				}
-
-			} while (page.remaining()>=recordSize);
-
-			pageNr++;
-		}
-		throw new EOFException();
-	}
-
 	private void writePage(ByteBuffer page, int pageNr) throws IOException {
+		int position = page.position();
 		page.rewind();
-		file.write(page,pageNr*pageSize);
+		file.write(page, pageNr * pageSize);
+		page.position(position);
+		pagecache.invalidate(pageNr);
 	}
 
-	private int readPage(ByteBuffer page, int pageOffset) throws IOException {
+	private int readPage(ByteBuffer page, int pageNr) {
+		
 		clearPage(page);
-		return file.read(page, pageOffset * pageSize);
+		if(pagecache.get(page, pageNr)!=-1) {
+			return pageSize;
+		}
+		try {
+			int read = file.read(page, pageNr * pageSize);
+			if(read!=-1) {
+				pagecache.put(page,pageNr);
+			}
+			return read;
+		} catch (IOException e) {
+			throw new IOError(e);
+		}
+	}
+	
+	private void assertRecordSize(Record newRecord) {
+		if (newRecord.size() > pageSize) {
+			throw new IllegalArgumentException("entry to big");
+		}
 	}
 
-	private static boolean isRecordFound(byte[] keySer, Record record) {
-		return record.isPresent() && Arrays.equals(record.key(), keySer);
-	}
-
-	private static void markAsRemoved(ByteBuffer page) {
-		page.put((byte)Record.Mark.REMOVED.ordinal());
+	private void assertTooManyPages() {
+		if(lastPageNumber>=maxNrPages) {
+			throw new TooManyPages();
+		}
 	}
 
 	private static Object deserializeValue(byte[] value) throws IOException, ClassNotFoundException {
@@ -230,49 +160,104 @@ class UnorderedHeapFile implements Store{
 		page.put(zeroPage);
 		page.rewind();
 	}
-	
+
 	private ByteBuffer zeroPage() {
 		ByteBuffer page = T_LOCAL_BUFFER.get();
 		clearPage(page);
 		return page;
 	}
 
-	class Cursor implements Iterator<ByteBuffer>{
+	class Cursor implements Iterator<Record> {
 
-		int pageNr=0;
+		int pageNr = 0;
 		ByteBuffer page = null;
-		
+		boolean hasNext = false;
+		private int mark = -1;
+
 		@Override
 		public boolean hasNext() {
-			if(page==null) {
-				page=zeroPage();
-				int bytesRead = readPage(page, pageNr);
-				if (bytesRead==-1) {
-					return false;
-				}
+			if (!hasNext) {
+				mark = -1;
+				do{
+					if (page == null) {
+						page = zeroPage();
+						int bytesRead = readPage(page, pageNr);
+						if (bytesRead == -1) {
+							return hasNext = false;
+						}
+						page.rewind();
+					}
+
+					byte mark = 0;
+					do {
+						mark = page.get();
+						if (Mark.isPresent(mark)) {
+							return hasNext = true;
+						}
+						if (Mark.isRemoved(mark)) {
+							skip();
+						}
+					} while (mark != Mark.EMPTY.ordinal() || !page.hasRemaining());
+
+					page = null;
+					pageNr++;
+
+				} while(true);
 			}
-			
-			byte mark = 0;
-			do {
-				mark = page.get();
-				if(mark==Mark.PRESENT.ordinal()) {
-					return true;
-				}
-			} while(mark!=Mark.EMPTY.ordinal());
-			
-			
-			return false;
+			return hasNext;
 		}
 
 
 		@Override
-		public ByteBuffer next() {
-			if(hasNext()) {
-				return page;
+		public Record next() {
+			if (hasNext || hasNext()) {
+				hasNext = false;
+				mark = page.position()-1;
+				return record();
 			}
-			return null;
+			throw new NoSuchElementException();
 		}
 		
+		@Override
+		public void remove() {
+			if(mark<0) {
+				throw new IllegalStateException("next() method has not yet been called, or the remove() method has already been called");
+			}
+			page.put(mark, Mark.REMOVED.mark());
+			try {
+				writePage(page, pageNr);
+				//force page refresh
+				lastPage = null;
+				mark = -1;
+			} catch (IOException e) {
+				throw new IOError(e);
+			}
+		}
+
+
+		Optional<ByteBuffer> page() {
+			return Optional.ofNullable(page);
+		}
+
+		private Record record() {
+			return Record.read(() -> page);
+		}
+
+		private void skip() {
+			// TODO we should not deser record, simply skip it
+			// as of now, this is fastest possible workaround
+			record();
+		}
+
+	}
+
+	public Cursor cursor() {
+		return new Cursor();
+	}
+
+	@Override
+	public Iterator<Record> iterator() {
+		return cursor();
 	}
 
 }

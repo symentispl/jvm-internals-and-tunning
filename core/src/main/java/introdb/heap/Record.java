@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.function.Supplier;
 
 class Record {
@@ -16,15 +17,22 @@ class Record {
 		Mark(byte mark) {
 			this.mark = mark;
 		}
+		
+		byte mark() {
+			return mark;
+		}
 
 		static boolean isEmpty(byte b) {
 			return EMPTY.mark == b;
 		}
 
-		boolean isPresent(byte b) {
+		static boolean isPresent(byte b) {
 			return PRESENT.mark == b;
 		}
 
+		static boolean isRemoved(byte b) {
+			return REMOVED.mark == b;
+		}
 	}
 
 	private final Mark mark;
@@ -66,15 +74,12 @@ class Record {
 	int size() {
 		return Byte.SIZE + Integer.SIZE + key.length + Integer.SIZE + value.length;
 	}
-
-	ByteBuffer writeExternal(Supplier<ByteBuffer> bufferSupplier) throws IOException {
+	
+	ByteBuffer write(Supplier<ByteBuffer> bufferSupplier) throws IOException {
 
 		ByteBuffer buffer = bufferSupplier.get();
-		// System.out.println("buffer position: "+buffer.position());
-		// System.out.println("writing mark: "+mark);
-		buffer.put((byte) mark.ordinal());
+		buffer.put((byte) mark.mark());
 
-		// System.out.println("writing key of length: "+key.length);
 		buffer.putInt(key.length);
 		buffer.put(key);
 
@@ -84,25 +89,50 @@ class Record {
 		return buffer;
 	}
 
-	static Record readExternal(Supplier<ByteBuffer> bufferSupplier) throws IOException {
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + Arrays.hashCode(key);
+		result = prime * result + ((mark == null) ? 0 : mark.hashCode());
+		result = prime * result + Arrays.hashCode(value);
+		return result;
+	}
 
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		Record other = (Record) obj;
+		if (!Arrays.equals(key, other.key))
+			return false;
+		if (mark != other.mark)
+			return false;
+		if (!Arrays.equals(value, other.value))
+			return false;
+		return true;
+	}
+
+	static Record of(Entry entry) throws IOException {
+		var keyByteArrayOutput = new ByteArrayOutputStream();
+		try (var objectOutput = new ObjectOutputStream(keyByteArrayOutput)) {
+			objectOutput.writeObject(entry.key());
+		}
+
+		var valueByteArrayOutput = new ByteArrayOutputStream();
+		try (var objectOutput = new ObjectOutputStream(valueByteArrayOutput)) {
+			objectOutput.writeObject(entry.value());
+		}
+
+		return new Record(keyByteArrayOutput.toByteArray(), valueByteArrayOutput.toByteArray());
+	}
+
+	public static Record read(Supplier<ByteBuffer> bufferSupplier) {
 		ByteBuffer buffer = bufferSupplier.get();
-
-		byte mark = buffer.get();
-
-		if (mark == Record.Mark.EMPTY.ordinal()) {
-			return null;
-		}
-
-		Record.Mark markEnum = Record.Mark.PRESENT;
-
-		if (mark == 2) {
-			markEnum = Record.Mark.REMOVED;
-		}
-
-		if (mark < 0 || mark > 2) {
-			throw new RuntimeException("invalid mark");
-		}
 
 		int keyLength = buffer.getInt();
 
@@ -113,21 +143,7 @@ class Record {
 		byte[] value = new byte[valueLength];
 		buffer.get(value);
 
-		return new Record(key, value, markEnum);
-	}
-
-	static Record of(Entry tuple) throws IOException {
-		var keyByteArrayOutput = new ByteArrayOutputStream();
-		try (var objectOutput = new ObjectOutputStream(keyByteArrayOutput)) {
-			objectOutput.writeObject(tuple.key());
-		}
-
-		var valueByteArrayOutput = new ByteArrayOutputStream();
-		try (var objectOutput = new ObjectOutputStream(valueByteArrayOutput)) {
-			objectOutput.writeObject(tuple.value());
-		}
-
-		return new Record(keyByteArrayOutput.toByteArray(), valueByteArrayOutput.toByteArray());
+		return new Record(key, value, Mark.PRESENT);
 	}
 
 }

@@ -12,9 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Random;
 
-import org.junit.Ignore;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 class UnorderedHeapFileTest {

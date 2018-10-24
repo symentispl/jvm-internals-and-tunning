@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
+set -x
 
-# shellcheck disable=SC2086
-{
-  # will fetch clean repos
-  xargs -a all-forks -n2 rm -rf $2
-  xargs -a all-forks -n2 git clone $1 $2
-}
+WORK_DIR=$(pwd)
+BENCHMARKS_DIR=target/benchmarks
 
-forks=$(cut -d " " -f2 all-forks)
-workdir=$(pwd)
+rm -rf target/
+mkdir -p "${BENCHMARKS_DIR}"
+cd "${BENCHMARKS_DIR}"
+
+xargs -t -a ../../all-forks -n2 git clone
+
+forks=$(cut -d " " -f2 ../../all-forks)
 
 for f in $forks; do
-  cd "$workdir/$f" || exit
+  cd "$f" || exit
   pwd
   mvn package -DskipTests
   java -jar perf/target/benchmarks.jar -i 2 -wi 1 -f 1 -rff output.csv
