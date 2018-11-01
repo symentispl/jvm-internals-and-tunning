@@ -2,19 +2,18 @@
 set -x
 
 WORK_DIR=$(pwd)
-BENCHMARKS_DIR=target/benchmarks
+BENCHMARKS_DIR=$WORK_DIR/target/benchmarks
 
 rm -rf target/
-mkdir -p "${BENCHMARKS_DIR}"
-cd "${BENCHMARKS_DIR}"
+mkdir -p "$BENCHMARKS_DIR"
+cd "$BENCHMARKS_DIR" || exit
 
 xargs -t -a ../../all-forks -n2 git clone
 
 forks=$(cut -d " " -f2 ../../all-forks)
 
 for f in $forks; do
-  cd "$f" || exit
-  pwd
+  cd "$BENCHMARKS_DIR/$f" || exit
   mvn package -DskipTests
   java -jar perf/target/benchmarks.jar -i 2 -wi 1 -f 1 -rff output.csv
 done
