@@ -12,18 +12,24 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Random;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class UnorderedHeapFileTest {
 
-
+	private Path heapFilePath;
 	private Store heapFile;
 
 	@BeforeEach
 	public void setUp() throws IOException {
-		Path heapFilePath = Files.createTempFile("heap", "0001");
+		heapFilePath = Files.createTempFile("heap", "0001");
 		heapFile = new UnorderedHeapFile(heapFilePath, 1024, 4*1024);
+	}
+	
+	@AfterEach
+	public void tearDown() throws IOException {
+		Files.delete(heapFilePath);
 	}
 
 	@Test
