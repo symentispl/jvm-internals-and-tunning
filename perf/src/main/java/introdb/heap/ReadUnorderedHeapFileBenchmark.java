@@ -1,6 +1,5 @@
 package introdb.heap;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -24,7 +23,7 @@ public class ReadUnorderedHeapFileBenchmark {
 	private Path tempFile;
 	
 	@Setup(Level.Trial)
-	public void setUp() throws IOException, ClassNotFoundException {
+	public void setUp() throws Exception {
 		tempFile = Files.createTempFile("heap", "0001");
 		heapFile = new UnorderedHeapFile(tempFile, 50000, 4*1024);
 		for(int i=0;i<1000;i++) {
@@ -33,12 +32,12 @@ public class ReadUnorderedHeapFileBenchmark {
 	}
 	
 	@TearDown(Level.Trial)
-	public void tearDown() throws IOException{
+	public void tearDown() throws Exception{
 		Files.delete(tempFile);
 	}
 	
     @Benchmark
-    public Object readKey() throws ClassNotFoundException, IOException {
+    public Object readKey() throws Exception {
     	return heapFile.get(key);
     }
 
