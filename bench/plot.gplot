@@ -1,4 +1,4 @@
 set datafile separator ","
 #set xtics rotate by -45
-set xtics border in scale 1,0.5 nomirror rotate by -45 offset character 0, 0, 0     norangelimit
-plot 'target/benchmarks/pivovarit/output.csv' using 0:5:xticlabel(1) with boxes
+set xtics border in scale 1,0.5 nomirror rotate by -45 offset character 0, 0, 0 norangelimit
+plot 'read-summary.csv' using 0:1:xticlabel(1) with boxes

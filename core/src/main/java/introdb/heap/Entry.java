@@ -23,7 +23,7 @@ class Entry {
 
 	@Override
 	public String toString() {
-		StringBuilder builder = new StringBuilder();
+		var builder = new StringBuilder();
 		builder.append("Entry [key=").append(key).append(", value=").append(value).append("]");
 		return builder.toString();
 	}	

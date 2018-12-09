@@ -1,19 +1,30 @@
 #!/usr/bin/env bash
-set -x
 
 WORK_DIR=$(pwd)
 BENCHMARKS_DIR=$WORK_DIR/target/benchmarks
+
+ALL_FORKS=$WORK_DIR/all-forks
+
+if [[ ! -f $ALL_FORKS ]]; then
+  echo "file with repo works, doesn't exist"
+  exit 1
+fi
 
 rm -rf target/
 mkdir -p "$BENCHMARKS_DIR"
 cd "$BENCHMARKS_DIR" || exit
 
-xargs -t -a ../../all-forks -n2 git clone
+xargs -t -a "$ALL_FORKS" -n2 git clone
 
-forks=$(cut -d " " -f2 ../../all-forks)
+forks=$(cut -d " " -f2 "$ALL_FORKS")
 
 for f in $forks; do
+  echo "building fork $f"
   cd "$BENCHMARKS_DIR/$f" || exit
-  mvn package -DskipTests
-  java -jar perf/target/benchmarks.jar -i 2 -wi 1 -f 1 -rff output.csv
+  mvn -l "$BENCHMARKS_DIR/$f/build.log" package
+  if [[ $? -ne 0 ]]; then
+    echo "fork $f doesn't compile or tests failed, removing it"
+    continue
+  fi
+  java -jar perf/target/benchmarks.jar "introdb.heap.ReadUnorderedHeapFileBenchmark.readKey" -p key=10 -i 1 -wi 1 -f 1 -gc true -rff output.csv
 done

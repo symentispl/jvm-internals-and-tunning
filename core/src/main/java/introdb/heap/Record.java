@@ -9,32 +9,6 @@ import java.util.function.Supplier;
 
 class Record {
 
-	enum Mark {
-		EMPTY((byte) 0), PRESENT((byte) 1), REMOVED((byte) 2);
-
-		private final byte mark;
-
-		Mark(byte mark) {
-			this.mark = mark;
-		}
-		
-		byte mark() {
-			return mark;
-		}
-
-		static boolean isEmpty(byte b) {
-			return EMPTY.mark == b;
-		}
-
-		static boolean isPresent(byte b) {
-			return PRESENT.mark == b;
-		}
-
-		static boolean isRemoved(byte b) {
-			return REMOVED.mark == b;
-		}
-	}
-
 	private final Mark mark;
 	private final byte[] key;
 	private final byte[] value;
@@ -77,13 +51,13 @@ class Record {
 	
 	ByteBuffer write(Supplier<ByteBuffer> bufferSupplier) throws IOException {
 
-		ByteBuffer buffer = bufferSupplier.get();
+		var buffer = bufferSupplier.get();
 		buffer.put((byte) mark.mark());
 
 		buffer.putInt(key.length);
-		buffer.put(key);
-
 		buffer.putInt(value.length);
+
+		buffer.put(key);
 		buffer.put(value);
 
 		return buffer;
@@ -131,19 +105,54 @@ class Record {
 		return new Record(keyByteArrayOutput.toByteArray(), valueByteArrayOutput.toByteArray());
 	}
 
-	public static Record read(Supplier<ByteBuffer> bufferSupplier) {
-		ByteBuffer buffer = bufferSupplier.get();
+	static Record read(Supplier<ByteBuffer> bufferSupplier) {
+		var buffer = bufferSupplier.get();
 
-		int keyLength = buffer.getInt();
+		var keyLength = buffer.getInt();
+		var valueLength = buffer.getInt();
 
-		byte[] key = new byte[keyLength];
+		var key = new byte[keyLength];
 		buffer.get(key);
 
-		int valueLength = buffer.getInt();
-		byte[] value = new byte[valueLength];
+		var value = new byte[valueLength];
 		buffer.get(value);
 
 		return new Record(key, value, Mark.PRESENT);
 	}
 
+	static void skip(Supplier<ByteBuffer> bufferSupplier) {
+		var buffer = bufferSupplier.get();
+
+		var keyLength = buffer.getInt();
+		var valueLength = buffer.getInt();
+
+		buffer.position(buffer.position()+keyLength+valueLength);
+	}
+
+	enum Mark {
+		EMPTY((byte) 0), PRESENT((byte) 1), REMOVED((byte) 2);
+
+		private final byte mark;
+
+		Mark(byte mark) {
+			this.mark = mark;
+		}
+		
+		byte mark() {
+			return mark;
+		}
+
+		static boolean isEmpty(byte b) {
+			return EMPTY.mark == b;
+		}
+
+		static boolean isPresent(byte b) {
+			return PRESENT.mark == b;
+		}
+
+		static boolean isRemoved(byte b) {
+			return REMOVED.mark == b;
+		}
+	}
+	
 }

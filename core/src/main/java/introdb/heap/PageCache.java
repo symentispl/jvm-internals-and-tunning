@@ -7,10 +7,10 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-public class PageCache {
+class PageCache {
 
 	private final Map<Integer,SoftReference<ByteBuffer>> pages;
-	private int pageSize;
+	private final int pageSize;
 
 	PageCache(int maxPageNr, int pageSize) {
 		this.pageSize = pageSize;
@@ -18,9 +18,9 @@ public class PageCache {
 	}
 
 	int get(ByteBuffer page, int pageNr) {
-		SoftReference<ByteBuffer> reference = pages.get(valueOf(pageNr));
+		var reference = pages.get(valueOf(pageNr));
 		if (reference != null) {
-			ByteBuffer buffer = reference.get();
+			var buffer = reference.get();
 			if (buffer != null) {
 				buffer.rewind();
 				page.put(buffer);
@@ -30,12 +30,12 @@ public class PageCache {
 		return -1;
 	}
 
-	public void put(ByteBuffer page, int pageNr) {
+	void put(ByteBuffer page, int pageNr) {
 		page.rewind();
 		pages.put(valueOf(pageNr),new SoftReference<>(ByteBuffer.allocate(pageSize).put(page)));		
 	}
 
-	public void invalidate(int pageNr) {
+	void remove(int pageNr) {
 		pages.remove(valueOf(pageNr));
 	}
 

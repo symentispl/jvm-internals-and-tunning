@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+WORK_DIR=$(pwd)
+BENCHMARKS_DIR=$WORK_DIR/target/benchmarks
+
+ALL_FORKS=$WORK_DIR/all-forks
+
+if [[ ! -f $ALL_FORKS ]]; then
+  echo "file with repo works, doesn't exist"
+  exit 1
+fi
+
+# get readKey benchmarks for every fork
+ls -1 "$BENCHMARKS_DIR" | xargs -I {} sed -n -e 's/^/{},/g' -e '2p' "$BENCHMARKS_DIR"/{}/output.csv | csvtool col 1,6 -
