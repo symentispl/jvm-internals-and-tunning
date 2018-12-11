@@ -1,4 +1,4 @@
-image: maven:3.5.4-jdk-10-slim
+image: maven:3.6.0-jdk-11-slim
 
 pipelines:
   branches:
@@ -8,3 +8,9 @@ pipelines:
             - maven
           script: # Modify the commands below to build your repository.
             - mvn -B verify -DforkCount=0 # -B batch mode makes Maven less verbose
+    homework*:
+      - step:
+          caches:
+            - maven
+          script:
+            - mvn -B test-compile
