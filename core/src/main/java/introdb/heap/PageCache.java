@@ -21,7 +21,8 @@ class PageCache {
   /**
    * Gets a page, or if it doesn't exists, tries to load it from disk.
    * 
-   * @param pageNr page number
+   * @param pageNr
+   *          page number
    * @return null when there is no such page in file
    */
   ByteBuffer get(Integer pageNr) {
@@ -43,8 +44,10 @@ class PageCache {
    * Puts page to page cache (but doesn't flush it), it throws exception if same
    * page already exists, but wrapped in different ByteBuffer.
    * 
-   * @param pageNr page number
-   * @param page physical record (page)
+   * @param pageNr
+   *          page number
+   * @param page
+   *          physical record (page)
    * @returns page written to cache
    */
   void put(Integer pageNr, ByteBuffer page) {

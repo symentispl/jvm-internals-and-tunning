@@ -235,7 +235,7 @@ class UnorderedHeapFile implements Store, Iterable<Record> {
     }
 
     private Record record() {
-      return Record.read(() -> currentPage);
+      return Record.read(currentPage);
     }
 
     private void skip() {

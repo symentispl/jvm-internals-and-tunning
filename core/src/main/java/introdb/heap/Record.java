@@ -109,8 +109,7 @@ class Record {
     return new Record(keyByteArrayOutput.toByteArray(), valueByteArrayOutput.toByteArray());
   }
 
-  static Record read(Supplier<ByteBuffer> bufferSupplier) {
-    var buffer = bufferSupplier.get();
+  static Record read(ByteBuffer buffer) {
 
     var keyLength = buffer.getInt();
     var valueLength = buffer.getInt();
