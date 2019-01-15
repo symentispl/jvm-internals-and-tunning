@@ -1,6 +1,7 @@
 package introdb.heap;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOError;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
@@ -9,150 +10,153 @@ import java.util.function.Supplier;
 
 class Record {
 
-	private final Mark mark;
-	private final byte[] key;
-	private final byte[] value;
+  private final Mark mark;
+  private final byte[] key;
+  private final byte[] value;
 
-	Record(byte[] key, byte[] value) {
-		this.key = key;
-		this.value = value;
-		this.mark = Mark.PRESENT;
-	}
+  Record(byte[] key, byte[] value) {
+    this.key = key;
+    this.value = value;
+    this.mark = Mark.PRESENT;
+  }
 
-	Record(byte[] key, byte[] value, Mark mark) {
-		this.key = key;
-		this.value = value;
-		this.mark = mark;
-	}
+  Record(byte[] key, byte[] value, Mark mark) {
+    this.key = key;
+    this.value = value;
+    this.mark = mark;
+  }
 
-	Mark mark() {
-		return mark;
-	}
+  Mark mark() {
+    return mark;
+  }
 
-	byte[] key() {
-		return key;
-	}
+  byte[] key() {
+    return key;
+  }
 
-	byte[] value() {
-		return value;
-	}
+  byte[] value() {
+    return value;
+  }
 
-	boolean isPresent() {
-		return mark == Mark.PRESENT;
-	}
+  boolean isPresent() {
+    return mark == Mark.PRESENT;
+  }
 
-	boolean isRemoved() {
-		return mark == Mark.REMOVED;
-	}
+  boolean isRemoved() {
+    return mark == Mark.REMOVED;
+  }
 
-	int size() {
-		return Byte.SIZE + Integer.SIZE + key.length + Integer.SIZE + value.length;
-	}
-	
-	ByteBuffer write(Supplier<ByteBuffer> bufferSupplier) throws IOException {
+  int size() {
+    return Byte.SIZE + Integer.SIZE + key.length + Integer.SIZE + value.length;
+  }
 
-		var buffer = bufferSupplier.get();
-		buffer.put((byte) mark.mark());
+  ByteBuffer write(ByteBuffer buffer) {
 
-		buffer.putInt(key.length);
-		buffer.putInt(value.length);
+    buffer.put((byte) mark.mark());
 
-		buffer.put(key);
-		buffer.put(value);
+    buffer.putInt(key.length);
+    buffer.putInt(value.length);
 
-		return buffer;
-	}
+    buffer.put(key);
+    buffer.put(value);
 
-	@Override
-	public int hashCode() {
-		final int prime = 31;
-		int result = 1;
-		result = prime * result + Arrays.hashCode(key);
-		result = prime * result + ((mark == null) ? 0 : mark.hashCode());
-		result = prime * result + Arrays.hashCode(value);
-		return result;
-	}
+    return buffer;
+  }
 
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		Record other = (Record) obj;
-		if (!Arrays.equals(key, other.key))
-			return false;
-		if (mark != other.mark)
-			return false;
-		if (!Arrays.equals(value, other.value))
-			return false;
-		return true;
-	}
+  @Override
+  public int hashCode() {
+    final int prime = 31;
+    int result = 1;
+    result = prime * result + Arrays.hashCode(key);
+    result = prime * result + ((mark == null) ? 0 : mark.hashCode());
+    result = prime * result + Arrays.hashCode(value);
+    return result;
+  }
 
-	static Record of(Entry entry) throws IOException {
-		var keyByteArrayOutput = new ByteArrayOutputStream();
-		try (var objectOutput = new ObjectOutputStream(keyByteArrayOutput)) {
-			objectOutput.writeObject(entry.key());
-		}
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj)
+      return true;
+    if (obj == null)
+      return false;
+    if (getClass() != obj.getClass())
+      return false;
+    Record other = (Record) obj;
+    if (!Arrays.equals(key, other.key))
+      return false;
+    if (mark != other.mark)
+      return false;
+    if (!Arrays.equals(value, other.value))
+      return false;
+    return true;
+  }
 
-		var valueByteArrayOutput = new ByteArrayOutputStream();
-		try (var objectOutput = new ObjectOutputStream(valueByteArrayOutput)) {
-			objectOutput.writeObject(entry.value());
-		}
+  static Record of(Entry entry) {
+    var keyByteArrayOutput = new ByteArrayOutputStream();
+    try (var objectOutput = new ObjectOutputStream(keyByteArrayOutput)) {
+      objectOutput.writeObject(entry.key());
+    } catch (IOException e) {
+      throw new IOError(e);
+    }
 
-		return new Record(keyByteArrayOutput.toByteArray(), valueByteArrayOutput.toByteArray());
-	}
+    var valueByteArrayOutput = new ByteArrayOutputStream();
+    try (var objectOutput = new ObjectOutputStream(valueByteArrayOutput)) {
+      objectOutput.writeObject(entry.value());
+    } catch (IOException e) {
+      throw new IOError(e);
+    }
 
-	static Record read(Supplier<ByteBuffer> bufferSupplier) {
-		var buffer = bufferSupplier.get();
+    return new Record(keyByteArrayOutput.toByteArray(), valueByteArrayOutput.toByteArray());
+  }
 
-		var keyLength = buffer.getInt();
-		var valueLength = buffer.getInt();
+  static Record read(Supplier<ByteBuffer> bufferSupplier) {
+    var buffer = bufferSupplier.get();
 
-		var key = new byte[keyLength];
-		buffer.get(key);
+    var keyLength = buffer.getInt();
+    var valueLength = buffer.getInt();
 
-		var value = new byte[valueLength];
-		buffer.get(value);
+    var key = new byte[keyLength];
+    buffer.get(key);
 
-		return new Record(key, value, Mark.PRESENT);
-	}
+    var value = new byte[valueLength];
+    buffer.get(value);
 
-	static void skip(Supplier<ByteBuffer> bufferSupplier) {
-		var buffer = bufferSupplier.get();
+    return new Record(key, value, Mark.PRESENT);
+  }
 
-		var keyLength = buffer.getInt();
-		var valueLength = buffer.getInt();
+  static void skip(Supplier<ByteBuffer> bufferSupplier) {
+    var buffer = bufferSupplier.get();
 
-		buffer.position(buffer.position()+keyLength+valueLength);
-	}
+    var keyLength = buffer.getInt();
+    var valueLength = buffer.getInt();
 
-	enum Mark {
-		EMPTY((byte) 0), PRESENT((byte) 1), REMOVED((byte) 2);
+    buffer.position(buffer.position() + keyLength + valueLength);
+  }
 
-		private final byte mark;
+  enum Mark {
+    EMPTY((byte) 0), PRESENT((byte) 1), REMOVED((byte) 2);
 
-		Mark(byte mark) {
-			this.mark = mark;
-		}
-		
-		byte mark() {
-			return mark;
-		}
+    private final byte mark;
 
-		static boolean isEmpty(byte b) {
-			return EMPTY.mark == b;
-		}
+    Mark(byte mark) {
+      this.mark = mark;
+    }
 
-		static boolean isPresent(byte b) {
-			return PRESENT.mark == b;
-		}
+    byte mark() {
+      return mark;
+    }
 
-		static boolean isRemoved(byte b) {
-			return REMOVED.mark == b;
-		}
-	}
-	
+    static boolean isEmpty(byte b) {
+      return EMPTY.mark == b;
+    }
+
+    static boolean isPresent(byte b) {
+      return PRESENT.mark == b;
+    }
+
+    static boolean isRemoved(byte b) {
+      return REMOVED.mark == b;
+    }
+  }
+
 }
