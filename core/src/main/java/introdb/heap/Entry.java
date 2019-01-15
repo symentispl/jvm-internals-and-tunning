@@ -21,11 +21,11 @@ class Entry {
 		return value;
 	}
 
-	@Override
-	public String toString() {
-		var builder = new StringBuilder();
-		builder.append("Entry [key=").append(key).append(", value=").append(value).append("]");
-		return builder.toString();
-	}	
+  @Override
+  public String toString() {
+    var builder = new StringBuilder();
+    builder.append("Entry [key=").append(key).append(", value=").append(value).append("]");
+    return builder.toString();
+  }
 
 }
