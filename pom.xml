@@ -15,5 +15,7 @@
 		<module>concurrency-primitives-cache</module>
     <module>concurrency-primitives-perf</module>
     <module>concurrency-primitives-mapreduce</module>
+    <module>concurrency-primitives-linkedlist</module>
+    <module>concurrency-primitives-queue</module>
 	</modules>
 </project>

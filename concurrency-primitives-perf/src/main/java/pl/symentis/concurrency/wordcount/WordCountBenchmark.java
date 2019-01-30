@@ -1,6 +1,5 @@
 package pl.symentis.concurrency.wordcount;
 
-import java.io.File;
 import java.util.HashMap;
 
 import org.openjdk.jmh.annotations.Benchmark;

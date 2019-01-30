@@ -9,30 +9,14 @@ import java.util.concurrent.TimeUnit;
 
 class ActorSystem {
 
-  private final BlockingQueue<DefaultActorRef<? extends Actor>> actors = new LinkedBlockingQueue<>();
+  private final BlockingQueue<SchedulableActorRef<? extends Actor>> actors = new LinkedBlockingQueue<>();
   private final ExecutorService executorService = Executors.newCachedThreadPool();
   private volatile boolean running;
-
-  public static void main(String[] args) {
-
-    ActorSystem system = new ActorSystem();
-    system.start();
-
-    ActorRef<HelloWord> ref = system.spawn(HelloWord.class);
-
-    ref.send("Hello world first time!!!");
-    ref.send("Hello world second time!!!");
-    ref.send("Hello world third time!!!");
-    ref.send("Hello world fourth time!!!");
-    
-    system.shutdown();
-
-  }
 
   void start() {
     running = true;
     int availableProcessors = Runtime.getRuntime().availableProcessors();
-    System.out.println("starting actor system with "+availableProcessors);
+    System.out.println("starting actor system with " + availableProcessors);
     for (int i = 0; i < availableProcessors; i++) {
       executorService.submit(() -> {
         while (running) {
@@ -40,7 +24,7 @@ class ActorSystem {
             var ref = actors.poll(1, TimeUnit.SECONDS);
             if (ref != null) {
               try {
-                ref.schedule();
+                ref.receive();
               } finally {
                 actors.put(ref);
               }
@@ -65,14 +49,33 @@ class ActorSystem {
 
   <T extends Actor> ActorRef<T> spawn(Class<T> clazz) {
     try {
-      var actorRef = new DefaultActorRef<T>(clazz.getConstructor().newInstance());
+      var actorRef = new SchedulableActorRef<T>(clazz.getConstructor().newInstance());
       // schedule actor
       actors.offer(actorRef);
       return actorRef;
-    } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException
-        | NoSuchMethodException | SecurityException e) {
-      throw new ActorRefException(e);
+    } catch (
+          InstantiationException 
+        | IllegalAccessException 
+        | IllegalArgumentException 
+        | InvocationTargetException
+        | NoSuchMethodException 
+        | SecurityException e) {
+      throw new ActorSystemException(e);
     }
+  }
+
+  public static void main(String[] args) {
+    ActorSystem system = new ActorSystem();
+    system.start();
+
+    ActorRef<HelloWord> ref = system.spawn(HelloWord.class);
+
+    ref.send("Hello world first time!!!");
+    ref.send("Hello world second time!!!");
+    ref.send("Hello world third time!!!");
+    ref.send("Hello world fourth time!!!");
+
+    system.shutdown();
   }
 
 }

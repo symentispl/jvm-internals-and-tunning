@@ -13,12 +13,55 @@ the hidden treasures
 
 == about me
 
-[role="highlight_title"]
-== concurrency primitives
+* 0-9 sleep walker
+* 9-17 performance engineer at http://neo4j.com[Neo4j]
+* 17-19 founder of http://segfault.events[SegFault] and http://coredump.event[CoreDump]
+* 19-21 working on new presentations
+* 21-00 praising gods of bytecode at the Church of JVM
 
-image::blacksmith-tools-shop-rustic-162631.jpeg[background,size=cover]
+=== don't believe it
+
+== agenda
+
+* fast & furious introduction into JVM & threads
+* what are concurrency primitives?
+
+=== the treasure hunt
+
+* locks
+* queues
+* barriers
+* atomics
+* executors
+
+[role="highlight_title"]
+=== show me the code
+
+image::pexels-photo-169573.jpeg[background]
 
 === !
+
+*I will, I promise*
+
+== what's concurrency?
+
+[quote,,]
+    the ability of different parts or units of a program, algorithm,
+    or problem to be executed out-of-order or in partial order,
+    without affecting the final outcome
+
+=== !
+
+this doesn't say a word about threads
+
+== !
+
+[quote,,]
+    this allows for parallel execution of the concurrent units.
+
+== !
+
+*Java's answer to concurrency*
 
 threads?
 
@@ -27,17 +70,31 @@ right?
 === !
 
 a simple model to implement +
-(joking) +
-hard (or almost impossible) to get it right
 
-=== few things that don't work
+[role="highlight_title"]
+=== (joking)
+
+image::https://media.giphy.com/media/4WkCTDMpgjsUU/giphy.gif[background]
+
+=== (or almost impossible)
+
+image::https://media.giphy.com/media/7q3By1tKdxjJ6/giphy.gif[background]
+
+=== to get right
+
+=== why?
 
 === !
 
 threads are scheduled by OS, +
 you don't have control over it
 
-(JVM tries to overcome it with https://wiki.openjdk.java.net/display/loom/Main[Project Loom])
+=== !
+
+JVM tries to overcome it with +
+https://wiki.openjdk.java.net/display/loom/Main[Project Loom] +
+stay tuned +
+there are working prototypes
 
 === !
 
@@ -45,14 +102,21 @@ you can communicate between threads +
 only by shared memory +
 you have to protect this memory +
 so no two threads are modifying its content +
-otherwise, you run into data race
+otherwise, you run into
+
+[role="highlight_title"]
+=== data race
+
+obrazek
 
 === !
 
 and when two threads can be scheduled +
-at the same time on different CPU cores (and sockets) +
+at the same time on different CPU cores +
+(and sockets) +
 you add complexities of +
-caches coherence and https://www.scss.tcd.ie/Jeremy.Jones/VivioJS/caches/MESIHelp.htm[MESI protocol], +
+caches coherence and gory details of +
+https://www.scss.tcd.ie/Jeremy.Jones/VivioJS/caches/MESIHelp.htm[MESI protocol], +
 false sharing +
 and all this weird stuff
 
@@ -60,8 +124,14 @@ and all this weird stuff
 
 all you have at your disposal are +
 mutexes and conditional variables +
+
+=== !
+
 with these mechanisms, it is easy to get into +
-deadlocks, livelocks, contention and starvation
+deadlocks, +
+livelocks, +
+contention +
+and starvation
 
 === synchronizations model quadrant
 
@@ -71,15 +141,26 @@ image::https://image.slidesharecdn.com/thinkingoutsidethesynchronisationquadrant
 
 image::https://image.slidesharecdn.com/fuscoconcurrency-151124181259-lva1-app6891/95/mario-fusco-comparing-different-concurrency-models-on-the-jvm-codemotion-milan-2015-39-638.jpg?cb=1448389354[alt]
 
+[role="highlight_title"]
+=== mutable shared state
+
+image::https://media.giphy.com/media/8Fla28qk2RGlYa2nXr/giphy.gif[background]
+
 === !
 
-mutable shared state is really the only part that's hard
+is really the only part +
+that's hard
 
 === !
 
 but we cannot avoid it, +
 because it is the only way +
-(sorry)
+
+=== !
+
+image::https://media.giphy.com/media/kAC4na628Wljy/giphy.gif[background]
+
+=== !
 
 but you say actors, +
 bullshit, +
@@ -118,7 +199,8 @@ we have conditional variables
 
 we have mutexes
 
-threads can only communicate through shared variables
+threads can only communicate +
+through shared variables
 
 === synchronized in depth
 
@@ -152,14 +234,14 @@ make critical sections as fast and short as possible
 === slow path
 
 this is where JVM talks with OS +
-through pthreads, +
+through `pthreads`, +
 which use `futex` syscall
 
 === biased locking
 
 [source, java]
 ----
-synchronized(this){
+synchronized(this){ //monitorenter
   // do stuff
 } // monitorexit;
 ----
@@ -171,15 +253,70 @@ do we have to do `monitorexit`?
 
 === !
 
-biased locking doesn't unlock, on `monitorexit` +
-we say monitor is biased against thread
+biased locking doesn't unlock, +
+on `monitorexit` +
+we say monitor is biased towards thread
+
+=== !
 
 but what happens when other thread wants to `monitoenter`? +
 we revoke bias +
 (which can be costly operation) +
 (requires safepoint)
 
+=== other tricks
+
+=== lock coarsenning
+
+[source,java]
+----
+synchronized(this){
+  // some code
+}
+  // even more code
+synchronized(this){
+  // and more code
+}
+----
+
 === !
+
+[source,java]
+----
+synchronized(this){
+  // some code
+  // even more code
+  // and more code
+}
+----
+
+=== lock ellision
+
+[source,java]
+----
+Object lock = new Object();
+synchronized(lock){
+  // some code
+  // even more code
+  // and more code
+}
+----
+
+=== escape analisys
+
+`lock` is never shared with other threads +
+(it doesn't escape) +
+we can safely remove synchronized at runtime
+
+=== people make mistakes
+
+=== object header
+
+
+[role="highlight_title"]
+== concurrency primitives
+
+image::blacksmith-tools-shop-rustic-162631.jpeg[background,size=cover]
 
 == concurrency primitivites
 
@@ -189,206 +326,35 @@ we revoke bias +
 * atomic variables
 * executors
 
-== concurrency primitivites
+=== !
 
-* *locks*
-* *queues*
-* barries
-* atomic variables
-* executors
-
-=== locks
-
-Java locks are `synchronized` on steroids,
-
-* they can be fair,
-** fairness generally decreases throughput but reduces variability and avoids starvation
-
-=== ReentrantLock
+building blocks of concurrency since JDK 1.5, +
+with many updates, fixes and additions +
+in subsequent releases
 
 === !
 
-[source, java]
-----
-var lock = new ReentrantLock(true);
-lock.lock();
-// do something
-lock.unlock();
-----
+this is my personal trauma, +
+but I have a feeling, +
+looking at many codebases +
+that we stucked in +
+`new Thread().start()` +
+`Object.wait()` +
+`Object.notify()`
 
-=== !
+== let's get back to basics
 
-* you can *try* to lock,
+== object pool
 
-[source, java]
-----
-var lock = new ReentrantLock();
-if(lock.tryLock()){
-  try{
-    // do something
-  } finally{
-    lock.unlock();
-  }
-} else{
-  // do something else, or maybe retry
-}
-----
+image::pexels-photo-887821.jpeg[background]
 
-=== !
+=== requirements
 
-* locks are reentrant (mostly, read Javadocs), aka recursive mutexes which
-allow the same thread to acquire multiple levels of ownership over the mutex object.
+* pool grows until it reaches maximum size
+* it never blocks, even if doesn't have objects
+* it never shrinks, unless we try to return object in invalid state
+* it doesn't use locks (explicitly)
 
-=== !
-
-[source, java]
-----
-var lock = new ReentrantLock();
-lock.lock();
-lock.lock(); // this will work ;)
-// do something
-lock.unlock();
-lock.unlock();
-
-----
-
-=== !
-
-* more fine-grained control, plus all the stuff from `synchronized` like
-conditional variables
-
-
-=== ReentrantReadWriteLock
-
-* `writeLock()`, returns exclusive lock
-* `readLock()`, returns shared lock
-* there can be only one thread which holds `writeLock()`, otherwise
-everyone is welcomed to come in ;)
-
-=== lock downgrading
-
-because of this lock being reentrant we can do lock downgrading
-
-=== !
-
-[source,java]
-----
-var lock = new ReentrantReadWriteLock();
-lock.writeLock().lock();
-try{
-  lock.readLock().lock();
-  try{
-    // read stuff, like linear scan for page
-  } finally{
-    lock.readLock().unlock();
-  }
-  // write stuff, like update page
-} finally{
-  lock.writeLock().unlock();
-}
-----
-
-
-=== !
-
-but you can't upgrade lock
-
-=== starving threads
-
-`ReentrantReadWriteLock` has some severe issues with starvation if not handled
-properly (using fairness may help, but it may be an overhead and compromise throughput).
-For example, a number of reads but very few writes can cause the writer thread
-to fall into starvation (even with fairness enabled)
-
-=== StampedLock
-
-Gives you fine-grained control over mutual exclusions but is one of +
-the hardest to master +
-and performance increments +
-are hard to predict, +
-measure don't guess
-
-=== !
-
-`StampedLock` is made of a stamp and mode, +
-where your lock acquisition method
-returns a stamp, +
-which is a long value used for unlocking within the final block.
-
-=== !
-
-If the stamp is ever zero, that means there's been a failure to acquire access. +
-`StampedLock` is all about giving us a possibility to perform optimistic reads.
-
-
-=== !
-
-[source, java]
-----
-var lock = new StampedLock();
-long stamp =  lock.writeLock();
-try{
-  // do stuff
-}finally {
- lock.unlockWrite(stamp);
-}
-----
-
-=== !
-
-ok, but what about optimistic read?
-
-[source,java]
-----
-var lock = new StampedLock();
-var stamp = lock.tryOptimisticRead();
-double currentX = x, currentY = y;
-if (!lock.validate(stamp)) {
-   stamp = lock.readLock();
-   try {
-     currentX = x;
-     currentY = y;
-   } finally {
-      lock.unlockRead(stamp);
-   }
-}
-----
-
-=== !
-
-[quote,,Javadocs]
-
-  This mode can be thought of as an extremely weak version of a read-lock,
-  that can be broken by a writer at any time. The use of optimistic mode for short read-only code segments often reduces contention and   improves throughput. However, its use is inherently fragile.
-
-=== !
-
-[quote,,Javadocs]
-  Optimistic read sections
-  should only read fields and hold them in local variables for later use after
-  validation. Fields read while in optimistic mode may be wildly inconsistent,
-  so usage applies only when you are familiar enough with data representations
-  to check consistency and/or repeatedly invoke method validate().
-
-=== !
-
-[quote,,Javadocs]
-  For example, such steps are typically required when first reading an
-  object or array reference, and then accessing one of its fields,
-  elements or methods.
-
-=== summary
-
-* no owning threads
-* no reentrancy
-* 3 modes of operation
-** write
-** read
-** optimistic read
-
-=== Deep dive
-
-https://www.javaspecialists.eu/archive/Issue215.html[StampedLock Idioms]
 
 === queues
 
@@ -438,52 +404,18 @@ unless you use timed versions
 
 === can we do it better?
 
-[.stretch]
-== non-blocking Lamport queue
+== !
 
-[source, java]
-----
-public final class P1C1QueueOriginal1<E> {
-  private final E[] buffer;
-  private volatile long tail = 0;
-  private volatile long head = 0;
+*non-blocking Lamport queue*
 
-  public P1C1QueueOriginal1(final int capacity) {
-    buffer = (E[]) new Object[capacity];
-  }
-
-  public boolean offer(final E e) {
-    if (null == e)
-      throw new NullPointerException("Null is not a valid element");
-
-    final long currentTail = tail;
-    final long wrapPoint = currentTail - buffer.length;
-    if (head <= wrapPoint)
-      return false;
-
-    buffer[(int) (currentTail % buffer.length)] = e;
-    tail = currentTail + 1;
-    return true;
-  }
-
-  public E poll() {
-    final long currentHead = head;
-    if (currentHead >= tail)
-      return null;
-
-    final int index = (int) (currentHead % buffer.length);
-    final E e = buffer[index];
-    buffer[index] = null;
-    head = currentHead + 1;
-    return e;
-  }
-}
-----
 
 === why volatile?
 
 * all threads will see the same value (it doesn't necessarily mean you read from RAM every time, please read carefully https://shipilev.net/blog/2014/safe-public-construction/[Safe Publication and Safe Initialization in Java])
 * access to volatile fields are synchronizing actions, can't be reordered with other synchronizing actions
+
+=== !
+
 * it gives you happens before ordering guarantees
 * it has a side effect, access from the same cache line
 
@@ -540,18 +472,91 @@ each insertion operation must wait for remove operation by another thread
   well-defined for queues with the same elements but different
   ordering properties.
 
-=== are locks faster ?
+[role="highlight_title"]
+== cache
 
-it depends ;)
+image::pexels-photo-566862.jpeg[background]
+
+=== requirements
+
+* it has max size, but it is "soft" limit
+* things get invalidated based on LRU algorithm
+
+== executors
+
+* single thread,
+* fixed size,
+* cached,
+* scheduled,
+
+=== task queues and policies
+
+=== queues
+
+you can use any implementation of BlockingQueue for task queue
 
 === !
 
-https://mechanical-sympathy.blogspot.com/2013/08/lock-based-vs-lock-free-concurrent.html[Lock-Based vs Lock-Free Concurrent Algorithms]
-https://blog.takipi.com/java-8-stampedlocks-vs-readwritelocks-and-synchronized/[Java 8 StampedLocks vs. ReadWriteLocks and Synchronized]
+* `ArrayBlockingQueue` for size limited task queues,
+* `LinkedBlockingQueue` for unbounded task queues
+* `SynchronousQueue` for direct tasks hands-off
+* `PriorityBlockingQueue`, this is where you can manage priorities of tasks
 
-barries & atomics & executors
+=== policies
 
-== barries
+what happens when we are out of space in fixed size task queues?
+
+it depends on `RejectedExecutionHandler` implementation,
+
+=== !
+
+* `AbortPolicy`
+* `CallerRunsPolicy`
+* `DiscardOldestPolicy`
+* `DiscardPolicy`
+
+=== !
+
+[role="highlight_title"]
+== actors
+
+image::cary-grant-rosalind-russell-ralph-bellamy-actor-53370.jpeg[background]
+
+=== requirements
+
+* one actor behaviour executed at a time, thus actors are safe to mutate its state
+* we are not going to implement other actors requirements
+
+=== limitations
+
+current scheduling doesn't differntiate +
+between idle and busy actors, +
+if actor doesn't has messages, +
+shouldn't be scheduled
+
+=== !
+
+different queue implementations can let you modify actor behaviour,
+
+* with PriorityQueue you can implement actor priorities
+* with DelayQueue you can schedule actors with delays
+* with SynchronousQueue you can implements blocking (don't do it)
+* multiple producers - single consumer optimized queue (mailbox) implementation +
+can make a whole lot of difference
+
+=== !
+
+understanding queue semantics is a key to success and world domination
+
+== map/reduce
+
+image::book-address-book-learning-learn-159751.jpeg[background]
+
+=== requirements
+
+I believe it doesn't need explanation
+
+=== barries
 
 aka synchronizers
 
@@ -760,7 +765,219 @@ it has interesting property,
 [quote,,Javadoc]
   For each pair of threads that successfully exchange objects via an Exchanger, actions prior to the exchange() in each thread happen-before those after a return from the corresponding exchange() in the other thread.
 
-== atomics
+=== locks
+
+Java locks are `synchronized` on steroids,
+
+* they can be fair,
+** fairness generally decreases throughput but reduces variability and avoids starvation
+
+
+
+
+
+
+=== ReentrantLock
+
+=== !
+
+[source, java]
+----
+var lock = new ReentrantLock(true);
+lock.lock();
+// do something
+lock.unlock();
+----
+
+=== !
+
+* you can *try* to lock,
+
+[source, java]
+----
+var lock = new ReentrantLock();
+if(lock.tryLock()){
+  try{
+    // do something
+  } finally{
+    lock.unlock();
+  }
+} else{
+  // do something else, or maybe retry
+}
+----
+
+=== !
+
+* locks are reentrant (mostly, read Javadocs), aka recursive mutexes which
+allow the same thread to acquire multiple levels of ownership over the mutex object.
+
+=== !
+
+[source, java]
+----
+var lock = new ReentrantLock();
+lock.lock();
+lock.lock(); // this will work ;)
+// do something
+lock.unlock();
+lock.unlock();
+
+----
+
+=== !
+
+* more fine-grained control, plus all the stuff from `synchronized` like
+conditional variables
+
+
+=== ReentrantReadWriteLock
+
+* `writeLock()`, returns exclusive lock
+* `readLock()`, returns shared lock
+* there can be only one thread which holds `writeLock()`, otherwise
+everyone is welcomed to come in ;)
+
+=== lock downgrading
+
+because of this lock being reentrant we can do lock downgrading
+
+=== !
+
+[source,java]
+----
+var lock = new ReentrantReadWriteLock();
+lock.writeLock().lock();
+try{
+  lock.readLock().lock();
+  try{
+    // read stuff, like linear scan for page
+  } finally{
+    lock.readLock().unlock();
+  }
+  // write stuff, like update page
+} finally{
+  lock.writeLock().unlock();
+}
+----
+
+
+=== !
+
+but you can't upgrade lock
+
+=== starving threads
+
+`ReentrantReadWriteLock` has some severe issues with starvation if not handled
+properly (using fairness may help, but it may be an overhead and compromise throughput).
+For example, a number of reads but very few writes can cause the writer thread
+to fall into starvation (even with fairness enabled)
+
+=== StampedLock
+
+Gives you fine-grained control over mutual exclusions but is one of +
+the hardest to master +
+and performance increments +
+are hard to predict, +
+measure don't guess
+
+=== !
+
+`StampedLock` is made of a stamp and mode, +
+where your lock acquisition method
+returns a stamp, +
+which is a long value used for unlocking within the final block.
+
+=== !
+
+If the stamp is ever zero, that means there's been a failure to acquire access. +
+`StampedLock` is all about giving us a possibility to perform optimistic reads.
+
+
+=== !
+
+[source, java]
+----
+var lock = new StampedLock();
+long stamp =  lock.writeLock();
+try{
+  // do stuff
+}finally {
+ lock.unlockWrite(stamp);
+}
+----
+
+=== !
+
+ok, but what about optimistic read?
+
+[source,java]
+----
+var lock = new StampedLock();
+var stamp = lock.tryOptimisticRead();
+double currentX = x, currentY = y;
+if (!lock.validate(stamp)) {
+   stamp = lock.readLock();
+   try {
+     currentX = x;
+     currentY = y;
+   } finally {
+      lock.unlockRead(stamp);
+   }
+}
+----
+
+=== !
+
+[quote,,Javadocs]
+
+  This mode can be thought of as an extremely weak version of a read-lock,
+  that can be broken by a writer at any time. The use of optimistic mode for short read-only code segments often reduces contention and   improves throughput. However, its use is inherently fragile.
+
+=== !
+
+[quote,,Javadocs]
+  Optimistic read sections
+  should only read fields and hold them in local variables for later use after
+  validation. Fields read while in optimistic mode may be wildly inconsistent,
+  so usage applies only when you are familiar enough with data representations
+  to check consistency and/or repeatedly invoke method validate().
+
+=== !
+
+[quote,,Javadocs]
+  For example, such steps are typically required when first reading an
+  object or array reference, and then accessing one of its fields,
+  elements or methods.
+
+=== summary
+
+* no owning threads
+* no reentrancy
+* 3 modes of operation
+** write
+** read
+** optimistic read
+
+=== Deep dive
+
+https://www.javaspecialists.eu/archive/Issue215.html[StampedLock Idioms]
+
+
+=== are locks faster ?
+
+it depends ;)
+
+=== !
+
+https://mechanical-sympathy.blogspot.com/2013/08/lock-based-vs-lock-free-concurrent.html[Lock-Based vs Lock-Free Concurrent Algorithms]
+https://blog.takipi.com/java-8-stampedlocks-vs-readwritelocks-and-synchronized/[Java 8 StampedLocks vs. ReadWriteLocks and Synchronized]
+
+== linked list
+
+image::pexels-photo-147635.jpeg[background]
+
+=== but first
 
 Is this code thread safe?
 
@@ -836,7 +1053,6 @@ void doLockFreeStyle(T value){
 this is a general pattern +
 (be careful, this is pattern, doesn't fit everywhere)
 
-
 === !
 
 * grab object state,
@@ -895,7 +1111,6 @@ new instance of this "holder" +
 
 yes, but not in JVM ;(
 
-
 === !
 
 * double compare-and-swap (DCAS or CAS2), it uses two memory addresses (not necessarily contiguous), proven to be slow (Motorola 86k and PowerPC)
@@ -925,6 +1140,11 @@ each record in the array can be updated separately
 
 On `sum()` we iterate over these arrays to calculate result.
 
+== linked list
+
+image::pexels-photo-147635.jpeg[background]
+
+
 === lock free structures
 
 * Lamport queues,
@@ -945,40 +1165,6 @@ watch what Herb's Sutter has to say, +
 especially +
 "Lock-Free Programming (or, Juggling Razor Blades)" +
 and "atomic<> Weapons" <- this one is a killer it will melt your brain (second part)
-
-== executors
-
-* single thread,
-* fixed size,
-* cached,
-* scheduled,
-
-=== task queues and policies
-
-=== queues
-
-you can use any implementation of BlockingQueue for task queue
-
-
-=== !
-
-* `ArrayBlockingQueue` for size limited task queues,
-* `LinkedBlockingQueue` for unbounded task queues
-* `SynchronousQueue` for direct tasks hands-off
-* `PriorityBlockingQueue`, this is where you can manage priorities of tasks
-
-=== policies
-
-what happens when we are out of space in fixed size task queues?
-
-it depends on `RejectedExecutionHandler` implementation,
-
-=== !
-
-* `AbortPolicy`
-* `CallerRunsPolicy`
-* `DiscardOldestPolicy`
-* `DiscardPolicy`
 
 === A Pragmatic Implementation of Non-Blocking Linked-Lists
 
@@ -1089,8 +1275,8 @@ has a predecessor and successor which are `Aux` nodes.
 
 it is permitted that `Aux` node +
 predecessor and successor is `Aux` +
-(but we try to limit this)
-
+(but we try to limit this
+, this will degrade performance)
 === !
 
 there is also a special structure used to traverse the list
@@ -1119,39 +1305,4 @@ cell and auxiliary nodes, +
 and there is a CAS operation +
 between auxiliary node and next cell
 
-=== !
-
-and there is not enough room to describe delete operation :)
-
-=== skip lists
-
-... and last structure that can be helpful
-
-=== !
-
-[quote,,Wikipedia]
-   skip list is a data structure that allows O(log n) search complexity as well
-   as O(log n) insertion complexity within an ordered sequence of n elements.
-   Thus it can get the best of array (for searching ) while maintaining a
-   linked list-like structure that allows insertion- which is not possible in an array.
-
-=== !
-
-[quote,,Wikipedia]
-   Fast search is made possible by maintaining a linked hierarchy of subsequences,
-   with each successive subsequence skipping over fewer elements than the
-   previous one (see the picture below on the right).
-
-=== !
-
-[quote,,Wikipedia]
-   Searching starts in the sparsest subsequence until two consecutive elements
-   have been found, one smaller and one larger than or equal
-   to the element searched for. Via the linked hierarchy,
-   these two elements link to elements of the next sparsest subsequence,
-   where searching is continued until finally we are searching in the full
-   sequence
-
-=== !
-
-image::https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Skip_list.svg/400px-Skip_list.svg.png[alt]
+== what's next?
