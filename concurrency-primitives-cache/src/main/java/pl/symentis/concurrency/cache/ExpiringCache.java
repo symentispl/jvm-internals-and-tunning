@@ -9,14 +9,21 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class ExpiringCache<K, V> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(ExpiringCache.class);
 
   private final long expiryTime;
   private final TimeUnit expiryUnit;
 
+  private final HashMap<K, Entry> cache = new HashMap<>();
+
   private final ExecutorService expiryWorker;
   private final DelayQueue<Entry> expiryQueue = new DelayQueue<>();
-  private final HashMap<K, Entry> cache = new HashMap<>();
+  
   private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
   private volatile boolean running = true;
@@ -31,7 +38,6 @@ public class ExpiringCache<K, V> {
         try {
           var entry = expiryQueue.poll(1, TimeUnit.SECONDS);
           if (entry != null) {
-//            System.out.println(String.format("expiring entry %s", entry.key));
             var writeLock = lock.writeLock();
             writeLock.lock();
             try {
@@ -41,7 +47,7 @@ public class ExpiringCache<K, V> {
             }
           }
         } catch (InterruptedException e) {
-          e.printStackTrace();
+          LOG.error("expired entry worker interuppted", e);
         }
       }
     });
@@ -106,6 +112,7 @@ public class ExpiringCache<K, V> {
   }
 
   final class Entry implements Delayed {
+
     final K key;
     volatile V value;
     volatile long timestamp = System.currentTimeMillis();
@@ -125,12 +132,10 @@ public class ExpiringCache<K, V> {
 
     void updateTimestamp() {
       timestamp = System.currentTimeMillis();
-//      System.out.println(String.format("update timestamp for key %s is %d", key, timestamp));
     }
 
     @Override
     public int compareTo(Delayed o) {
-//      System.out.println(String.format("compareTo(%s,%s)", this, o));
       @SuppressWarnings("unchecked")
       Entry entry = (Entry) o;
       if (this.timestamp < entry.timestamp) {
@@ -140,19 +145,14 @@ public class ExpiringCache<K, V> {
       if (this.timestamp > entry.timestamp) {
         return 1;
       }
-
-//      System.out.println("kurwa");
       return 0;
     }
 
     @Override
     public long getDelay(TimeUnit unit) {
-      long delay = unit.convert(expiryUnit.toMillis(expiryTime) - (System.currentTimeMillis() - timestamp),
+      return unit.convert(
+          expiryUnit.toMillis(expiryTime) - (System.currentTimeMillis() - timestamp),
           TimeUnit.MILLISECONDS);
-
-//      System.out.println(String.format("delay for key %s is %d", key, delay));
-
-      return delay;
     }
 
     @Override

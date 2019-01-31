@@ -7,7 +7,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 class ActorSystem {
+
+  private final static Logger LOG = LoggerFactory.getLogger(ActorSystem.class);
 
   private final BlockingQueue<SchedulableActorRef<? extends Actor>> actors = new LinkedBlockingQueue<>();
   private final ExecutorService executorService = Executors.newCachedThreadPool();
@@ -16,7 +21,7 @@ class ActorSystem {
   void start() {
     running = true;
     int availableProcessors = Runtime.getRuntime().availableProcessors();
-    System.out.println("starting actor system with " + availableProcessors);
+    LOG.info("starting actor system with {} threads", availableProcessors);
     for (int i = 0; i < availableProcessors; i++) {
       executorService.submit(() -> {
         while (running) {
@@ -24,7 +29,7 @@ class ActorSystem {
             var ref = actors.poll(1, TimeUnit.SECONDS);
             if (ref != null) {
               try {
-                ref.receive();
+                ref.onSchedule();
               } finally {
                 actors.put(ref);
               }
@@ -43,7 +48,7 @@ class ActorSystem {
       executorService.shutdown();
       executorService.awaitTermination(60, TimeUnit.SECONDS);
     } catch (Exception e) {
-      System.out.println(e);
+      LOG.error("actor system shutdown interrupted", e);
     }
   }
 

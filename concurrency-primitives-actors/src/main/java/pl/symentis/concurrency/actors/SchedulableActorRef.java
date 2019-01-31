@@ -21,8 +21,8 @@ class SchedulableActorRef<T extends Actor> implements ActorRef<T> {
     }
   }
 
-  void receive() {
-    Object message = mailbox.poll();
+  void onSchedule() {
+    var message = mailbox.poll();
     if (message != null) {
       instance.receive(message);
     }
