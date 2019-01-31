@@ -29,8 +29,19 @@
 		</dependency>
 
 		<dependency>
+			<groupId>pl.project13.scala</groupId>
+			<artifactId>sbt-jmh-extras</artifactId>
+			<version>0.3.4</version>
+		</dependency>
+
+		<dependency>
 			<groupId>pl.symentis.concurrency</groupId>
 			<artifactId>concurrency-primitives-actors</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>pl.symentis.concurrency</groupId>
+			<artifactId>concurrency-primitives-cache</artifactId>
 			<version>${project.version}</version>
 		</dependency>
 		<dependency>
