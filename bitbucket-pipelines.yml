@@ -1,4 +1,4 @@
-image: cloudbees/java-build-tools:latest
+image: symentis/adoptopenjdk11-build-essential
 
 pipelines:
   default:
