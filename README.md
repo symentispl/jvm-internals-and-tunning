@@ -2,7 +2,7 @@
 
 bootstrap instances
 
-    tail -n +2 inv | xargs -I hostname ssh root@hostname "apt-get update && apt-get -y install python"
+    tail -n +2 inv | xargs -I hostname ssh -oStrictHostKeyChecking=no root@hostname "apt-get update && apt-get -y install python"
 
 and run playbook
 

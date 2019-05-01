@@ -1,5 +1,6 @@
 ---
 - hosts: maszyny
+  strategy: free
   tasks:
   - name: add Oracle JDK repository
     apt_repository: repo=ppa:webupd8team/java state=present

@@ -8,14 +8,14 @@
 :revealjs_theme: night
 :imagesdir: images
 :customcss: css/custom.css
-:title-slide-background-image: https://i.ytimg.com/vi/_TQYpKSMVhw/maxresdefault.jpg
+:title-slide-background-image: pexels-photo-217316.jpeg
 
 == about me
 
 *Jarek Pałka*
 
 [options="step"]
-* Allegro.tech, doing stuff, back to coding, hell yeah!!!
+* Neo4j, performance, infrastructure and JVM
 * JDD, 4Developers and one more conference (still under development) where I
 serve as a dictator for life
 * JVM, bytecode, parsers, graphs and other cool things (like ponies)

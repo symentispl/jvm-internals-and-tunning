@@ -31,6 +31,8 @@
 					</execution>
 				</executions>
 				<configuration>
+				    <proguardVersion>6.1.0beta2</proguardVersion>
+				    <silent>true</silent>
 					<options>
 -keep public class pl.symentis.jvm.example3.Example3c {
 	public static void main(java.lang.String[]);
@@ -40,11 +42,18 @@
 }
 					</options>
 					<libs>
-						<lib>${java.home}/lib/rt.jar</lib>
-						<lib>${java.home}/lib/jce.jar</lib>
-						<lib>${java.home}/lib/ext/sunjce_provider.jar</lib>
+						<lib>${java.home}/jmods</lib>
+                        <lib>${java.home}/lib</lib>
 					</libs>
 				</configuration>
+				<dependencies>
+                    <dependency>
+                        <groupId>net.sf.proguard</groupId>
+                        <artifactId>proguard-base</artifactId>
+                        <version>6.1.0beta2</version>
+                        <scope>runtime</scope>
+                    </dependency>
+                </dependencies>
 			</plugin>
 		</plugins>
 	</build>

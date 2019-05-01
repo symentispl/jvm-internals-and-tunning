@@ -25,6 +25,7 @@
 					</execution>
 				</executions>
 				<configuration>
+					<extraJvmArguments>-Dorg.slf4j.simpleLogger.defaultLogLevel=warn</extraJvmArguments>
 					<programs>
 						<program>
 							<mainClass>pl.symentis.jvm.example0.Main</mainClass>
