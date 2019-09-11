@@ -39,19 +39,6 @@
 		</plugins>
 	</build>
 
-	<modules>
-		<module>jvm-voyeurs-net</module>
-		<module>jvm-voyeurs-gc</module>
-		<module>jvm-voyeurs-jit</module>
-		<module>jvm-voyeurs-bin</module>
-		<module>jvm-voyeurs-concurrency</module>
-		<module>jvm-voyeurs-journal</module>
-		<module>jvm-voyeurs-jmh</module>
-		<module>jvm-voyeurs-nio</module>
-		<module>jvm-voyeurs-jni</module>
-		<module>jvm-voyeurs-zero-copy</module>
-	</modules>
-
 	<dependencyManagement>
 		<dependencies>
 			<dependency>
@@ -91,4 +78,34 @@
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
+
+	<profiles>
+		<profile>
+			<id>all</id>
+			<activation>
+				<activeByDefault>true</activeByDefault>
+			</activation>
+			<modules>
+				<module>jvm-voyeurs-net</module>
+				<module>jvm-voyeurs-gc</module>
+				<module>jvm-voyeurs-jit</module>
+				<module>jvm-voyeurs-bin</module>
+				<module>jvm-voyeurs-concurrency</module>
+				<module>jvm-voyeurs-journal</module>
+				<module>jvm-voyeurs-jmh</module>
+				<module>jvm-voyeurs-nio</module>
+				<module>jvm-voyeurs-zero-copy</module>
+			</modules>
+		</profile>
+		<profile>
+			<activation>
+				<os>
+					<family>unix</family>
+				</os>
+			</activation>
+			<modules>
+				<module>jvm-voyeurs-jni</module>
+			</modules>
+		</profile>
+	</profiles>
 </project>
