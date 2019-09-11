@@ -101,6 +101,7 @@
 			<activation>
 				<os>
 					<family>unix</family>
+					<name>linux</name>
 				</os>
 			</activation>
 			<modules>
