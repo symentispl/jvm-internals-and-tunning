@@ -119,11 +119,13 @@
 			<artifactId>jvm-voyeurs-jni-jar</artifactId>
 			<version>${project.version}</version>
 			<classifier>bin</classifier>
+			<optional>true</optional>
 		</dependency>
 		<dependency>
 			<groupId>pl.symentis.jvminternals</groupId>
 			<artifactId>jvm-voyeurs-jni-main</artifactId>
 			<version>${project.version}</version>
+			<optional>true</optional>
 		</dependency>
 		<dependency>
 			<groupId>pl.symentis.jvminternals</groupId>
