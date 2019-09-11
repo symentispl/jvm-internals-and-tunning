@@ -98,6 +98,7 @@
 			</modules>
 		</profile>
 		<profile>
+			<id>linux</id>
 			<activation>
 				<os>
 					<family>unix</family>
@@ -105,6 +106,15 @@
 				</os>
 			</activation>
 			<modules>
+				<module>jvm-voyeurs-net</module>
+				<module>jvm-voyeurs-gc</module>
+				<module>jvm-voyeurs-jit</module>
+				<module>jvm-voyeurs-bin</module>
+				<module>jvm-voyeurs-concurrency</module>
+				<module>jvm-voyeurs-journal</module>
+				<module>jvm-voyeurs-jmh</module>
+				<module>jvm-voyeurs-nio</module>
+				<module>jvm-voyeurs-zero-copy</module>
 				<module>jvm-voyeurs-jni</module>
 			</modules>
 		</profile>
