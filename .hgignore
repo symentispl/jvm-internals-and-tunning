@@ -7,3 +7,4 @@ target
 .settings/
 .classpath
 .project
+modules/mutants-xenomorphs-and-bytecode/bytecode-byteman/dependency-reduced-pom.xml

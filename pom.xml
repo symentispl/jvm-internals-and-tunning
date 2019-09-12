@@ -71,6 +71,7 @@
 		<module>modules/jmm-and-concurrency</module>
 		<module>modules/mutants-xenomorphs-and-bytecode</module>
 		<module>modules/voyeurs-in-jvm-land</module>
+		<module>modules/jmh</module>
   </modules>
 
 </project>

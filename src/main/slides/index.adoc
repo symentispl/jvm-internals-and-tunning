@@ -2,8 +2,7 @@
 :idprefix:
 :stem: asciimath
 :backend: html
-:source-highlighter: pygments
-:pygments-style: tango
+:source-highlighter: highlightjs
 :revealjs_history: true
 :revealjs_theme: white
 :imagesdir: images
@@ -11,23 +10,26 @@
 
 == about me
 
-* Allegro.tech, data streams with Kafka, Hazelcast, RXJava and tons of JVM tuning
-* JDD/4Developers, naczelny sprawca zamieszania czyli człowiek od kłopotów,
-* a tak poza tym jeśli cokolwiek ma związek z JVM i HotSpot, bytecode'em, parserami, językami programowania na JVM oraz technikami JIT, wcześniej czy później się tym zainteresuje :)
-* były architekt, manager, sysadmin i człowiek od wydajności,
+* Neo4j, performance & benchmarking infrastructure engineer
+* co-founder of Symentis and SegFault,
+* JDD/4Developers program committee lead,
+* special interest in JVM, compilers, parsers, bytecode and programming languages
+* former developer, architect and software development manager
 
 == agenda
 
-<<mutants_xenomorphs_and_bytecode>> +
-<<jit_me_baby_one_more_time>> +
-<<java_io>> +
-<<garbage_collection>> +
-<<java_memory_model_and_concurrency>> +
-<<voyeurs_in_the_jvm_land>>
+<<is_java_fast_yet,Is Java fast yet?>> +
+<<jit_me_baby_one_more_time, JIT me baby one more time>> +
+<<garbage_collection,Garbage collection>> +
+<<java_memory_model_and_concurrency,Java Memory Model and concurrency>> +
+<<java_io,Java I/O>> +
+<<mutants_xenomorphs_and_bytecode,Mutants, xenomorphs and bytecode>> +
+<<voyeurs_in_the_jvm_land,Voyeurs in the JVM land>>
 
-include::bytecode.adoc[]
+include::is-java-fast-yet.adoc[]
 include::jit.adoc[]
-include::io.adoc[]
 include::gc.adoc[]
 include::concurrency.adoc[]
+include::io.adoc[]
+include::bytecode.adoc[]
 include::observability.adoc[]
