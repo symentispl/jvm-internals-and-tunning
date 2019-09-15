@@ -72,7 +72,6 @@
 		<module>modules/gc-in-openjdk</module>
 		<module>modules/java-io-wars</module>
 		<module>modules/jit-me-baby</module>
-		<module>modules/jmm-and-concurrency</module>
 		<module>modules/mutants-xenomorphs-and-bytecode</module>
 		<module>modules/voyeurs-in-jvm-land</module>
 		<module>modules/micro-benchmarks</module>
