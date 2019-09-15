@@ -63,6 +63,10 @@
 										</versionRange>
 										<goals>
 											<goal>initialize</goal>
+											<goal>javah</goal>
+											<goal>compile</goal>
+											<goal>link</goal>
+											<goal>unzipinc</goal>
 										</goals>
 									</pluginExecutionFilter>
 									<action>

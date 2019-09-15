@@ -9,6 +9,10 @@
 
 	<name>jvm-internals</name>
 
+    <prerequisites>
+        <maven>3.6</maven>
+    </prerequisites>
+
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
@@ -71,7 +75,7 @@
 		<module>modules/jmm-and-concurrency</module>
 		<module>modules/mutants-xenomorphs-and-bytecode</module>
 		<module>modules/voyeurs-in-jvm-land</module>
-		<module>modules/jmh</module>
+		<module>modules/micro-benchmarks</module>
 		<module>modules/concurrency-primitives</module>
   </modules>
 
