@@ -1,2 +1,4 @@
+pycairo
 invoke
 livereload
+shaape

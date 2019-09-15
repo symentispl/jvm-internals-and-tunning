@@ -72,6 +72,7 @@
 		<module>modules/mutants-xenomorphs-and-bytecode</module>
 		<module>modules/voyeurs-in-jvm-land</module>
 		<module>modules/jmh</module>
+		<module>modules/concurrency-primitives</module>
   </modules>
 
 </project>
