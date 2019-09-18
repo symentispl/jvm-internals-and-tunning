@@ -1,29 +1,30 @@
 package pl.symentis.concurrency.primer.counter;
 
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class LockedCounter {
+public class ReadWriteLockedCounter {
 
 	private long counter;
 
-	private final ReentrantLock lock = new ReentrantLock();
+	private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
 	public long inc() {
-		lock.lock();
+		lock.writeLock().lock();
 		try {
 			return ++counter;
 
 		} finally {
-			lock.unlock();
+			lock.writeLock().unlock();
 		}
 	}
 
 	public long counter() {
-		lock.lock();
+		lock.readLock().lock();
 		try {
 			return counter;
 		} finally {
-			lock.unlock();
+			lock.readLock().unlock();
 		}
 	}
 }

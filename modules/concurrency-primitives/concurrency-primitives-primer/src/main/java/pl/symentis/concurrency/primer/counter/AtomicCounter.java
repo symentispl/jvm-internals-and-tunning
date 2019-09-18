@@ -6,8 +6,8 @@ public class AtomicCounter {
 
 	private AtomicLong counter = new AtomicLong();
 
-	public void inc() {
-		counter.incrementAndGet();
+	public long inc() {
+		return counter.incrementAndGet();
 	}
 
 	public long counter() {

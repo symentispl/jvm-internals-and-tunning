@@ -5,7 +5,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-public class SequentialWorkflow implements Workflow {
+public class SequentialMapReduce implements MapReduce {
 
   @Override
   public <I, K, V> void run(Input<I> in, Mapper<I, K, V> mapper, Reducer<K, V> reducer, Output<K, V> output) {

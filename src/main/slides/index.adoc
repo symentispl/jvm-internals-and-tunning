@@ -1,4 +1,5 @@
-= JVM internals and tuning
+= JVM
+performance,internals and tuning
 :idprefix:
 :stem: asciimath
 :backend: html

@@ -10,51 +10,51 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 
-import pl.symentis.concurrency.mapreduce.ParallelWorkflow;
-import pl.symentis.concurrency.mapreduce.SequentialWorkflow;
-import pl.symentis.concurrency.mapreduce.Workflow;
+import pl.symentis.concurrency.mapreduce.ForkJoinMapReduce;
+import pl.symentis.concurrency.mapreduce.ParallelMapReduce;
+import pl.symentis.concurrency.mapreduce.SequentialMapReduce;
+import pl.symentis.concurrency.mapreduce.MapReduce;
 import pl.symentis.concurrency.wordcount.WordCount.WordCountMapper;
 import pl.symentis.concurrency.wordcount.WordCount.WordCountReducer;
 
 @State(Scope.Benchmark)
 public class WordCountBenchmark {
 
-  @Param({ "sequential", "parallel" })
-  public String workflowType;
+	@Param({ "sequential", "parallel", "forkjoin" })
+	public String workflowType;
 
-  private Workflow workflow;
+	private MapReduce workflow;
 
-  private WordCountMapper wordCountMapper;
+	private WordCountMapper wordCountMapper;
 
-  private WordCountReducer wordCountReducer;
+	private WordCountReducer wordCountReducer;
 
-  @Setup(Level.Trial)
-  public void setUp() {
-    wordCountMapper = WordCount.WordCountMapper.withDefaultStopwords();
-    wordCountReducer = new WordCount.WordCountReducer();
-    if ("sequential".equals(workflowType)) {
-      workflow = new SequentialWorkflow();
-    } else if ("parallel".equals(workflowType)) {
-      workflow = new ParallelWorkflow();
-    } else {
-      throw new IllegalArgumentException();
-    }
-  }
+	@Setup(Level.Trial)
+	public void setUp() {
+		wordCountMapper = WordCount.WordCountMapper.withDefaultStopwords();
+		wordCountReducer = new WordCount.WordCountReducer();
+		if ("sequential".equals(workflowType)) {
+			workflow = new SequentialMapReduce();
+		} else if ("parallel".equals(workflowType)) {
+			workflow = new ParallelMapReduce();
+		} else if ("forkjoin".equals(workflowType)) {
+			workflow = new ForkJoinMapReduce();
+		} else {
+			throw new IllegalArgumentException();
+		}
+	}
 
-  @TearDown(Level.Trial)
-  public void tearDown() {
-    workflow.shutdown();
-  }
+	@TearDown(Level.Trial)
+	public void tearDown() {
+		workflow.shutdown();
+	}
 
-  @Benchmark
-  public Object countWords() throws Exception {
-    HashMap<String, Long> map = new HashMap<String, Long>();
-    workflow.run(
-        new WordCount.FileLineInput(WordCountBenchmark.class.getResourceAsStream("/big.txt")), 
-        wordCountMapper,
-        wordCountReducer,
-        map::put);
-    return map;
-  }
+	@Benchmark
+	public Object countWords() throws Exception {
+		HashMap<String, Long> map = new HashMap<String, Long>();
+		workflow.run(new WordCount.FileLineInput(WordCountBenchmark.class.getResourceAsStream("/big.txt")),
+				wordCountMapper, wordCountReducer, map::put);
+		return map;
+	}
 
 }

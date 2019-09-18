@@ -250,6 +250,7 @@ you overwrite values of the parameters with command line options
 java -jar target/benchmarks.jar -p loadFactor=0.8,0.9
 ----
 
+[role="highlight_title"]
 == dead code
 
 image::https://static.pexels.com/photos/34153/pexels-photo.jpg[background, size=cover]
@@ -269,6 +270,7 @@ public void testMethod(Blackhole blackhole){
 }
 ----
 
+[role="highlight_title"]
 == asymmetric tests
 
 image::https://static.pexels.com/photos/632445/pexels-photo-632445.jpeg[background, size=cover]
@@ -331,6 +333,15 @@ java -jar benchmark.jar -lprof
 java -jar benchmark.jar -prof hs_gc
 ----
 
+=== !
+
+safepoint +
+perfasm
+
+
+jmh.extras.JFR +
+jmh.extras.Async
+
 == reporters
 
 and last but not least, writing test results to files
@@ -346,11 +357,65 @@ java -jar benchmark.jar -rf csv -rff results.csv
 on laptops governors can trick you, +
 it's easy to control them on Linux with `cpufreq-set`
 
+== flamegraphs
+
+[quote,,Brendan Greg]
+  Flame graphs are a visualization of profiled software, allowing
+  the most frequent code-paths to be identified quickly and accurately.
+  They can be generated using my open source programs on github.com/brendangregg/FlameGraph,
+  which create interactive SVGs
+
+== flame graphs with JMH
+
+  sudo sysctl kernel.perf_event_paranoid=-1
+  export ASYNC_PROFILER_DIR=/home/jarek/tools/async-profiler
+  export FLAMEGRAPH_DIR=/home/jarek/tools/FlameGraph
+
+  java -jar perf/target/benchmarks.jar \
+  "introdb.heap.ReadUnorderedHeapFileBenchmark.readKey"  -f 1 \
+  -prof jmh.extras.Async:flameGraphOpts="--minwidth,2;verbose=true" \
+  -p bufferSize=512
+
+  $FLAMEGRAPH_DIR/flamegraph.pl \
+  introdb.heap.ReadUnorderedHeapFileBenchmark.readKey-Throughput-key-\
+  106211185005499297763/collapsed-cpu.txt \
+   > ReadUnorderedHeapFileBenchmark.readKey.svg
+
+=== !
+
+image::introdb.heap.ReadUnorderedHeapFileBenchmark.readKey.svg[background, size=contain]
+
+== NOTE
+
+you can also generate flamegraphs using +
+JFR (Java Flight Recorder) recordings +
+using https://github.com/chrishantha/jfr-flame-graph[], +
+but it can be tricky to get it working with JDK 11 +
+(actually, it doesn't work +
+as there were changes in JFR parser)
+
 === what about macro?
 
 (this is not a scope of this training)
 
 * JMeter
 * Gatling
+
+=== why my code is slow?
+
+sometimes you write code that's supposed to be fast, +
+as f..k, +
+according to all best practices ever described +
+
+and it is sometimes slow, +
+with no reason
+
+
+[role="highlight_title"]
+=== let's dive in
+
+image::blue-deep-diver-94241.jpg[background]
+
+
 
 == !

@@ -1,14 +1,14 @@
 package pl.symentis.concurrency.primer.counter;
 
-public class Counter {
+public class SynchronizedCounter {
 
 	private long counter;
 
-	public long inc() {
+	public synchronized long inc() {
 		return ++counter;
 	}
 
-	public long counter() {
+	public synchronized long counter() {
 		return counter;
 	}
 }

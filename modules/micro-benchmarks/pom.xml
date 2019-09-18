@@ -73,6 +73,11 @@
 			<artifactId>concurrency-primitives-mapreduce</artifactId>
 			<version>${project.version}</version>
 		</dependency>
+		<dependency>
+			<groupId>pl.symentis.concurrency</groupId>
+			<artifactId>concurrency-primitives-primer</artifactId>
+			<version>${project.version}</version>
+		</dependency>
 	</dependencies>
 
 
