@@ -1,0 +1,22 @@
+If everything seems under control, you're just not going fast enough.
+
+Have you ever wondered what does it take to make your software run faster?
+Have you ever wondered what does it take to become a "performance engineer"?
+Or you are doing so-called "adhoc" performance tunning, living your life from
+on outage to another severity 1? And you have this strange feeling, that this
+not like things should be?
+
+You have never cared about how your code performance. You knew it is always
+problem with database (or somebody's else problem, blaming other's is easy).
+It is just hard to admit that you don't know how to make your code run faster.
+
+Let me be your guide on a trip. I will show you how to, accompanied by tools
+like JMH, JFR and flamegraphs, make your code run faster. We will not only focus on tooling but also on
+performance tunning process. We are going to talk about times when benchmarks lie,
+why data sets are crucial and when more doesn't mean faster.
+
+During the whole presentation, we will be refactoring and improving the
+performance of one, not so trivial code example. Something that everybody knows and something
+that is fun to implement on your own.
+
+Benchmark, profile, refactor, repeat.
