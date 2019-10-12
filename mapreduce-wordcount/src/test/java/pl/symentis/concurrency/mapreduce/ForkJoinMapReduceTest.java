@@ -19,7 +19,7 @@ public class ForkJoinMapReduceTest {
 
 	@Test
 	public void forkJoinMapReduce() throws FileNotFoundException {
-	    MapReduce workflow = new SequentialMapReduce();
+	    MapReduce workflow = new SequentialMapReduce.Builder().build();
 	    Map<String, Long> smap = new HashMap<>();
 	    Mapper<String, String, Long> wordCountMapper = WordCount.mapperWithDefaultStopwords();
 	    workflow.run(

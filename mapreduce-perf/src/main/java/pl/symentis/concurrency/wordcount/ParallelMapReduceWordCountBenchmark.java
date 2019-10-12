@@ -12,47 +12,47 @@ import org.openjdk.jmh.annotations.TearDown;
 
 import pl.symentis.concurrency.wordcount.WordCount.WordCountMapper;
 import pl.symentis.concurrency.wordcount.WordCount.WordCountReducer;
-import pl.symentis.mapreduce.ForkJoinMapReduce;
 import pl.symentis.mapreduce.MapReduce;
 import pl.symentis.mapreduce.ParallelMapReduce;
-import pl.symentis.mapreduce.SequentialMapReduce;
 
 @State(Scope.Benchmark)
-public class WordCountBenchmark {
+public class ParallelMapReduceWordCountBenchmark {
 
-	@Param({ "sequential", "parallel", "forkjoin" })
-	public String workflowType;
-
-	private MapReduce workflow;
+	@Param({"8"})
+	public int threadPoolMaxSize;
+	
+	@Param({"1000"})
+	public int phaserMaxTasks;
+	
+	
+	private MapReduce mapReduce;
 
 	private WordCountMapper wordCountMapper;
 
 	private WordCountReducer wordCountReducer;
 
 	@Setup(Level.Trial)
-	public void setUp() {
+	public void setUp() throws Exception {
 		wordCountMapper = WordCount.WordCountMapper.withDefaultStopwords();
 		wordCountReducer = new WordCount.WordCountReducer();
-		if ("sequential".equals(workflowType)) {
-			workflow = new SequentialMapReduce();
-		} else if ("parallel".equals(workflowType)) {
-			workflow = new ParallelMapReduce();
-		} else if ("forkjoin".equals(workflowType)) {
-			workflow = new ForkJoinMapReduce();
-		} else {
-			throw new IllegalArgumentException();
-		}
+		mapReduce = new ParallelMapReduce
+				.Builder()
+				.withPhaserMaxTasks(phaserMaxTasks)
+				.withThreadPoolSize(threadPoolMaxSize)
+				.build();
 	}
 
 	@TearDown(Level.Trial)
 	public void tearDown() {
-		workflow.shutdown();
+		mapReduce.shutdown();
 	}
 
 	@Benchmark
 	public Object countWords() throws Exception {
 		HashMap<String, Long> map = new HashMap<String, Long>();
-		workflow.run(new WordCount.FileLineInput(WordCountBenchmark.class.getResourceAsStream("/big.txt")),
+		mapReduce.run(
+				new WordCount.FileLineInput(
+						ParallelMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
 				wordCountMapper, wordCountReducer, map::put);
 		return map;
 	}

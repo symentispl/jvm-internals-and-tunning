@@ -1,25 +1,31 @@
 package pl.symentis.jmh.profilers;
 
+import static java.lang.String.format;
+
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 
 import org.openjdk.jmh.infra.BenchmarkParams;
+import org.openjdk.jmh.infra.IterationParams;
 import org.openjdk.jmh.profile.ExternalProfiler;
+import org.openjdk.jmh.profile.InternalProfiler;
 import org.openjdk.jmh.results.AggregationPolicy;
 import org.openjdk.jmh.results.Aggregator;
 import org.openjdk.jmh.results.BenchmarkResult;
+import org.openjdk.jmh.results.IterationResult;
 import org.openjdk.jmh.results.Result;
 import org.openjdk.jmh.results.ResultRole;
+import org.openjdk.jmh.runner.IterationType;
 
-public final class JFR implements ExternalProfiler {
+public final class JFR implements ExternalProfiler, InternalProfiler {
 
-	private static final String DUMP_FOLDER = System.getProperty("jmh.stack.profiles", System.getProperty("user.dir"));
-
-	private static final String DEFAULT_OPTIONS = System.getProperty("jmh.jfr.options", "settings=profile,disk=true");
-
-	private volatile String dumpFile;
+	private volatile String filename;
+	private volatile boolean afterWarmup;
 
 	@Override
 	public Collection<String> addJVMInvokeOptions(final BenchmarkParams params) {
@@ -28,10 +34,7 @@ public final class JFR implements ExternalProfiler {
 
 	@Override
 	public Collection<String> addJVMOptions(final BenchmarkParams params) {
-		final String id = params.id();
-		dumpFile = DUMP_FOLDER + '/' + id + ".jfr";
-		String flightRecorderOptions = DEFAULT_OPTIONS + ",dumponexit=true,filename=" + dumpFile;
-		return Arrays.asList("-XX:+FlightRecorder", "-XX:StartFlightRecording=" + flightRecorderOptions);
+		return Arrays.asList("-XX:+FlightRecorder");
 	}
 
 	@Override
@@ -39,8 +42,52 @@ public final class JFR implements ExternalProfiler {
 	}
 
 	@Override
+	public void beforeIteration(BenchmarkParams benchmarkParams, IterationParams iterationParams) {
+
+		if(!afterWarmup && iterationParams.getType() == IterationType.MEASUREMENT) {
+			afterWarmup = true;
+			Path jcmd = Paths.get(benchmarkParams.getJvm()).getParent().resolve("jcmd");
+			filename = format("%s.jfr", benchmarkParams.id());
+			try {
+				int exitCode = new ProcessBuilder()
+					.command( 
+							jcmd.toString(), 
+							Long.toString(ProcessHandle.current().pid()),
+							"JFR.start",
+							format("filename=%s dumponexit=true disk=true settings=profile", filename))
+					.start()
+					.waitFor();
+				if(exitCode!=0) {
+					throw new RuntimeException("failed to run jcmd command");
+				}
+			} catch (InterruptedException | IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
+		
+	}
+
+	@Override
+	public Collection<? extends Result> afterIteration(
+			BenchmarkParams benchmarkParams,
+			IterationParams iterationParams,
+			IterationResult result) {
+		NoResult r = new NoResult("Profile saved to " + filename);
+		return Collections.singleton(r);
+	}
+
+	@Override
+	public Collection<? extends Result> afterTrial(final BenchmarkResult bp, final long l, final File file,
+			final File file1) {
+		
+		System.out.println(bp.getBenchmarkResults());
+		
+		return Collections.emptyList();
+	}
+
+	@Override
 	public boolean allowPrintOut() {
-		return true;
+		return false;
 	}
 
 	@Override
@@ -51,14 +98,6 @@ public final class JFR implements ExternalProfiler {
 	@Override
 	public String getDescription() {
 		return "Java Flight Recording profiler runs for every benchmark.";
-	}
-
-	@Override
-	public Collection<? extends Result> afterTrial(final BenchmarkResult bp, final long l, final File file,
-			final File file1) {
-		NoResult r = new NoResult("Profile saved to " + dumpFile + ", results: " + bp + ", stdOutFile = " + file
-				+ ", stdErrFile = " + file1);
-		return Collections.singleton(r);
 	}
 
 	private static final class NoResult extends Result<NoResult> {
@@ -96,7 +135,7 @@ public final class JFR implements ExternalProfiler {
 
 	@Override
 	public String toString() {
-		return "JmhFlightRecorderProfiler{" + "dumpFile=" + dumpFile + '}';
+		return "JFR";
 	}
 
 }

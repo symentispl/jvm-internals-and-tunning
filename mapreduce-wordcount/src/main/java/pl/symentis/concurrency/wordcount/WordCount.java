@@ -47,7 +47,7 @@ public class WordCount {
 
 	public static void main(String[] args) throws Exception {
 		while (true) {
-			MapReduce workflow = new SequentialMapReduce();
+			MapReduce workflow = new SequentialMapReduce.Builder().build();
 			Map<String, Long> smap = new HashMap<>();
 			long timeMillis = System.currentTimeMillis();
 			workflow.run(input(new File("src/test/resources/big.txt")), mapperWithDefaultStopwords(), reducer(),
@@ -55,7 +55,7 @@ public class WordCount {
 			System.out.println(System.currentTimeMillis() - timeMillis);
 			workflow.shutdown();
 
-			workflow = new ParallelMapReduce();
+			workflow = new ParallelMapReduce.Builder().build();
 			Map<String, Long> pmap = new HashMap<>();
 			timeMillis = System.currentTimeMillis();
 			workflow.run(input(new File("src/test/resources/big.txt")), mapperWithDefaultStopwords(), reducer(),
