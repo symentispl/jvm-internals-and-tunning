@@ -10,8 +10,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 
-import pl.symentis.concurrency.wordcount.WordCount.WordCountMapper;
-import pl.symentis.concurrency.wordcount.WordCount.WordCountReducer;
+import pl.symentis.concurrency.wordcount.stopwords.Stopwords;
 import pl.symentis.mapreduce.MapReduce;
 import pl.symentis.mapreduce.MapperOutput;
 import pl.symentis.mapreduce.SequentialMapReduce;
@@ -19,20 +18,23 @@ import pl.symentis.mapreduce.SequentialMapReduce;
 @State(Scope.Benchmark)
 public class SequentialMapReduceWordCountBenchmark {
 
-	@Param({ "pl.symentis.mapreduce.mapper.HashMapOutput" })
+	@Param({"pl.symentis.mapreduce.mapper.HashMapOutput"})
 	public String mapperOutputClass;
 
+	@Param({"pl.symentis.concurrency.wordcount.stopwords.ICUThreadLocalStopwords"})
+	public String stopwordsClass;
+
+	private WordCount wordCount;
 	private MapReduce mapReduce;
 
-	private WordCountMapper wordCountMapper;
-
-	private WordCountReducer wordCountReducer;
 
 	@SuppressWarnings("unchecked")
 	@Setup(Level.Trial)
 	public void setUp() throws Exception {
-		wordCountMapper = WordCount.WordCountMapper.withDefaultStopwords();
-		wordCountReducer = new WordCount.WordCountReducer();
+		wordCount = new WordCount
+				.Builder()
+				.withStopwords((Class<? extends Stopwords>) Class.forName(stopwordsClass))
+				.build();
 		mapReduce = new SequentialMapReduce
 				.Builder()
 				.withMapperOutput((Class<? extends MapperOutput<?, ?>>) Class.forName(mapperOutputClass))
@@ -48,9 +50,9 @@ public class SequentialMapReduceWordCountBenchmark {
 	public Object countWords() throws Exception {
 		HashMap<String, Long> map = new HashMap<String, Long>();
 		mapReduce.run(
-				new WordCount.FileLineInput(
-						SequentialMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
-				wordCountMapper, wordCountReducer, map::put);
+				wordCount.input( SequentialMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt") ),
+				wordCount.mapper(),
+				wordCount.reducer(), map::put);
 		return map;
 	}
 

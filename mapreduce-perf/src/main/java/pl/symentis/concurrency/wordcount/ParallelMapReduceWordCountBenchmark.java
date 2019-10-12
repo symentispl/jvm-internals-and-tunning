@@ -10,14 +10,16 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 
-import pl.symentis.concurrency.wordcount.WordCount.WordCountMapper;
-import pl.symentis.concurrency.wordcount.WordCount.WordCountReducer;
+import pl.symentis.concurrency.wordcount.stopwords.Stopwords;
 import pl.symentis.mapreduce.MapReduce;
 import pl.symentis.mapreduce.ParallelMapReduce;
 
 @State(Scope.Benchmark)
 public class ParallelMapReduceWordCountBenchmark {
 
+	@Param({"pl.symentis.concurrency.wordcount.stopwords.ICUThreadLocalStopwords"})
+	public String stopwordsClass;
+	
 	@Param({"8"})
 	public int threadPoolMaxSize;
 	
@@ -25,16 +27,16 @@ public class ParallelMapReduceWordCountBenchmark {
 	public int phaserMaxTasks;
 	
 	
+	private WordCount wordCount;
 	private MapReduce mapReduce;
 
-	private WordCountMapper wordCountMapper;
-
-	private WordCountReducer wordCountReducer;
-
+	@SuppressWarnings("unchecked")
 	@Setup(Level.Trial)
 	public void setUp() throws Exception {
-		wordCountMapper = WordCount.WordCountMapper.withDefaultStopwords();
-		wordCountReducer = new WordCount.WordCountReducer();
+		wordCount = new WordCount
+				.Builder()
+				.withStopwords((Class<? extends Stopwords>) Class.forName(stopwordsClass))
+				.build();
 		mapReduce = new ParallelMapReduce
 				.Builder()
 				.withPhaserMaxTasks(phaserMaxTasks)
@@ -51,9 +53,10 @@ public class ParallelMapReduceWordCountBenchmark {
 	public Object countWords() throws Exception {
 		HashMap<String, Long> map = new HashMap<String, Long>();
 		mapReduce.run(
-				new WordCount.FileLineInput(
-						ParallelMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
-				wordCountMapper, wordCountReducer, map::put);
+				wordCount.input(ParallelMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
+				wordCount.mapper(),
+				wordCount.reducer(),
+				map::put);
 		return map;
 	}
 

@@ -1,5 +1,7 @@
 package pl.symentis.concurrency.wordcount;
 
+import static java.lang.String.format;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -8,71 +10,64 @@ import java.io.IOError;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
+import java.lang.reflect.InvocationTargetException;
 import java.util.NoSuchElementException;
-import java.util.TreeSet;
 import java.util.regex.Pattern;
 
-import java.text.CollationKey;
-import java.text.Collator;
- 
-//import com.ibm.icu.text.CollationKey;
-//import com.ibm.icu.text.Collator;
-
-import pl.symentis.mapreduce.ForkJoinMapReduce;
+import pl.symentis.concurrency.wordcount.stopwords.ICUThreadLocalStopwords;
+import pl.symentis.concurrency.wordcount.stopwords.Stopwords;
 import pl.symentis.mapreduce.Input;
-import pl.symentis.mapreduce.MapReduce;
 import pl.symentis.mapreduce.Mapper;
 import pl.symentis.mapreduce.Output;
-import pl.symentis.mapreduce.ParallelMapReduce;
 import pl.symentis.mapreduce.Reducer;
-import pl.symentis.mapreduce.SequentialMapReduce;
 
 public class WordCount {
 
-	public static Input<String> input(File file) throws FileNotFoundException {
+	public static class Builder{
+		
+		private Class<? extends Stopwords> stopwordsClass = ICUThreadLocalStopwords.class;
+
+		public Builder withStopwords(Class<? extends Stopwords> stopwordsClass) {
+			this.stopwordsClass = stopwordsClass;
+			return this;
+		}
+		
+		public WordCount build() {
+			try {
+				Stopwords stopwords= (Stopwords) stopwordsClass
+						.getMethod("from", InputStream.class)
+						.invoke(stopwordsClass, WordCount.class.getResourceAsStream("stopwords_en.txt"));
+				return new WordCount(stopwords);
+			} catch (	IllegalAccessException | 
+						IllegalArgumentException |
+						InvocationTargetException | 
+						NoSuchMethodException | 
+						SecurityException e) {
+				throw new RuntimeException(format("cannot instantiate stopwords %s", stopwordsClass), e);
+			}
+		}
+	}
+	
+	private final Stopwords stopwords;
+
+	public WordCount(Stopwords stopwords) {
+		this.stopwords = stopwords;
+	}
+
+	public Input<String> input(File file) throws FileNotFoundException {
 		return new FileLineInput(file);
 	}
-
-	public static Mapper<String, String, Long> mapperWithDefaultStopwords() {
-		return WordCountMapper.withDefaultStopwords();
+	
+	public Input<String> input(InputStream inputStream) {
+		return new FileLineInput(inputStream);
+	}
+	
+	public Mapper<String, String, Long> mapper() {
+		return new WordCountMapper(stopwords);
 	}
 
-	public static Reducer<String, Long> reducer() {
+	public Reducer<String, Long> reducer() {
 		return new WordCountReducer();
-	}
-
-	public static void main(String[] args) throws Exception {
-		while (true) {
-			MapReduce workflow = new SequentialMapReduce.Builder().build();
-			Map<String, Long> smap = new HashMap<>();
-			long timeMillis = System.currentTimeMillis();
-			workflow.run(input(new File("src/test/resources/big.txt")), mapperWithDefaultStopwords(), reducer(),
-					smap::put);
-			System.out.println(System.currentTimeMillis() - timeMillis);
-			workflow.shutdown();
-
-			workflow = new ParallelMapReduce.Builder().build();
-			Map<String, Long> pmap = new HashMap<>();
-			timeMillis = System.currentTimeMillis();
-			workflow.run(input(new File("src/test/resources/big.txt")), mapperWithDefaultStopwords(), reducer(),
-					pmap::put);
-			System.out.println(System.currentTimeMillis() - timeMillis);
-			workflow.shutdown();
-			System.out.println("Parallel MapReduce results equals Sequential? =>" + pmap.equals(smap));
-
-			workflow = new ForkJoinMapReduce();
-			Map<String, Long> fmap = new HashMap<>();
-			timeMillis = System.currentTimeMillis();
-			workflow.run(input(new File("src/test/resources/big.txt")), mapperWithDefaultStopwords(), reducer(),
-					fmap::put);
-			System.out.println(System.currentTimeMillis() - timeMillis);
-			workflow.shutdown();
-			System.out.println("ForkJoin MapReduce results equals Sequential? =>" + fmap.equals(smap));
-		}
 	}
 
 	static final class WordCountReducer implements Reducer<String, Long> {
@@ -92,45 +87,19 @@ public class WordCount {
 
 		private static final Pattern PATTERN = Pattern.compile("\\s|\\p{Punct}");
 
-		private final Collection<CollationKey> stopwords;
+		private final Stopwords stopwords;
 
-		private final ThreadLocal<Collator> threadLocalCollator = new ThreadLocal<Collator>() {
-
-			@Override
-			protected Collator initialValue() {
-				return (Collator) collator.clone();
-			}
-		};
-
-		private final Collator collator;
-
-		WordCountMapper(Collator collator, TreeSet<CollationKey> stopwords) {
-			this.collator = collator;
+		WordCountMapper(Stopwords stopwords) {
 			this.stopwords = stopwords;
 		}
 
 		@Override
 		public void map(String in, Output<String, Long> output) {
 			for (String str : PATTERN.split(in.toLowerCase())) {
-				if (!stopwords.contains(threadLocalCollator.get().getCollationKey(str))) {
+				if (!stopwords.contains(str)) {
 					output.emit(str, 1L);
 				}
 			}
-		}
-
-		private static WordCountMapper from(InputStream input) {
-			Collator collator = Collator.getInstance(Locale.ENGLISH);
-			TreeSet<CollationKey> stopwords = new TreeSet<>();
-			try (BufferedReader reader = new BufferedReader(new InputStreamReader(input))) {
-				reader.lines().map(collator::getCollationKey).collect(() -> stopwords, TreeSet::add, TreeSet::addAll);
-			} catch (IOException e) {
-				throw new IOError(e);
-			}
-			return new WordCountMapper(collator, stopwords);
-		}
-
-		public static WordCountMapper withDefaultStopwords() {
-			return from(WordCountMapper.class.getResourceAsStream("stopwords_en.txt"));
 		}
 	}
 
@@ -184,4 +153,5 @@ public class WordCount {
 		}
 
 	}
+
 }

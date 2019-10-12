@@ -4,29 +4,32 @@ import java.util.HashMap;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 
-import pl.symentis.concurrency.wordcount.WordCount.WordCountMapper;
-import pl.symentis.concurrency.wordcount.WordCount.WordCountReducer;
+import pl.symentis.concurrency.wordcount.stopwords.Stopwords;
 import pl.symentis.mapreduce.ForkJoinMapReduce;
 import pl.symentis.mapreduce.MapReduce;
 
 @State(Scope.Benchmark)
 public class ForkJoinMapReduceWordCountBenchmark {
 
+	@Param({"pl.symentis.concurrency.wordcount.stopwords.ICUThreadLocalStopwords"})
+	public String stopwordsClass;
+
+	private WordCount wordCount;
 	private MapReduce mapReduce;
 
-	private WordCountMapper wordCountMapper;
-
-	private WordCountReducer wordCountReducer;
-
+	@SuppressWarnings("unchecked")
 	@Setup(Level.Trial)
 	public void setUp() throws Exception {
-		wordCountMapper = WordCount.WordCountMapper.withDefaultStopwords();
-		wordCountReducer = new WordCount.WordCountReducer();
+		wordCount = new WordCount
+				.Builder()
+				.withStopwords((Class<? extends Stopwords>) Class.forName(stopwordsClass))
+				.build();
 		mapReduce = new ForkJoinMapReduce
 				.Builder()
 				.build();
@@ -41,9 +44,10 @@ public class ForkJoinMapReduceWordCountBenchmark {
 	public Object countWords() throws Exception {
 		HashMap<String, Long> map = new HashMap<String, Long>();
 		mapReduce.run(
-				new WordCount.FileLineInput(
-						ParallelMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
-				wordCountMapper, wordCountReducer, map::put);
+				wordCount.input(ForkJoinMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
+				wordCount.mapper(),
+				wordCount.reducer(),
+				map::put);
 		return map;
 	}
 
