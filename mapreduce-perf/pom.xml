@@ -161,6 +161,8 @@
 									<arguments>
 										<argument>-jar</argument>
 										<argument>target/benchmarks.jar</argument>
+										<argument>-f</argument>
+										<argument>1</argument>
 									</arguments>
 								</configuration>
 							</execution>

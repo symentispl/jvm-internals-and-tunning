@@ -1,15 +1,10 @@
 package pl.symentis.mapreduce;
 
-import static java.util.stream.Collectors.groupingBy;
-import static java.util.stream.Collectors.mapping;
-import static java.util.stream.Collectors.reducing;
-
-import java.lang.invoke.VarHandle;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Phaser;
@@ -56,18 +51,16 @@ public class ParallelMapReduce implements MapReduce {
 		};
 
 		// map
+		Map<K, Collection<V>> map = new ConcurrentHashMap<>();
 		int tasksPerPhaser = 0;
 		Phaser phaser = new Phaser(rootPhaser);
 
-		List<Map<K,List<V>>> slots= new ArrayList<>();
-		
 		while (input.hasNext()) {
 			I in = input.next();
 
 			phaser.register();
 
-			slots.add(null);
-			executorService.submit(new MapperPhase<>(in, mapper, slots, slots.size()-1, phaser));
+			executorService.submit(new MapperPhase<>(in, mapper, map, phaser));
 
 			tasksPerPhaser++;
 			if (tasksPerPhaser >= phaserMaxTasks) {
@@ -77,16 +70,6 @@ public class ParallelMapReduce implements MapReduce {
 		}
 
 		rootPhaser.awaitAdvance(0);
-		VarHandle.acquireFence();
-				
-		Map<K, List<V>> map = slots.stream()
-				.flatMap( m -> m.entrySet().stream())
-				.collect(
-						groupingBy(
-								Map.Entry::getKey,
-								mapping( 
-										Map.Entry::getValue,
-										reducing(new ArrayList<>(),ParallelMapReduce::sum ))));
 
 		// reduce
 		Set<K> keys = map.keySet();
@@ -110,41 +93,31 @@ public class ParallelMapReduce implements MapReduce {
 
 		private final I in;
 		private final Mapper<I, K, V> mapper;
+		private final Map<K, Collection<V>> map;
 		private final Phaser phaser;
-		private final List<Map<K, List<V>>> slots;
-		private final int slot;
 
-		MapperPhase(I in, Mapper<I, K, V> mapper, List<Map<K, List<V>>> slots, int slot, Phaser phaser) {
+		MapperPhase(I in, Mapper<I, K, V> mapper, Map<K, Collection<V>> map, Phaser phaser) {
 			this.in = in;
 			this.mapper = mapper;
-			this.slots = slots;
-			this.slot = slot;
+			this.map = map;
 			this.phaser = phaser;
 		}
 
 		@Override
 		public void run() {
-			Map<K,List<V>> map = new HashMap<>();
 			mapper.map(in, (k, v) -> {
 				map.compute(k, (key, oldValue) -> {
-					List<V> newValue = oldValue;
+					Collection<V> newValue = oldValue;
 					if (newValue == null) {
-						newValue = new ArrayList<>();
+						newValue = new ConcurrentLinkedQueue<>();
 					}
 					newValue.add(v);
 					return newValue;
 				});
 			});
-			slots.set(slot, map);
-			VarHandle.releaseFence();
 			phaser.arriveAndDeregister();
 		}
 
-	}
-		
-	private static <V> List<V> sum(List<V> op1, List<V> op2){
-		op1.addAll(op2);
-		return op2;
 	}
 
 }
