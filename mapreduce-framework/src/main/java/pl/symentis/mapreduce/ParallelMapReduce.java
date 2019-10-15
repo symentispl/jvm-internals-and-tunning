@@ -16,10 +16,34 @@ import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 
 public class ParallelMapReduce implements MapReduce {
+	
+	public static class Builder {
 
-	private static final int MAX_TASKS_PER_PHASER = 1000;
+		private int threadPoolMaxSize = Runtime.getRuntime().availableProcessors();
+		private int phaserMaxTasks = 1000;
 
-	private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()*4);
+		public Builder withThreadPoolSize(int threadPoolMaxSize){
+			this.threadPoolMaxSize = threadPoolMaxSize;
+			return this;
+		}
+		
+		public Builder withPhaserMaxTasks(int phaserMaxTasks) {
+			this.phaserMaxTasks = phaserMaxTasks;
+			return this;
+		}
+
+		public MapReduce build() {
+			return new ParallelMapReduce(threadPoolMaxSize, phaserMaxTasks);
+		}
+	}
+
+	private final ExecutorService executorService;
+	private final int phaserMaxTasks;
+
+	public ParallelMapReduce(int threadPoolMaxSize, int phaserMaxTasks ) {
+		executorService  = Executors.newFixedThreadPool(threadPoolMaxSize);
+		this.phaserMaxTasks = phaserMaxTasks;
+	}
 
 	@Override
 	public <I, K, V> void run(Input<I> input, Mapper<I, K, V> mapper, Reducer<K, V> reducer, Output<K, V> output) {
@@ -46,7 +70,7 @@ public class ParallelMapReduce implements MapReduce {
 			executorService.submit(new MapperPhase<>(in, mapper, slots, slots.size()-1, phaser));
 
 			tasksPerPhaser++;
-			if (tasksPerPhaser >= MAX_TASKS_PER_PHASER) {
+			if (tasksPerPhaser >= phaserMaxTasks) {
 				phaser = new Phaser(rootPhaser);
 				tasksPerPhaser = 0;
 			}

@@ -29,14 +29,14 @@
 		</dependency>
 
 		<dependency>
-			<groupId>org.spf4j</groupId>
-			<artifactId>spf4j-jmh</artifactId>
-			<version>8.6.22</version>
+			<groupId>pl.symentis.mapreduce</groupId>
+			<artifactId>mapreduce-wordcount</artifactId>
+			<version>${project.version}</version>
 		</dependency>
-
 		<dependency>
 			<groupId>pl.symentis.mapreduce</groupId>
 			<artifactId>mapreduce-wordcount</artifactId>
+			<type>test-jar</type>
 			<version>${project.version}</version>
 		</dependency>
 	</dependencies>
@@ -141,4 +141,34 @@
 			</plugins>
 		</pluginManagement>
 	</build>
+
+	<profiles>
+		<profile>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>exec-maven-plugin</artifactId>
+						<version>1.6.0</version>
+						<executions>
+							<execution>
+								<phase>verify</phase>
+								<goals>
+									<goal>exec</goal>
+								</goals>
+								<configuration>
+									<executable>java</executable>
+									<arguments>
+										<argument>-jar</argument>
+										<argument>target/benchmarks.jar</argument>
+									</arguments>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+			<id>run-all-perf</id>
+		</profile>
+	</profiles>
 </project>

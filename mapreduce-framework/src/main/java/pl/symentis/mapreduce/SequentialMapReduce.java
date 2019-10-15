@@ -1,16 +1,57 @@
 package pl.symentis.mapreduce;
 
+import static java.lang.String.format;
+
+import java.lang.reflect.InvocationTargetException;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.function.Supplier;
 
-import pl.symentis.mapreduce.mapper.GuavaMultiMapOutput;
+import pl.symentis.mapreduce.mapper.HashMapOutput;
 
 public class SequentialMapReduce implements MapReduce {
+
+	public static class Builder {
+
+		@SuppressWarnings("rawtypes")
+		private Class<? extends MapperOutput> mapperOutputClass = HashMapOutput.class;
+
+		public Builder withMapperOutput(Class<? extends MapperOutput<?, ?>> mapperOutputClass) {
+			this.mapperOutputClass = mapperOutputClass;
+			return this;
+		}
+
+		public MapReduce build() {
+
+			@SuppressWarnings("rawtypes")
+			Supplier<? extends MapperOutput> supplier = () -> {
+				try {
+					return mapperOutputClass.getConstructor().newInstance();
+				} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
+						| InvocationTargetException | NoSuchMethodException | SecurityException e) {
+					throw new IllegalArgumentException(format("cannot instatiate mapper output class %s", mapperOutputClass), e);
+				}
+			};
+
+			return new SequentialMapReduce(supplier);
+		}
+
+	}
+
+	@SuppressWarnings("rawtypes")
+	private Supplier<? extends MapperOutput> mapperOutputSupplier;
+
+	@SuppressWarnings("rawtypes")
+	private SequentialMapReduce(Supplier<? extends MapperOutput> mapperOutputSupplier) {
+		this.mapperOutputSupplier = mapperOutputSupplier;
+	}
 
 	@Override
 	public <I, K, V> void run(Input<I> in, Mapper<I, K, V> mapper, Reducer<K, V> reducer, Output<K, V> output) {
 
-		MapperOutput<K, V> mapperOutput = new GuavaMultiMapOutput<K, V>();
+		@SuppressWarnings("unchecked")
+		MapperOutput<K, V> mapperOutput = mapperOutputSupplier.get();
+
 		while (in.hasNext()) {
 			mapper.map(in.next(), mapperOutput);
 		}
@@ -23,7 +64,7 @@ public class SequentialMapReduce implements MapReduce {
 
 	@Override
 	public void shutdown() {
-		
+		;
 	}
 
 	static class IteratorInput<E> implements Input<E> {
@@ -45,6 +86,5 @@ public class SequentialMapReduce implements MapReduce {
 		}
 
 	}
-
 
 }

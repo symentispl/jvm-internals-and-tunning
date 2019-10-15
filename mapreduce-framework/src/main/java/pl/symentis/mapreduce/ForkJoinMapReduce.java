@@ -13,6 +13,12 @@ public class ForkJoinMapReduce implements MapReduce {
 
 	private final ForkJoinPool pool = ForkJoinPool.commonPool();
 
+	public static class Builder{
+		public MapReduce build(){
+			return new ForkJoinMapReduce();
+		}
+	}
+
 	@Override
 	public <I, K, V> void run(Input<I> input, Mapper<I, K, V> mapper, Reducer<K, V> reducer, Output<K, V> output) {
 
