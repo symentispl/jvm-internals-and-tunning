@@ -3,33 +3,26 @@ set -ex
 
 # this script gets all measurements which will be needed during presentation
 
-./mvnw clean verify
+./mvnw -l build.log clean verify
 
 mkdir target
 
-async_out_dir=$(mktemp -d -p "$(pwd)/target")
-java -jar mapreduce-perf/target/benchmarks.jar \
-	"SequentialMapReduceWordCountBenchmark.countWords" \
-	-f 1 -wi 1 -i 1 \
-	-p stopwordsClass="pl.symentis.concurrency.wordcount.stopwords.NonThreadLocalStopwords" \
-	-prof jmh.extras.Async:dir="${async_out_dir}"
-cp "${async_out_dir}/flame-graph-cpu.svg" SequentialMapReduceWordCountBenchmark-NonThreadLocalStopwords.svg
+benchmarks_basepackage="pl.symentis.concurrency.wordcount"
 
-async_out_dir=$(mktemp -d -p "$(pwd)/target")
-java -jar mapreduce-perf/target/benchmarks.jar \
-	"SequentialMapReduceWordCountBenchmark.countWords" \
-	-f 1 -wi 1 -i 1 \
-	-p stopwordsClass="pl.symentis.concurrency.wordcount.stopwords.ThreadLocalStopwords" \
-	-prof jmh.extras.Async:dir="${async_out_dir}"
-cp "${async_out_dir}/flame-graph-cpu.svg" SequentialMapReduceWordCountBenchmark-ThreadLocalStopwords.svg
+stopwords_basepackage="pl.symentis.concurrency.wordcount.stopwords"
+stopwords=("NonThreadLocalStopwords" "ThreadLocalStopwords" "ICUThreadLocalStopwords")
 
-async_out_dir=$(mktemp -d -p "$(pwd)/target")
-java -jar mapreduce-perf/target/benchmarks.jar \
-	"SequentialMapReduceWordCountBenchmark.countWords" \
-	-f 1 -wi 1 -i 1 \
-	-p stopwordsClass="pl.symentis.concurrency.wordcount.stopwords.ICUThreadLocalStopwords" \
-	-prof jmh.extras.Async:dir="${async_out_dir}"
-cp "${async_out_dir}/flame-graph-cpu.svg" SequentialMapReduceWordCountBenchmark-ICUThreadLocalStopwords.svg
+for stopword in "${stopwords[@]}"
+do
+	async_out_dir=$(mktemp -d -p "$(pwd)/target")
+	java -jar mapreduce-perf/target/benchmarks.jar \
+		"${benchmarks_basepackage}.SequentialMapReduceWordCountBenchmark.countWords" \
+		-f 1 -wi 1 -i 1 \
+		-o "${async_out_dir}/${stopword}.log" \
+		-p stopwordsClass="${stopwords_basepackage}.${stopword}" \
+		-prof jmh.extras.Async:dir="${async_out_dir}"
+	cp "${async_out_dir}/flame-graph-cpu.svg" SequentialMapReduceWordCountBenchmark-${stopword}.svg
+done
 
 java -jar mapreduce-perf/target/benchmarks.jar \
 	"SequentialMapReduceWordCountBenchmark.countWords" \

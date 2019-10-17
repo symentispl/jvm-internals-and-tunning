@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import pl.symentis.mapreduce.MapperOutput;
@@ -32,5 +33,9 @@ public final class HashMapOutput<K, V> implements MapperOutput<K, V> {
 	@Override
 	public Iterator<V> values(K k) {
 		return map.get(k).iterator();
+	}
+	
+	public Map<K, List<V>> asMap(){
+		return map;
 	}
 }

@@ -5,7 +5,6 @@ import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.reducing;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -16,12 +15,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 
+import pl.symentis.mapreduce.mapper.HashMapOutput;
+
 public class BatchingParallelMapReduce implements MapReduce {
 
 	public static class Builder {
 
 		private int threadPoolMaxSize = Runtime.getRuntime().availableProcessors();
 		private int phaserMaxTasks = 1000;
+		private int batchSize = 1000;
 
 		public Builder withThreadPoolSize(int threadPoolMaxSize) {
 			this.threadPoolMaxSize = threadPoolMaxSize;
@@ -33,8 +35,13 @@ public class BatchingParallelMapReduce implements MapReduce {
 			return this;
 		}
 
+		public Builder withBatchSize(int batchSize) {
+			this.batchSize = batchSize;
+			return this;
+		}
+
 		public MapReduce build() {
-			return new BatchingParallelMapReduce(threadPoolMaxSize, phaserMaxTasks);
+			return new BatchingParallelMapReduce(threadPoolMaxSize, phaserMaxTasks, batchSize);
 		}
 	}
 
@@ -42,10 +49,10 @@ public class BatchingParallelMapReduce implements MapReduce {
 	private final int phaserMaxTasks;
 	private final int batchSize;
 
-	public BatchingParallelMapReduce(int threadPoolMaxSize, int phaserMaxTasks) {
+	public BatchingParallelMapReduce(int threadPoolMaxSize, int phaserMaxTasks, int batchSize) {
 		this.executorService = Executors.newFixedThreadPool(threadPoolMaxSize);
 		this.phaserMaxTasks = phaserMaxTasks;
-		this.batchSize = 1000;
+		this.batchSize = batchSize;
 	}
 
 	@Override
@@ -62,37 +69,55 @@ public class BatchingParallelMapReduce implements MapReduce {
 		int tasksPerPhaser = 0;
 		Phaser phaser = new Phaser(rootPhaser);
 
-		ConcurrentLinkedDeque<Map<K, List<V>>> tasks = new ConcurrentLinkedDeque<Map<K, List<V>>>();
-		ArrayList<I> buffer = new ArrayList<>(batchSize);
+		ConcurrentLinkedDeque<Map<K, List<V>>> mapResults = new ConcurrentLinkedDeque<>();
+		ArrayList<I> batch = new ArrayList<>(batchSize);
 
 		while (input.hasNext()) {
-			buffer.add(input.next());
+			batch.add(input.next());
 
-			if (buffer.size() == batchSize) {
+			if (batch.size() == batchSize) {
 				phaser.register();
 
-				executorService.submit(new MapperPhase<>(new IteratorInput<>(buffer.iterator()), mapper, tasks, phaser));
+				executorService.submit(new MapperPhase<>(new IteratorInput<>(batch.iterator()), mapper, mapResults, phaser));
 
 				tasksPerPhaser++;
 				if (tasksPerPhaser >= phaserMaxTasks) {
 					phaser = new Phaser(rootPhaser);
 					tasksPerPhaser = 0;
 				}
-				buffer = new ArrayList<>(batchSize);
+				batch = new ArrayList<>(batchSize);
 			}
 		}
 
 		rootPhaser.awaitAdvance(0);
 
-		Map<K, List<V>> map = tasks.stream().flatMap(m -> m.entrySet().stream()).collect(groupingBy(Map.Entry::getKey,
-				mapping(Map.Entry::getValue, reducing(new ArrayList<>(), BatchingParallelMapReduce::sum))));
+		// merge map results
+		Map<K, List<V>> map = merge(mapResults);
 
 		// reduce
+		reduce(reducer, output, map);
+
+	}
+
+	private <K, V> void reduce(Reducer<K, V> reducer, Output<K, V> output, Map<K, List<V>> map) {
 		Set<K> keys = map.keySet();
 		for (K key : keys) {
 			reducer.reduce(key, new IteratorInput<>(map.get(key).iterator()), output);
 		}
+	}
 
+	private <V, K> Map<K, List<V>> merge(ConcurrentLinkedDeque<Map<K, List<V>>> mapResults) {
+		return mapResults.stream()
+				.map(Map::entrySet)
+				.flatMap(Set::stream)
+				.collect(
+						groupingBy(
+								Map.Entry::getKey,
+								mapping(
+										Map.Entry::getValue, 
+										reducing(
+												new ArrayList<>(),
+												BatchingParallelMapReduce::sum))));
 	}
 
 	@Override
@@ -101,40 +126,31 @@ public class BatchingParallelMapReduce implements MapReduce {
 		try {
 			executorService.awaitTermination(1, TimeUnit.MINUTES);
 		} catch (InterruptedException e) {
-			throw new WorkflowException(e);
+			throw new MapReduceException(e);
 		}
 	}
 
 	static final class MapperPhase<I, K, V> implements Runnable {
 
-		private final Input<I> in;
+		private final Input<I> input;
 		private final Mapper<I, K, V> mapper;
 		private final Phaser phaser;
-		private final Queue<Map<K, List<V>>> slots;
+		private final Queue<Map<K, List<V>>> mapResults;
 
-		MapperPhase(Input<I> in, Mapper<I, K, V> mapper, Queue<Map<K, List<V>>> slots, Phaser phaser) {
-			this.in = in;
+		MapperPhase(Input<I> input, Mapper<I, K, V> mapper, Queue<Map<K, List<V>>> mapResults, Phaser phaser) {
+			this.input = input;
 			this.mapper = mapper;
-			this.slots = slots;
+			this.mapResults = mapResults;
 			this.phaser = phaser;
 		}
 
 		@Override
 		public void run() {
-			Map<K, List<V>> map = new HashMap<>();
-			while (in.hasNext()) {
-				mapper.map(in.next(), (k, v) -> {
-					map.compute(k, (key, oldValue) -> {
-						List<V> newValue = oldValue;
-						if (newValue == null) {
-							newValue = new ArrayList<>();
-						}
-						newValue.add(v);
-						return newValue;
-					});
-				});
+			HashMapOutput<K,V> output = new HashMapOutput<>();
+			while (input.hasNext()) {
+				mapper.map(input.next(), output);
 			}
-			slots.offer(map);
+			mapResults.offer(output.asMap());
 			phaser.arriveAndDeregister();
 		}
 
@@ -144,5 +160,6 @@ public class BatchingParallelMapReduce implements MapReduce {
 		op1.addAll(op2);
 		return op2;
 	}
+	
 
 }

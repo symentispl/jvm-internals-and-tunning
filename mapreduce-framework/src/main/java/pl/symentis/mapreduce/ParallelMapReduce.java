@@ -85,7 +85,7 @@ public class ParallelMapReduce implements MapReduce {
 		try {
 			executorService.awaitTermination(1, TimeUnit.MINUTES);
 		} catch (InterruptedException e) {
-			throw new WorkflowException(e);
+			throw new MapReduceException(e);
 		}
 	}
 

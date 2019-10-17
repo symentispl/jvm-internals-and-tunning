@@ -26,6 +26,8 @@ public class BatchingParallelMapReduceWordCountBenchmark {
 	@Param({"1000"})
 	public int phaserMaxTasks;
 	
+	@Param({"1000"})
+	public int batchSize;
 	
 	private WordCount wordCount;
 	private MapReduce mapReduce;
@@ -41,6 +43,7 @@ public class BatchingParallelMapReduceWordCountBenchmark {
 				.Builder()
 				.withPhaserMaxTasks(phaserMaxTasks)
 				.withThreadPoolSize(threadPoolMaxSize)
+				.withBatchSize(batchSize)
 				.build();
 	}
 
