@@ -1,4 +1,4 @@
-package pl.symentis.concurrency.wordcount;
+package pl.symentis.wordcount;
 
 import java.util.HashMap;
 
@@ -10,14 +10,15 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 
-import pl.symentis.concurrency.wordcount.stopwords.Stopwords;
 import pl.symentis.mapreduce.BatchingParallelMapReduce;
 import pl.symentis.mapreduce.MapReduce;
+import pl.symentis.wordcount.WordCount;
+import pl.symentis.wordcount.stopwords.Stopwords;
 
 @State(Scope.Benchmark)
 public class BatchingParallelMapReduceWordCountBenchmark {
 
-	@Param({"pl.symentis.concurrency.wordcount.stopwords.ICUThreadLocalStopwords"})
+	@Param({"pl.symentis.wordcount.stopwords.ICUThreadLocalStopwords"})
 	public String stopwordsClass;
 	
 	@Param({"8"})

@@ -1,4 +1,4 @@
-package pl.symentis.concurrency.wordcount;
+package pl.symentis.wordcount;
 
 import static java.lang.String.format;
 
@@ -14,12 +14,12 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.NoSuchElementException;
 import java.util.regex.Pattern;
 
-import pl.symentis.concurrency.wordcount.stopwords.ICUThreadLocalStopwords;
-import pl.symentis.concurrency.wordcount.stopwords.Stopwords;
 import pl.symentis.mapreduce.Input;
 import pl.symentis.mapreduce.Mapper;
 import pl.symentis.mapreduce.Output;
 import pl.symentis.mapreduce.Reducer;
+import pl.symentis.wordcount.stopwords.ICUThreadLocalStopwords;
+import pl.symentis.wordcount.stopwords.Stopwords;
 
 public class WordCount {
 

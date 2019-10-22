@@ -13,12 +13,10 @@
 		<dependency>
 			<groupId>com.google.guava</groupId>
 			<artifactId>guava</artifactId>
-			<version>28.1-jre</version>
 		</dependency>
 		<dependency>
 			<groupId>org.eclipse.collections</groupId>
 			<artifactId>eclipse-collections</artifactId>
-			<version>10.0.0</version>
 		</dependency>
 	</dependencies>
 </project>

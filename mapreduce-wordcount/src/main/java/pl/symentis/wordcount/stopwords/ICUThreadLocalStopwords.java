@@ -1,17 +1,31 @@
-package pl.symentis.concurrency.wordcount.stopwords;
+package pl.symentis.wordcount.stopwords;
 
 import java.io.BufferedReader;
 import java.io.IOError;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.text.CollationKey;
-import java.text.Collator;
 import java.util.Locale;
 import java.util.TreeSet;
 
-public class NonThreadLocalStopwords implements Stopwords{
+import com.ibm.icu.text.CollationKey;
+import com.ibm.icu.text.Collator;
 
+public class ICUThreadLocalStopwords implements Stopwords {
+
+	private final ThreadLocal<Collator> threadLocalCollator = new ThreadLocal<Collator>() {
+
+		@Override
+		protected Collator initialValue() {
+			try {
+				return (Collator) collator.clone();
+			} catch (CloneNotSupportedException e) {
+				throw new RuntimeException(e);
+			}
+		}
+	};
+
+	private Collator collator;
 	private final TreeSet<CollationKey> stopwords;
 
 	public static Stopwords from(InputStream inputStream) {
@@ -22,17 +36,17 @@ public class NonThreadLocalStopwords implements Stopwords{
 		} catch (IOException e) {
 			throw new IOError(e);
 		}
-		return new NonThreadLocalStopwords(stopwords);
+		return new ICUThreadLocalStopwords(collator, stopwords);
 	}
-	
-	private NonThreadLocalStopwords(TreeSet<CollationKey> stopwords) {
+
+	private ICUThreadLocalStopwords(Collator collator, TreeSet<CollationKey> stopwords) {
+		this.collator = collator;
 		this.stopwords = stopwords;
 	}
 
 	@Override
 	public boolean contains(String str) {
-		Collator collator = Collator.getInstance(Locale.ENGLISH);
-		return stopwords.contains(collator.getCollationKey(str));
+		return stopwords.contains(threadLocalCollator.get().getCollationKey(str));
 	}
-	
+
 }

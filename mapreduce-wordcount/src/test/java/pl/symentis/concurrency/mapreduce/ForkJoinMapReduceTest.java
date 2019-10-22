@@ -9,10 +9,10 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
-import pl.symentis.concurrency.wordcount.WordCount;
 import pl.symentis.mapreduce.ForkJoinMapReduce;
 import pl.symentis.mapreduce.MapReduce;
 import pl.symentis.mapreduce.SequentialMapReduce;
+import pl.symentis.wordcount.WordCount;
 
 public class ForkJoinMapReduceTest {
 

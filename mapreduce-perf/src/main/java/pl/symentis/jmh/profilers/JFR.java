@@ -4,6 +4,8 @@ import static java.lang.String.format;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -22,10 +24,29 @@ import org.openjdk.jmh.results.Result;
 import org.openjdk.jmh.results.ResultRole;
 import org.openjdk.jmh.runner.IterationType;
 
+import joptsimple.OptionParser;
+import joptsimple.OptionSet;
+import joptsimple.OptionSpec;
+import pl.project13.scala.jmh.extras.profiler.ProfilerUtils;
+
 public final class JFR implements ExternalProfiler, InternalProfiler {
 
-	private volatile String filename;
+	private volatile Path filename;
 	private volatile boolean afterWarmup;
+	private Path outputDir;
+
+	public JFR(String initLine) throws Exception {
+		OptionParser parser = new OptionParser();
+		OptionSpec<String> outputDir = parser.accepts("dir", "Output directory").withRequiredArg()
+				.describedAs("directory").ofType(String.class);
+
+		OptionSet optionSet = ProfilerUtils.parseInitLine(initLine, parser);
+
+		if (optionSet.has(outputDir)) {
+			this.outputDir = Paths.get(optionSet.valueOf(outputDir));
+			Files.createDirectories(this.outputDir);
+		} 
+	}
 
 	@Override
 	public Collection<String> addJVMInvokeOptions(final BenchmarkParams params) {
@@ -44,33 +65,36 @@ public final class JFR implements ExternalProfiler, InternalProfiler {
 	@Override
 	public void beforeIteration(BenchmarkParams benchmarkParams, IterationParams iterationParams) {
 
-		if(!afterWarmup && iterationParams.getType() == IterationType.MEASUREMENT) {
+		if (!afterWarmup && iterationParams.getType() == IterationType.MEASUREMENT) {
 			afterWarmup = true;
+			
+			if(outputDir==null) {
+				try {
+					outputDir = Files.createTempDirectory( benchmarkParams.id() );
+				} catch (IOException e) {
+					throw new UncheckedIOException(e);
+				}
+			}
+			
 			Path jcmd = Paths.get(benchmarkParams.getJvm()).getParent().resolve("jcmd");
-			filename = format("%s.jfr", benchmarkParams.id());
+			filename = outputDir.resolve("profile.jfr").toAbsolutePath();
 			try {
 				int exitCode = new ProcessBuilder()
-					.command( 
-							jcmd.toString(), 
-							Long.toString(ProcessHandle.current().pid()),
-							"JFR.start",
-							format("filename=%s dumponexit=true disk=true settings=profile", filename))
-					.start()
-					.waitFor();
-				if(exitCode!=0) {
+						.command(jcmd.toString(), Long.toString(ProcessHandle.current().pid()), "JFR.start",
+								format("filename=%s dumponexit=true disk=true settings=profile", filename))
+						.start().waitFor();
+				if (exitCode != 0) {
 					throw new RuntimeException("failed to run jcmd command");
 				}
 			} catch (InterruptedException | IOException e) {
 				throw new RuntimeException(e);
 			}
 		}
-		
+
 	}
 
 	@Override
-	public Collection<? extends Result> afterIteration(
-			BenchmarkParams benchmarkParams,
-			IterationParams iterationParams,
+	public Collection<? extends Result> afterIteration(BenchmarkParams benchmarkParams, IterationParams iterationParams,
 			IterationResult result) {
 		NoResult r = new NoResult("Profile saved to " + filename);
 		return Collections.singleton(r);
@@ -79,9 +103,9 @@ public final class JFR implements ExternalProfiler, InternalProfiler {
 	@Override
 	public Collection<? extends Result> afterTrial(final BenchmarkResult bp, final long l, final File file,
 			final File file1) {
-		
+
 		System.out.println(bp.getBenchmarkResults());
-		
+
 		return Collections.emptyList();
 	}
 

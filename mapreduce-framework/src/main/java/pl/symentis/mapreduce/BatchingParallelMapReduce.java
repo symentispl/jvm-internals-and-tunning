@@ -160,6 +160,5 @@ public class BatchingParallelMapReduce implements MapReduce {
 		op1.addAll(op2);
 		return op2;
 	}
-	
 
 }

@@ -1,4 +1,4 @@
-package pl.symentis.concurrency.wordcount.stopwords;
+package pl.symentis.wordcount.stopwords;
 
 public interface Stopwords {
 	boolean contains(String str);

@@ -1,4 +1,4 @@
-package pl.symentis.concurrency.wordcount.stopwords;
+package pl.symentis.wordcount.stopwords;
 
 import java.io.BufferedReader;
 import java.io.IOError;
@@ -10,17 +10,8 @@ import java.text.Collator;
 import java.util.Locale;
 import java.util.TreeSet;
 
-public class ThreadLocalStopwords implements Stopwords {
+public class NonThreadLocalStopwords implements Stopwords{
 
-	private final ThreadLocal<Collator> threadLocalCollator = new ThreadLocal<Collator>() {
-
-		@Override
-		protected Collator initialValue() {
-			return (Collator) collator.clone();
-		}
-	};
-
-	private Collator collator;
 	private final TreeSet<CollationKey> stopwords;
 
 	public static Stopwords from(InputStream inputStream) {
@@ -31,17 +22,17 @@ public class ThreadLocalStopwords implements Stopwords {
 		} catch (IOException e) {
 			throw new IOError(e);
 		}
-		return new ThreadLocalStopwords(collator, stopwords);
+		return new NonThreadLocalStopwords(stopwords);
 	}
-
-	private ThreadLocalStopwords(Collator collator, TreeSet<CollationKey> stopwords) {
-		this.collator = collator;
+	
+	private NonThreadLocalStopwords(TreeSet<CollationKey> stopwords) {
 		this.stopwords = stopwords;
 	}
 
 	@Override
 	public boolean contains(String str) {
-		return stopwords.contains(threadLocalCollator.get().getCollationKey(str));
+		Collator collator = Collator.getInstance(Locale.ENGLISH);
+		return stopwords.contains(collator.getCollationKey(str));
 	}
-
+	
 }

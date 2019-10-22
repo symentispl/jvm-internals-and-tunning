@@ -1,27 +1,22 @@
-package pl.symentis.concurrency.wordcount.stopwords;
+package pl.symentis.wordcount.stopwords;
 
 import java.io.BufferedReader;
 import java.io.IOError;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.text.CollationKey;
+import java.text.Collator;
 import java.util.Locale;
 import java.util.TreeSet;
 
-import com.ibm.icu.text.CollationKey;
-import com.ibm.icu.text.Collator;
-
-public class ICUThreadLocalStopwords implements Stopwords {
+public class ThreadLocalStopwords implements Stopwords {
 
 	private final ThreadLocal<Collator> threadLocalCollator = new ThreadLocal<Collator>() {
 
 		@Override
 		protected Collator initialValue() {
-			try {
-				return (Collator) collator.clone();
-			} catch (CloneNotSupportedException e) {
-				throw new RuntimeException(e);
-			}
+			return (Collator) collator.clone();
 		}
 	};
 
@@ -36,10 +31,10 @@ public class ICUThreadLocalStopwords implements Stopwords {
 		} catch (IOException e) {
 			throw new IOError(e);
 		}
-		return new ICUThreadLocalStopwords(collator, stopwords);
+		return new ThreadLocalStopwords(collator, stopwords);
 	}
 
-	private ICUThreadLocalStopwords(Collator collator, TreeSet<CollationKey> stopwords) {
+	private ThreadLocalStopwords(Collator collator, TreeSet<CollationKey> stopwords) {
 		this.collator = collator;
 		this.stopwords = stopwords;
 	}
