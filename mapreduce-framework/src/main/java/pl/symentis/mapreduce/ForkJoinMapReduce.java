@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountedCompleter;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveTask;
 
@@ -46,6 +47,7 @@ public class ForkJoinMapReduce implements MapReduce {
 		protected Map<K, List<V>> compute() {
 			List<I> batch = new ArrayList<>(DEFAULT_BATCH_SIZE);
 			List<MapperTask<I, K, V>> tasks = new ArrayList<>();
+			
 			while (in.hasNext()) {
 				batch.add(in.next());
 				if (batch.size() == DEFAULT_BATCH_SIZE || !in.hasNext()) {

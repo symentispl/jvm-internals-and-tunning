@@ -4,6 +4,7 @@ import static java.lang.String.format;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.Iterator;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -17,6 +18,7 @@ public class SequentialMapReduce implements MapReduce {
 		private Class<? extends MapperOutput> mapperOutputClass = HashMapOutput.class;
 
 		public Builder withMapperOutput(Class<? extends MapperOutput<?, ?>> mapperOutputClass) {
+			Objects.nonNull(mapperOutputClass);
 			this.mapperOutputClass = mapperOutputClass;
 			return this;
 		}
@@ -72,6 +74,7 @@ public class SequentialMapReduce implements MapReduce {
 		private final Iterator<E> iterator;
 
 		IteratorInput(Iterator<E> iterator) {
+			Objects.nonNull(iterator);
 			this.iterator = iterator;
 		}
 

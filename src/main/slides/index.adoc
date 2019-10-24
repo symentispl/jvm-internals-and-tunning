@@ -1,0 +1,70 @@
+= Are you fast enough?
+:idprefix:
+:stem: asciimath
+:backend: html
+:source-highlighter: highlightjs
+:highlightjs-style: github
+:revealjs_history: true
+:revealjs_theme: night
+:revealjs_controls: false
+:imagesdir: images
+:customcss: css/custom.css
+
+== about me
+
+Neo4j (a graph database) performance engineer
+
+over 20 years with JVM, +
+since early days of no native threads and, +
+no JIT and slow as hell GC
+
+speaker, coder, architect
+
+founder of SegFault conference
+
+== DISCLAIMER
+
+this presentation may contain strong language, my own opinions, references
+to sex, drugs, religion, alcohol and politics
+
+if this does make you feel offended that's good it means you have something you care about in your life
+
+=== !
+
+=== performance is hard!
+
+=== performance is fun!
+
+=== show must go on
+
+=== actors
+
+map reduce & distinct word count,
+
+=== !
+
+"pure" JDK 11,
+
+Java Microbenchmark Harness
+
+Async profiler
+
+Java Mission Control
+
+flamegraphs
+
+=== naive implementation
+
+single threaded
+
+=== Wes Dreyer
+
+=== !
+
+never ever start with concurrent implementation first,
+
+just no
+
+if you cannot make single thread fast, why do you think you can do so for multiple threads
+
+=== the framework

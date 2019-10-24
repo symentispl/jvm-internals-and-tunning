@@ -1,7 +1,21 @@
 #!/usr/bin/env bash
-set -ex
+set -eu
 
-# this script gets all measurements which will be needed during presentation
+boxes -d stone <<< "this script gets all measurements which will be needed during presentation"
+
+# check all required variables and OS level settings
+
+if [[ $(sysctl -n kernel.kptr_restrict) != "0" ]]
+then
+	echo "run sudo sysctl kernel.kptr_restrict=0"
+	exit 1
+fi
+
+if [[ $(sysctl -n kernel.perf_event_paranoid) != "-1" ]]
+then
+	echo "run sudo sysctl kernel.perf_event_paranoid=-1"
+	exit 1
+fi
 
 if [[ -z "$FLAME_GRAPH_DIR" ]]
 then
@@ -36,6 +50,7 @@ async_profile() {
 		profiler_output_dir=$(mktemp -d -p "$(pwd)/target")
 		java -jar mapreduce-perf/target/benchmarks.jar \
 			"${benchmarks_basepackage}.SequentialMapReduceWordCountBenchmark.countWords" \
+			-foe true \
 			-f $forks -wi $warmups -i $iterations \
 			-p "${parameter_name}"="${parameter_baskepackage}"."${classname}" \
 			-prof jmh.extras.Async:dir="${profiler_output_dir}" 
@@ -54,6 +69,7 @@ jfr_profile() {
 		profiler_output_dir=$(mktemp -d -p "$(pwd)/target")
 		java -jar mapreduce-perf/target/benchmarks.jar \
 			"${benchmark}" \
+			-foe true \
 			-f $forks -wi $warmups -i $iterations \
 			-p "${parameter_name}"="${value}" \
 			-prof pl.symentis.jmh.profilers.JFR:dir="${profiler_output_dir}"
@@ -61,7 +77,7 @@ jfr_profile() {
 	done
 }
 
-measurment() {
+measurement() {
 	local benchmarks_basepackage="$1"
 	shift
 	local parameter_baskepackage="$1"
@@ -78,6 +94,7 @@ measurment() {
 
 	java -jar mapreduce-perf/target/benchmarks.jar \
 		"${benchmarks_basepackage}.SequentialMapReduceWordCountBenchmark.countWords" \
+		-foe true \
 		-f $forks -wi $warmups -i $iterations \
 		-p "${parameter_name}"=""$(IFS=, ; echo "${all_parameter_classnames[*]}")"" \
 		-rff "${results}/SequentialMapReduceWordCountBenchmark-${parameter_name}.csv"		
@@ -90,14 +107,14 @@ boxes -d stone <<< "Sequential map reduce - comparing stopwords implementations"
 stopwords_basepackage="pl.symentis.wordcount.stopwords"
 stopwords=("NonThreadLocalStopwords" "ThreadLocalStopwords" "ICUThreadLocalStopwords")
 async_profile "$benchmarks_basepackage" "$stopwords_basepackage" "stopwordsClass" "${stopwords[@]}"
-measurment "$benchmarks_basepackage" "$stopwords_basepackage" "stopwordsClass" "${stopwords[@]}"
+measurement "$benchmarks_basepackage" "$stopwords_basepackage" "stopwordsClass" "${stopwords[@]}"
 
 boxes -d stone <<< "Sequential map reduce - comparing mapper output implementations"
 
 mappers_outputs_basepackage="pl.symentis.mapreduce.mapper"
 mappers_outputs=("HashMapOutput" "GuavaMultiMapOutput" "EclipseCollectionsMultiMapOutput")
 async_profile "$benchmarks_basepackage" "$mappers_outputs_basepackage" "mapperOutputClass" "${mappers_outputs[@]}"
-measurment "$benchmarks_basepackage" "$mappers_outputs_basepackage" "mapperOutputClass" "${mappers_outputs[@]}"
+measurement "$benchmarks_basepackage" "$mappers_outputs_basepackage" "mapperOutputClass" "${mappers_outputs[@]}"
 
 boxes -d stone <<< "Parallel map reduce"
 

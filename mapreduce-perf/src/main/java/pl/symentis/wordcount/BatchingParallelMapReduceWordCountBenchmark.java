@@ -57,7 +57,7 @@ public class BatchingParallelMapReduceWordCountBenchmark {
 	public Object countWords() throws Exception {
 		HashMap<String, Long> map = new HashMap<String, Long>();
 		mapReduce.run(
-				wordCount.input(BatchingParallelMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
+				wordCount.input(BatchingParallelMapReduceWordCountBenchmark.class.getResourceAsStream("/text8")),
 				wordCount.mapper(),
 				wordCount.reducer(),
 				map::put);

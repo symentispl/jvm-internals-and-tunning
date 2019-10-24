@@ -75,7 +75,7 @@ public class BatchingParallelMapReduce implements MapReduce {
 		while (input.hasNext()) {
 			batch.add(input.next());
 
-			if (batch.size() == batchSize) {
+			if (batch.size() == batchSize || !input.hasNext()) {
 				phaser.register();
 
 				executorService.submit(new MapperPhase<>(new IteratorInput<>(batch.iterator()), mapper, mapResults, phaser));
