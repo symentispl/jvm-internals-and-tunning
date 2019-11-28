@@ -29,8 +29,8 @@ boxes -d stone <<< "Building benchmarks"
 ./mvnw -l build.log clean verify
 
 forks=1
-iterations=1
-warmups=1
+iterations=5
+warmups=5
 
 results=target/results
 
