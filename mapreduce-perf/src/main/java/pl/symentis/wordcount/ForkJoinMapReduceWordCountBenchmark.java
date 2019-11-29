@@ -1,55 +1,47 @@
 package pl.symentis.wordcount;
 
-import java.util.HashMap;
-
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Param;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.TearDown;
-
+import org.openjdk.jmh.annotations.*;
 import pl.symentis.mapreduce.ForkJoinMapReduce;
 import pl.symentis.mapreduce.MapReduce;
-import pl.symentis.wordcount.WordCount;
 import pl.symentis.wordcount.stopwords.Stopwords;
+
+import java.util.HashMap;
 
 @State(Scope.Benchmark)
 public class ForkJoinMapReduceWordCountBenchmark {
 
-	@Param({"pl.symentis.wordcount.stopwords.ICUThreadLocalStopwords"})
-	public String stopwordsClass;
+    @Param({"pl.symentis.wordcount.stopwords.ICUThreadLocalStopwords"})
+    public String stopwordsClass;
 
-	private WordCount wordCount;
-	private MapReduce mapReduce;
+    private WordCount wordCount;
+    private MapReduce mapReduce;
 
-	@SuppressWarnings("unchecked")
-	@Setup(Level.Trial)
-	public void setUp() throws Exception {
-		wordCount = new WordCount
-				.Builder()
-				.withStopwords((Class<? extends Stopwords>) Class.forName(stopwordsClass))
-				.build();
-		mapReduce = new ForkJoinMapReduce
-				.Builder()
-				.build();
-	}
+    @SuppressWarnings("unchecked")
+    @Setup(Level.Trial)
+    public void setUp() throws Exception {
+        wordCount = new WordCount
+                .Builder()
+                .withStopwords((Class<? extends Stopwords>) Class.forName(stopwordsClass))
+                .build();
+        mapReduce = new ForkJoinMapReduce
+                .Builder()
+                .build();
+    }
 
-	@TearDown(Level.Trial)
-	public void tearDown() {
-		mapReduce.shutdown();
-	}
+    @TearDown(Level.Trial)
+    public void tearDown() {
+        mapReduce.shutdown();
+    }
 
-	@Benchmark
-	public Object countWords() throws Exception {
-		HashMap<String, Long> map = new HashMap<String, Long>();
-		mapReduce.run(
-				wordCount.input(ForkJoinMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
-				wordCount.mapper(),
-				wordCount.reducer(),
-				map::put);
-		return map;
-	}
+    @Benchmark
+    public Object countWords() {
+        HashMap<String, Long> map = new HashMap<String, Long>();
+        mapReduce.run(
+                wordCount.input(ForkJoinMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
+                wordCount.mapper(),
+                wordCount.reducer(),
+                map::put);
+        return map;
+    }
 
 }

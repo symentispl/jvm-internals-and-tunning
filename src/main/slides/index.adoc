@@ -48,7 +48,7 @@ analyze
 
 === let me introduce
 
-"not invented here "map reduce framework +
+"not invented here" map reduce framework +
 & +
 distinct word count, +
 aka Hello World of map/reduce
@@ -109,7 +109,25 @@ include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/Out
 include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/SequentialMapReduce.java[lines=51..65]
 ----
 
-=== is it fast enough?
+== word count
+
+=== !
+
+[role="stretch"]
+[source,java,indent=0]
+----
+include::{sourcedir}/mapreduce-wordcount/src/main/java/pl/symentis/wordcount/WordCount.java[lines=97..103]
+----
+
+=== !
+
+[role="stretch"]
+[source,java,indent=0]
+----
+include::{sourcedir}/mapreduce-wordcount/src/main/java/pl/symentis/wordcount/WordCount.java[lines=73..84]
+----
+
+== is it fast enough?
 
 === !
 
@@ -326,6 +344,10 @@ flush them to disk +
 
 start reduction as soon as we have first results from map +
 (sacrifice threads, smaller throughput of map phase)
+
+=== !
+
+measure don't guess
 
 === !
 

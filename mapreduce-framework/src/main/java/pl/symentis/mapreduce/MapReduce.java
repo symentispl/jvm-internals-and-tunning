@@ -2,8 +2,12 @@ package pl.symentis.mapreduce;
 
 public interface MapReduce {
 
-  <I, K, V> void run(Input<I> in, Mapper<I, K, V> mapper, Reducer<K, V> reducer, Output<K, V> output);
+    <In, MapperKey, MapperValue, ReducerKey, ReducerValue> void run(
+            Input<In> input,
+            Mapper<In, MapperKey, MapperValue> mapper,
+            Reducer<MapperKey, MapperValue, ReducerKey, ReducerValue> reducer,
+            Output<ReducerKey, ReducerValue> output);
 
-  void shutdown();
+    void shutdown();
 
 }

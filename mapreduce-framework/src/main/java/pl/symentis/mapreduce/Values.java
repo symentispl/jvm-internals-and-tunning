@@ -5,8 +5,8 @@ import java.util.Set;
 
 public interface Values<K, V> {
 
-	Set<K> keys();
+    Set<K> keys();
 
-	Iterator<V> values(K k);
+    Iterator<V> values(K k);
 
 }
