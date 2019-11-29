@@ -32,17 +32,26 @@ to sex, drugs, religion, alcohol and politics
 
 if this does make you feel offended that's good it means you have something you care about in your life
 
-=== !
+=== universal truth about performance
 
 === performance is hard!
 
 === performance is fun!
 
-=== show must go on
+=== !
 
-=== actors
+code
 
-map reduce & distinct word count,
+profile
+
+analyze
+
+=== let me introduce
+
+"not invented here "map reduce framework +
+& +
+distinct word count, +
+aka Hello World of map/reduce
 
 === !
 
@@ -65,6 +74,38 @@ single threaded
 [role="stretch"]
 [source,java,indent=0]
 ----
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/Input.java[]
+----
+
+=== !
+
+[role="stretch"]
+[source,java,indent=0]
+----
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/Mapper.java[]]
+----
+
+=== !
+
+[role="stretch"]
+[source,java,indent=0]
+----
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/Reducer.java[]]
+----
+
+=== !
+
+[role="stretch"]
+[source,java,indent=0]
+----
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/Output.java[]]
+----
+
+=== !
+
+[role="stretch"]
+[source,java,indent=0]
+----
 include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/SequentialMapReduce.java[lines=51..65]
 ----
 
@@ -77,13 +118,12 @@ include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/Seq
 ----
 include::{sourcedir}/mapreduce-perf/src/main/java/pl/symentis/wordcount/SequentialMapReduceWordCountBenchmark.java[lines=19..59]
 ----
-
 === !
 
 [format="csv", options="header"]
 |===
-Mode,Score,Unit
-"thrpt",1.830915,ops/s
+Benchmark,Mode,Score,Unit
+Sequential,"thrpt",1.830915,ops/s
 |===
 
 === is it fast enough?
@@ -94,11 +134,37 @@ image::SequentialMapReduceWordCountBenchmark-NonThreadLocalStopwords.svg[backgro
 
 === !
 
+[role="stretch"]
+[source,java,indent=0]
+----
+include::{sourcedir}/mapreduce-wordcount/src/main/java/pl/symentis/wordcount/stopwords/NonThreadLocalStopwords.java[lines=13..38]
+----
+
+=== !
+
 image::SequentialMapReduceWordCountBenchmark-ThreadLocalStopwords.svg[background, size=contain]
 
 === !
 
 image::SequentialMapReduceWordCountBenchmark-ICUThreadLocalStopwords.svg[background, size=contain]
+
+=== !
+
+[role="stretch"]
+[source,java,indent=0]
+----
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/mapper/HashMapOutput.java[lines=17..26]
+----
+
+=== is it fast enough?
+
+[format="csv", options="header"]
+|===
+Mapper,Mode,Score,Unit
+HashMap,"thrpt",1.874043,ops/s
+GuavaMultiMap,"thrpt",1.927683,ops/s
+EclipseMultiMap,"thrpt",1.830915, ops/s
+|===
 
 === !
 
@@ -114,11 +180,13 @@ image::https://media.giphy.com/media/XUVPMUlUNUAog/giphy.gif[background, size=co
 
 === !
 
-never ever start with concurrent implementation first,
+never ever start with +
+concurrent implementation first,
 
-just no
+*just no*
 
-if you cannot make single thread fast, why do you think you can do so for multiple threads
+if you cannot make single thread fast, +
+why do you think you can do so for multiple threads
 
 === divide
 
@@ -145,17 +213,17 @@ Sequential,"thrpt",1.830915,ops/s
 Parallel,"thrpt",2.895935,ops/s
 |===
 
+=== moar threads
+
+// here csv
+
 === flight recorder
 
 image::https://media.giphy.com/media/iJ5bSix01wY36/giphy.gif[background]
 
 === !
 
-//TODO: here goes JFR picture,
-
-=== moar threads
-
-// here csv
+image::ParallelMapReduce-32-threads-jmc.png[background]
 
 === contention stupid
 
@@ -208,6 +276,63 @@ Batching,"thrpt",4.283660,ops/s
 
 image::https://media.giphy.com/media/OH2rL6DVTNpte/giphy.gif[background]
 
-=== the framework
+=== !
+
+image::https://media.giphy.com/media/zSZogXiRS2zjG/giphy.gif[background]
+
+=== ForkJoinPool
+
+[role="stretch"]
+[source,java,indent=0]
+----
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/ForkJoinMapReduce.java[lines=47..75]
+----
+
+=== my eyes are bleeding
+
+This was probably worst `RecursiveTask` implementation you have every seen,
+
+blocking operation (use ManagedBlocking)
+
+but?
+
+=== is it fast enough?
+
+[format="csv", options="header"]
+|===
+Benchmark,Mode,Score,Unit
+Sequential,"thrpt",1.830915,ops/s
+Parallel,"thrpt",2.895935,ops/s
+Batching,"thrpt",4.283660,ops/s
+ForkJoin,"thrpt",4.458359,ops/s
+|===
+
+=== are we done?
+
+=== !
+
+during tests we were using 6 Mb text file, +
+guess what, +
+it OOMs with 100 Mb file
+
+=== !
+
+intermediate results (from map phase) are kept in memory
+
+=== ?
+
+flush them to disk +
+(serialization costs, oh so much fun)
+
+start reduction as soon as we have first results from map +
+(sacrifice threads, smaller throughput of map phase)
+
+=== !
+
+no animals were hurt, +
+only random bytecodes +
+which you can find at
+
+https://bitbucket.org/symentis/fast-enough/[]
 
 === the end
