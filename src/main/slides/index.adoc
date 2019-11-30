@@ -46,6 +46,8 @@ profile
 
 analyze
 
+repeat
+
 === let me introduce
 
 "not invented here" map reduce framework +
@@ -106,7 +108,7 @@ include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/Out
 [role="stretch"]
 [source,java,indent=0]
 ----
-include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/SequentialMapReduce.java[lines=51..65]
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/SequentialMapReduce.java[lines=60..67]
 ----
 
 == word count
@@ -116,7 +118,7 @@ include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/Seq
 [role="stretch"]
 [source,java,indent=0]
 ----
-include::{sourcedir}/mapreduce-wordcount/src/main/java/pl/symentis/wordcount/WordCount.java[lines=97..103]
+include::{sourcedir}/mapreduce-wordcount/src/main/java/pl/symentis/wordcount/WordCount.java[lines=66..77]
 ----
 
 === !
@@ -124,7 +126,7 @@ include::{sourcedir}/mapreduce-wordcount/src/main/java/pl/symentis/wordcount/Wor
 [role="stretch"]
 [source,java,indent=0]
 ----
-include::{sourcedir}/mapreduce-wordcount/src/main/java/pl/symentis/wordcount/WordCount.java[lines=73..84]
+include::{sourcedir}/mapreduce-wordcount/src/main/java/pl/symentis/wordcount/WordCount.java[lines=79..97]
 ----
 
 == is it fast enough?
@@ -155,7 +157,7 @@ image::SequentialMapReduceWordCountBenchmark-NonThreadLocalStopwords.svg[backgro
 [role="stretch"]
 [source,java,indent=0]
 ----
-include::{sourcedir}/mapreduce-wordcount/src/main/java/pl/symentis/wordcount/stopwords/NonThreadLocalStopwords.java[lines=13..38]
+include::{sourcedir}/mapreduce-wordcount/src/main/java/pl/symentis/wordcount/stopwords/NonThreadLocalStopwords.java[lines=29..32]
 ----
 
 === !
@@ -171,7 +173,7 @@ image::SequentialMapReduceWordCountBenchmark-ICUThreadLocalStopwords.svg[backgro
 [role="stretch"]
 [source,java,indent=0]
 ----
-include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/mapper/HashMapOutput.java[lines=17..26]
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/mapper/HashMapOutput.java[lines=12..21]
 ----
 
 === is it fast enough?
@@ -211,7 +213,7 @@ why do you think you can do so for multiple threads
 [role="stretch"]
 [source,java,indent=0]
 ----
-include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/ParallelMapReduce.java[lines=46..72]
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/ParallelMapReduce.java[lines=45..71]
 ----
 
 === conquer
@@ -245,13 +247,13 @@ image::ParallelMapReduce-32-threads-jmc.png[background]
 
 === contention stupid
 
-BlockingQueue in ThreadPool
+`BlockingQueue` in `ThreadPoolExecutor`
 
-ConcurrentHashMap
+`ConcurrentHashMap`
 
 === batching
 
-send bigger chunks of data into ThreadPool
+send bigger chunks of data into `ThreadPoolExecutor`
 
 don't share ConcurrentHashMap +
 (it will require additional phase)
@@ -261,7 +263,7 @@ don't share ConcurrentHashMap +
 [role="stretch"]
 [source,java,indent=0]
 ----
-include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/BatchingParallelMapReduce.java[lines=72..90]
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/BatchingParallelMapReduce.java[lines=63..86]
 ----
 
 === !
@@ -269,7 +271,7 @@ include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/Bat
 [role="stretch"]
 [source,java,indent=0]
 ----
-include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/BatchingParallelMapReduce.java[lines=148..155]
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/BatchingParallelMapReduce.java[lines=105..117]
 ----
 
 === !
@@ -277,7 +279,7 @@ include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/Bat
 [role="stretch"]
 [source,java,indent=0]
 ----
-include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/BatchingParallelMapReduce.java[lines=109..121]
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/BatchingParallelMapReduce.java[lines=144..151]
 ----
 
 === is it fast enough?
@@ -298,19 +300,25 @@ image::https://media.giphy.com/media/OH2rL6DVTNpte/giphy.gif[background]
 
 image::https://media.giphy.com/media/zSZogXiRS2zjG/giphy.gif[background]
 
-=== ForkJoinPool
+== ForkJoinPool
+
+
+=== !
 
 [role="stretch"]
 [source,java,indent=0]
 ----
-include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/ForkJoinMapReduce.java[lines=47..75]
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/ForkJoinMapReduce.java[lines=50..78]
 ----
 
 === my eyes are bleeding
 
 This was probably worst `RecursiveTask` implementation you have every seen,
 
-blocking operation (use ManagedBlocking)
+we he blocking operation in task +
+(use ManagedBlocker)
+
+use `CountedCompleter` for task coordination
 
 but?
 
