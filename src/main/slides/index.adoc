@@ -194,6 +194,7 @@ EclipseMultiMap,"thrpt",1.830915, ops/s
 
 === is it fast enough?
 
+[role=highlight_section_title]
 === threads !!!
 
 image::https://media.giphy.com/media/XUVPMUlUNUAog/giphy.gif[background, size=contain]
@@ -235,7 +236,14 @@ Parallel,"thrpt",2.895935,ops/s
 
 === moar threads
 
-// here csv
+[format="csv", options="header"]
+|===
+(threadPoolMaxSize),   Mode,  Score, Units
+                  4,  thrpt,  3.930, ops/s
+                  8,  thrpt,  3.915, ops/s
+                 16,  thrpt,  2.516, ops/s
+                 32,  thrpt,  2.618, ops/s
+|===
 
 === flight recorder
 
@@ -271,7 +279,7 @@ include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/Bat
 [role="stretch"]
 [source,java,indent=0]
 ----
-include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/BatchingParallelMapReduce.java[lines=105..117]
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/BatchingParallelMapReduce.java[lines=144..151]
 ----
 
 === !
@@ -279,7 +287,7 @@ include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/Bat
 [role="stretch"]
 [source,java,indent=0]
 ----
-include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/BatchingParallelMapReduce.java[lines=144..151]
+include::{sourcedir}/mapreduce-framework/src/main/java/pl/symentis/mapreduce/BatchingParallelMapReduce.java[lines=105..117]
 ----
 
 === is it fast enough?
@@ -298,7 +306,7 @@ image::https://media.giphy.com/media/OH2rL6DVTNpte/giphy.gif[background]
 
 === !
 
-image::https://media.giphy.com/media/zSZogXiRS2zjG/giphy.gif[background]
+image::https://media.giphy.com/media/zSZogXiRS2zjG/giphy.gif[background,size=contain]
 
 == ForkJoinPool
 
@@ -365,4 +373,17 @@ which you can find at
 
 https://bitbucket.org/symentis/fast-enough/[]
 
-=== the end
+=== remeber
+
+code
+
+profile
+
+analyze
+
+repeat
+
+
+=== !
+
+image::https://media.giphy.com/media/26AHC0kdj8IeLkmBy/giphy.gif[background]

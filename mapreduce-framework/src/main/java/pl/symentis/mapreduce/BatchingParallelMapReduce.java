@@ -4,6 +4,8 @@ import pl.symentis.mapreduce.mapper.HashMapOutput;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.*;
 
@@ -102,8 +104,8 @@ public class BatchingParallelMapReduce implements MapReduce {
         }
     }
 
-    private <V, K> Map<K, List<V>> merge(ConcurrentLinkedDeque<Map<K, List<V>>> mapResults) {
-        return mapResults.stream()
+    public static  <V, K> Map<K, List<V>> merge(ConcurrentLinkedDeque<Map<K, List<V>>> mapResults) {
+        return mapResults.parallelStream()
                 .map(Map::entrySet)
                 .flatMap(Set::stream)
                 .collect(
@@ -153,8 +155,10 @@ public class BatchingParallelMapReduce implements MapReduce {
     }
 
     private static <V> List<V> sum(List<V> op1, List<V> op2) {
-        op1.addAll(op2);
-        return op2;
+        ArrayList<V> vs = new ArrayList<>(op1.size() + op2.size());
+        vs.addAll(op1);
+        vs.addAll(op2);
+        return vs;
     }
 
 }
