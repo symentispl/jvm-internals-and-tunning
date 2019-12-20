@@ -11,16 +11,40 @@
 
 	<name>jvm-internals</name>
 
-	<prerequisites>
-		<maven>3.6</maven>
-	</prerequisites>
-
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
 
 	<build>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-invoker-plugin</artifactId>
+					<version>3.2.1</version>
+				</plugin>
+			</plugins>
+		</pluginManagement>
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-invoker-plugin</artifactId>
+				<configuration>
+					<debug>true</debug>
+					<failIfNoProjects>true</failIfNoProjects>
+					<projectsDirectory>modules</projectsDirectory>
+					<cloneProjectsTo>${project.build.directory}/integration</cloneProjectsTo>
+				</configuration>
+				<executions>
+					<execution>
+						<id>integration-test</id>
+						<goals>
+							<goal>install</goal>
+							<goal>run</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
@@ -95,13 +119,4 @@
 
 	</dependencyManagement>
 
-	<modules>
-		<module>modules/gc-in-openjdk</module>
-		<module>modules/java-io-wars</module>
-		<module>modules/jit-me-baby</module>
-		<module>modules/mutants-xenomorphs-and-bytecode</module>
-		<module>modules/voyeurs-in-jvm-land</module>
-		<module>modules/micro-benchmarks</module>
-		<module>modules/concurrency-primitives</module>
-	</modules>
 </project>
