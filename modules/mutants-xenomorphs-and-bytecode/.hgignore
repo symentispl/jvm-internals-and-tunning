@@ -1,0 +1,9 @@
+syntax: glob
+
+target/
+.classpath
+.project
+.settings/
+__pycache__/
+*.pyc
+.pybuild/
