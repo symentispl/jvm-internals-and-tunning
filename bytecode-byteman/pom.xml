@@ -9,6 +9,10 @@
 	</parent>
 	<artifactId>bytecode-byteman</artifactId>
 
+	<properties>
+		<byteman.version>4.0.9</byteman.version>
+	</properties>
+
 	<build>
 		<plugins>
 			<plugin>
@@ -27,7 +31,7 @@
 								<artifactItem>
 									<groupId>org.jboss.byteman</groupId>
 									<artifactId>byteman-download</artifactId>
-									<version>3.0.8</version>
+									<version>${byteman.version}</version>
 									<classifier>full</classifier>
 									<type>zip</type>
 								</artifactItem>
@@ -39,7 +43,7 @@
 			<plugin>
 				<groupId>org.jboss.byteman</groupId>
 				<artifactId>byteman-rulecheck-maven-plugin</artifactId>
-				<version>3.0.8</version>
+				<version>${byteman.version}</version>
 				<executions>
 					<execution>
 						<id>rulecheck-test</id>
@@ -138,14 +142,14 @@
 		<dependency>
 			<groupId>org.jboss.byteman</groupId>
 			<artifactId>byteman-bmunit</artifactId>
-			<version>3.0.8</version>
+			<version>${byteman.version}</version>
 			<scope>test</scope>
 		</dependency>
 
 		<dependency>
 			<groupId>org.jboss.byteman</groupId>
 			<artifactId>byteman</artifactId>
-			<version>3.0.8</version>
+			<version>${byteman.version}</version>
 			<scope>test</scope>
 		</dependency>
 
