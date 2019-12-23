@@ -40,15 +40,15 @@
   - name: install SDKMAN
     shell: curl -s "https://get.sdkman.io" | bash
     args:
-      creates: "~/.sdkman"
+      creates: "/home/ubuntu/.sdkman"
   - name: install JDK
-    shell: ". ~/.sdkman/bin/sdkman-init.sh && sdk update && sdk install java 11.0.5.hs-adpt"
+    shell: ". /home/ubuntu/.sdkman/bin/sdkman-init.sh && sdk update && sdk install java 11.0.5.hs-adpt"
     args:
-      creates: "~/.sdkman/candidates/java/13.0.0.hs-adpt/"
+      creates: "/home/ubuntu/.sdkman/candidates/java/11.0.5.hs-adpt/"
       executable: /bin/bash
   - name: create async profiler directory
     file:
-      path: "~/tools/async-profiler"
+      path: "/home/ubuntu/tools/async-profiler"
       state: directory
   - name: install async profiler
     unarchive:
@@ -58,9 +58,13 @@
       creates: "/home/ubuntu/tools/async-profiler/profiler.sh"
   - name: create flamegraphs directory
     file:
-      path: "~/tools/flamegraphs"
+      path: "/home/ubuntu/tools/flamegraphs"
       state: directory
   - name: install flamegraphs
     git:
       repo: https://github.com/brendangregg/FlameGraph.git
       dest: "/home/ubuntu/tools/flamegraphs"
+  - name: install hsdis
+    copy:
+        src: hsdis-amd64.so
+        dest: /home/ubuntu/.sdkman/candidates/java/11.0.5.hs-adpt/lib/server/hsdis-amd64.so

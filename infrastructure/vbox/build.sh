@@ -2,23 +2,50 @@
 set -eux
 
 #
-# this script build virtualbox image for the training
+# this script builds virtualbox image for the training
 #
 
+##
 # first check if SSH private/public key exists
 ssh_private_key_file="workshops.key"
-ssh_public_key_file="workshops.key.pub"
+source_path="ubuntu-19.10-server-cloudimg-amd64.ova"
+
+if [[ "$#" -gt 0 ]]; then
+	while [[ "$#" -gt 0 ]]; do
+		case $1 in
+			--ssh-private-key-file)
+				ssh_private_key_file=$2
+				shift 2
+				;;
+			--source-path)
+				source_path=$2
+				shift 2
+				;;
+			*)
+				echo "unrecognized argument $1"
+				exit 1
+		esac
+	done
+fi
+
 
 if [[ ! -f "$ssh_private_key_file" ]]; then
   #statements
-  echo "SSH private key $ssh_private_key_file doesn't exist"
+  echo -e "SSH private key $ssh_private_key_file doesn't exist, please generate keys with:\n\tssh-keygen -f workshops.key"
   exit 1
 fi
 
+ssh_public_key_file="${ssh_private_key_file}.pub"
+
 if [[ ! -f "$ssh_public_key_file" ]]; then
   #statements
-  echo "SSH public key $ssh_public_key_file doesn't exist"
+  echo -e "SSH public key $ssh_public_key_file doesn't exist, please generate keys with:\n\tssh-keygen -f workshops.key"
   exit 1
+fi
+
+if [[ ! -f "$source_path" ]]; then
+	echo "VirtualBox image at $source_path, doesn't exist"
+	exit 1
 fi
 
 # generate iso
