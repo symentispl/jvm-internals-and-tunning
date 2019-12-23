@@ -2,6 +2,7 @@ package pl.symentis.bytecode.byteman;
 
 import org.jboss.byteman.contrib.bmunit.BMRule;
 import org.jboss.byteman.contrib.bmunit.BMUnitRunner;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -12,6 +13,7 @@ import org.junit.runner.RunWith;
  *
  */
 @RunWith(BMUnitRunner.class)
+@Ignore( "cannot attach to JVM under JDK 11")
 public class FileProcessorTest {
 
 	@Rule
