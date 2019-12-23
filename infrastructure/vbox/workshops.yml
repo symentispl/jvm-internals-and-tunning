@@ -1,0 +1,66 @@
+---
+- hosts: all
+  user: ubuntu
+  strategy: free
+  tasks:
+  - name: install packages
+    apt:
+      name: "{{ item }}"
+      update_cache: yes
+    loop:
+      - sysdig
+      - linux-tools-common
+      - linux-tools-generic
+      - gdb
+      - sysstat
+      - lsof
+      - procps
+      - unzip
+      # SDKMAN needs it
+      - zip
+      # we need it to install flamegraphs
+      - git
+      - ca-certificates
+      - perl-modules
+    become: yes
+  - name: set perf_event_paranoid parameter
+    sysctl:
+      name: kernel.perf_event_paranoid
+      value: 1
+      reload: yes
+      state: present
+    become: yes
+  - name: set kptr_restrict parameter
+    sysctl:
+      name: kernel.kptr_restrict
+      value: 0
+      reload: yes
+      state: present
+    become: yes
+  - name: install SDKMAN
+    shell: curl -s "https://get.sdkman.io" | bash
+    args:
+      creates: "~/.sdkman"
+  - name: install JDK
+    shell: ". ~/.sdkman/bin/sdkman-init.sh && sdk update && sdk install java 11.0.5.hs-adpt"
+    args:
+      creates: "~/.sdkman/candidates/java/13.0.0.hs-adpt/"
+      executable: /bin/bash
+  - name: create async profiler directory
+    file:
+      path: "~/tools/async-profiler"
+      state: directory
+  - name: install async profiler
+    unarchive:
+      src: https://github.com/jvm-profiling-tools/async-profiler/releases/download/v1.6/async-profiler-1.6-linux-x64.tar.gz
+      dest: "/home/ubuntu/tools/async-profiler"
+      remote_src: yes
+      creates: "/home/ubuntu/tools/async-profiler/profiler.sh"
+  - name: create flamegraphs directory
+    file:
+      path: "~/tools/flamegraphs"
+      state: directory
+  - name: install flamegraphs
+    git:
+      repo: https://github.com/brendangregg/FlameGraph.git
+      dest: "/home/ubuntu/tools/flamegraphs"

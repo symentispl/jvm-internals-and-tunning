@@ -1,0 +1,40 @@
+{
+  "variables": {
+    "shutdown_command": "sudo shutdown -P now",
+    "headless": "true"
+  },
+  "builders": [{
+    "type": "virtualbox-ovf",
+    "source_path": "{{user `source_path`}}",
+    "ssh_username": "ubuntu",
+    "ssh_private_key_file": "{{user `ssh_private_key_file`}}",
+    "ssh_timeout": "30m",
+    "shutdown_command": "{{user `shutdown_command`}}",
+    "headless" : "{{ user `headless` }}",
+    "vboxmanage": [
+      ["modifyvm", "{{.Name}}", "--memory", "4096"],
+      ["modifyvm", "{{.Name}}", "--cpus", "4"],
+      ["modifyvm", "{{.Name}}", "--uart1", "0x3f8","4"],
+      ["modifyvm", "{{.Name}}", "--uartmode1", "disconnected"],
+      ["modifyvm", "{{.Name}}", "--boot1", "disk"],
+      ["modifyvm", "{{.Name}}", "--boot2", "none"],
+      ["modifyvm", "{{.Name}}", "--boot3", "none"],
+      ["modifyvm", "{{.Name}}", "--boot4", "none"],
+      ["storagectl", "{{.Name}}", "--name","Floppy", "--remove"],
+      ["storageattach","{{.Name}}", "--storagectl",
+       "IDE","--port","0","--device","0","--type","dvddrive",
+       "--medium","{{user `cloud_init_data_iso`}}"]
+    ],
+    "vboxmanage_post" : [
+      ["storageattach","{{.Name}}", "--storagectl",
+       "IDE","--port","0","--device","0","--type","dvddrive",
+       "--medium","none"]      
+    ]
+  }],
+  "provisioners": [
+    {
+          "type": "ansible",
+          "playbook_file": "./workshops.yml"
+        }
+  ]
+}
