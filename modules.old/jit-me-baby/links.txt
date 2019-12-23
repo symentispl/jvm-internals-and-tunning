@@ -1,6 +1,0 @@
-https://www.cs.cmu.edu/~fp/courses/15213-s07/misc/asm64-handout.pdf
-https://www.cs.uaf.edu/2012/fall/cs301/lecture/09_10_functions.html
-http://www.slideshare.net/CharlesNutter/redev-2011-jvm-jit-for-dummies-what-the-jvm-does-with-your-bytecode-when-youre-not-looking
-http://www.beyondjava.net/blog/a-close-look-at-javas-jit-dont-waste-your-time-on-local-optimizations/
-http://www.imada.sdu.dk/Courses/DM18/Litteratur/IntelnATT.htm
-http://www.swansontec.com/sregisters.html
