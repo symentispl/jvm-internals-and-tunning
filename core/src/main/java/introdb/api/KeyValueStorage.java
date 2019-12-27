@@ -11,4 +11,8 @@ public interface KeyValueStorage {
 
   void put(Entry entry) throws IOException;
 
+  /**
+   * Close underlying storage (for example file)
+   */
+  void closeForcibly() throws IOException;
 }

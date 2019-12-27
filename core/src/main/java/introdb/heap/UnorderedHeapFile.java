@@ -1,6 +1,7 @@
 package introdb.heap;
 
-import static java.lang.String.format;
+import introdb.api.Entry;
+import introdb.api.KeyValueStorage;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -18,6 +19,8 @@ import introdb.api.KeyValueStorage;
 import introdb.fs.Block;
 import introdb.fs.BlockFile;
 import introdb.record.TransientRecord;
+
+import static java.lang.String.format;
 
 class UnorderedHeapFile implements KeyValueStorage, Iterable<TransientRecord> {
 
@@ -130,7 +133,7 @@ class UnorderedHeapFile implements KeyValueStorage, Iterable<TransientRecord> {
 
 	/**
 	 * Forces underlying file channel to close
-	 * 
+	 *
 	 * @throws IOException
 	 */
 	public void closeForcibly() throws IOException {
