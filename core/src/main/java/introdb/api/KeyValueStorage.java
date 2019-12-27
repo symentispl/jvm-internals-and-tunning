@@ -3,7 +3,7 @@ package introdb.api;
 import java.io.IOException;
 import java.io.Serializable;
 
-public interface Store {
+public interface KeyValueStorage {
 
   Object remove(Serializable key) throws IOException, ClassNotFoundException;
 

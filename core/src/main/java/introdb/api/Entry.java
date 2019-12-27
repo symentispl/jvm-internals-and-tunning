@@ -1,8 +1,8 @@
-package introdb.heap;
+package introdb.api;
 
 import java.io.Serializable;
 
-class Entry {
+public class Entry {
 
 	private final Serializable key;
 	private final Serializable value;
@@ -21,11 +21,11 @@ class Entry {
 		return value;
 	}
 
-  @Override
-  public String toString() {
-    var builder = new StringBuilder();
-    builder.append("Entry [key=").append(key).append(", value=").append(value).append("]");
-    return builder.toString();
-  }
+	@Override
+	public String toString() {
+		var builder = new StringBuilder();
+		builder.append("Entry [key=").append(key).append(", value=").append(value).append("]");
+		return builder.toString();
+	}
 
 }

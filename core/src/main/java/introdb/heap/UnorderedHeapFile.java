@@ -2,12 +2,7 @@ package introdb.heap;
 
 import static java.lang.String.format;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOError;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -15,242 +10,131 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.Set;
+import java.util.logging.Logger;
 
-import introdb.heap.Record.Mark;
+import introdb.api.Entry;
+import introdb.api.KeyValueStorage;
+import introdb.fs.Block;
+import introdb.fs.BlockFile;
+import introdb.record.TransientRecord;
 
-class UnorderedHeapFile implements Store, Iterable<Record> {
+class UnorderedHeapFile implements KeyValueStorage, Iterable<TransientRecord> {
 
-  private final PageCache pageCache;
-  private final int maxNrPages;
-  private final int pageSize;
+	private static final Logger LOGGER = Logger.getLogger(UnorderedHeapFile.class.getName());
 
-  private ByteBuffer lastPage;
-  private int lastPageNumber = -1;
+	private final int maxBlockNumber;
+	private final int blockSize;
 
-  private final FileChannel file;
+	private int lastBlockNumber = 0;
 
-  UnorderedHeapFile(Path path, int maxNrPages, int pageSize) throws IOException {
-    this.file = FileChannel.open(path,
-        Set.of(StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE));
-    this.pageCache = new PageCache(maxNrPages, this::readPage);
-    this.maxNrPages = maxNrPages;
-    this.pageSize = pageSize;
-    nextPage();
-  }
+	private final FileChannel file;
+	private final BlockFile blockFile;
 
-  @Override
-  public void put(Entry entry) {
+	UnorderedHeapFile( Path path, int maxBlockNumber, int blockSize ) throws IOException {
+		this.file = FileChannel.open(path,
+				Set.of(StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE));
+		blockFile = new BlockFile( file, blockSize );
+		this.maxBlockNumber = maxBlockNumber;
+		this.blockSize = blockSize;
+	}
 
-    assertTooManyPages();
+	@Override
+	public Iterator<TransientRecord> iterator() {
+		return null;
+	}
 
-    var newRecord = Record.of(entry);
+	@Override
+	public Object remove(Serializable key) throws IOException, ClassNotFoundException {
+		byte[] keySer = TransientRecord.serializeKey(key);
+		var localLastBlockNumber = lastBlockNumber;
+		for ( int currentPage = 0; currentPage <= localLastBlockNumber; currentPage++) {
+			var block = blockFile.read(currentPage, () -> ByteBuffer.allocate( blockSize ));
+			var cursor = block.cursor();
+			while (cursor.hasNext()) {
+				var record = cursor.next();
+				if (record.isPresent() && Arrays.equals(keySer, record.key())) {
+					cursor.remove();
+					block.flush(blockFile);
+					return record.valueAsObject();
+				}
+			}
+		}
+		return null;
+	}
 
-    assertRecordSize(newRecord);
+	@Override
+	public Object get(Serializable key) throws IOException, ClassNotFoundException {
 
-    var iterator = cursor();
-    while (iterator.hasNext()) {
-      var record = iterator.next();
-      if (Arrays.equals(newRecord.key(), record.key())) {
-        iterator.remove();
-        break;
-      }
-    }
+		byte[] keySer = TransientRecord.serializeKey(key);
+		var localLastBlockNumber = lastBlockNumber;
+		for ( int currentPage = 0; currentPage <= localLastBlockNumber; currentPage++) {
+			var block = blockFile.read(currentPage, () -> ByteBuffer.allocate( blockSize ));
+			for (var record : block) {
+				if (record.isPresent()) {
+					if (Arrays.equals(keySer, record.key())) {
+						return record.valueAsObject();
+					}
+				} else if (record.isEmpty()) {
+					// last record in page
+					break;
+				}
+			}
+		}
+		return null;
+	}
 
-    if (lastPage.remaining() < newRecord.size()) {
-      nextPage();
-    }
+	@Override
+	public void put(Entry entry) throws IOException {
 
-    var src = newRecord.write(lastPage);
+		LOGGER.fine(() -> format("putting entry %s", entry));
 
-    flushPage(src, lastPageNumber);
-  }
+		// create record, check if it fits in page
+		var newRecord = TransientRecord.of(entry);
+		if ( newRecord.size() > blockSize ) {
+			throw new IllegalArgumentException("record to large");
+		}
+		var localLastBlockNumber=lastBlockNumber;
+		// iterate over pages
+		for ( int currentPage = 0; currentPage <= localLastBlockNumber; currentPage++) {
+			var block = blockFile.read(currentPage, () -> ByteBuffer.allocate( blockSize ));
+			var cursor = block.cursor();
+			while (cursor.hasNext()) {
+				var record = cursor.next();
+				if (record.isPresent() && Arrays.equals(newRecord.key(), record.key())) {
+					cursor.remove();
+					block.flush(blockFile);
+					break;
 
-  private void nextPage() {
-    lastPage = ByteBuffer.allocate(pageSize);
-    lastPageNumber++;
-    pageCache.put(lastPageNumber, lastPage);
-  }
+				}
+			}
+		}
+		append(newRecord);
+	}
 
-  @Override
-  public Object get(Serializable key) {
+	private void append(TransientRecord record) throws IOException {
 
-    // serialize key
-    var keySer = serializeKey(key);
+		var block = blockFile.read( lastBlockNumber, () -> ByteBuffer.allocate( blockSize ));
 
-    var iterator = cursor();
-    while (iterator.hasNext()) {
-      var record = iterator.next();
-      if (Arrays.equals(keySer, record.key())) {
-        return deserializeValue(record.value());
-      }
-    }
-    return null;
-  }
+		if (block.remaining() < record.size()) {
+			block = Block.create( ++lastBlockNumber, blockSize );
+		}
+		append(record, block);
+	}
 
-  public Object remove(Serializable key) {
-    // serialize key
-    var keySer = serializeKey(key);
+	private void append(TransientRecord record, Block block) throws IOException {
+		LOGGER.fine(() -> format( "appending record at block %d, %s", lastBlockNumber, block));
+		block.write(record);
+		block.flush(blockFile);
+	}
 
-    var iterator = cursor();
-    while (iterator.hasNext()) {
-      var record = iterator.next();
-      if (Arrays.equals(keySer, record.key())) {
-        var value = deserializeValue(record.value());
-        iterator.remove();
-        return value;
-      }
-    }
-    return null;
-  }
-
-  private void flushPage(ByteBuffer page, int pageNr) {
-    int position = page.position();
-    page.rewind();
-    try {
-      file.write(page, pageNr * pageSize);
-    } catch (IOException e) {
-      throw new IOError(e);
-    }
-    page.position(position);
-  }
-
-  private ByteBuffer readPage(int pageNr) {
-
-    if (pageNr > lastPageNumber) {
-      return null;
-    }
-
-    ByteBuffer page = ByteBuffer.allocate(pageSize);
-    try {
-      var bytesRead = file.read(page, pageNr * pageSize);
-      if (bytesRead != pageSize) {
-        throw new IllegalStateException(format("read page size is %d, file corrupted", bytesRead));
-      }
-      return page;
-    } catch (IOException e) {
-      throw new IOError(e);
-    }
-
-  }
-
-  private void assertRecordSize(Record newRecord) {
-    if (newRecord.size() > pageSize) {
-      throw new IllegalArgumentException("entry to big");
-    }
-  }
-
-  private void assertTooManyPages() {
-    if (lastPageNumber >= maxNrPages) {
-      throw new TooManyPages();
-    }
-  }
-
-  private static Object deserializeValue(byte[] value) {
-    try (var inputStream = new ByteArrayInputStream(value)) {
-      try (var objectInput = new ObjectInputStream(inputStream)) {
-        return objectInput.readObject();
-      }
-    } catch (IOException | ClassNotFoundException e) {
-      throw new IOError(e);
-    }
-  }
-
-  private static byte[] serializeKey(Serializable key) {
-    try (var byteArray = new ByteArrayOutputStream()) {
-      try (var objectOutput = new ObjectOutputStream(byteArray)) {
-        objectOutput.writeObject(key);
-      }
-      return byteArray.toByteArray();
-    } catch (IOException e) {
-      throw new IOError(e);
-    }
-  }
-
-  class Cursor implements Iterator<Record> {
-
-    int pageNr;
-    ByteBuffer currentPage;
-    boolean hasNext;
-    private int inPagePosition = -1;
-
-    @Override
-    public boolean hasNext() {
-      if (!hasNext) {
-        inPagePosition = -1;
-        do {
-          if (currentPage == null) {
-            var page = pageCache.get(pageNr);
-            if (page == null) {
-              return hasNext = false;
-            }
-            currentPage = page.duplicate().rewind();
-          }
-
-          byte mark = 0;
-          do {
-            mark = currentPage.get();
-            if (Mark.isPresent(mark)) {
-              return hasNext = true;
-            }
-            if (Mark.isRemoved(mark)) {
-              skip();
-            }
-          } while (!Mark.isEmpty(mark) || !currentPage.hasRemaining());
-
-          currentPage = null;
-          pageNr++;
-
-        } while (true);
-      }
-      return hasNext;
-    }
-
-    @Override
-    public Record next() {
-      if (hasNext || hasNext()) {
-        hasNext = false;
-        inPagePosition = currentPage.position() - 1;
-        return record();
-      }
-      throw new NoSuchElementException();
-    }
-
-    @Override
-    public void remove() {
-      if (inPagePosition < 0) {
-        throw new IllegalStateException(
-            "next() method has not yet been called, or the remove() method has already been called");
-      }
-      currentPage.put(inPagePosition, Mark.REMOVED.mark());
-      // force page flush
-      flushPage(currentPage, pageNr);
-      inPagePosition = -1;
-    }
-
-    Optional<ByteBuffer> page() {
-      return Optional.ofNullable(currentPage);
-    }
-
-    private Record record() {
-      return Record.read(currentPage);
-    }
-
-    private void skip() {
-      Record.skip(() -> currentPage);
-    }
-
-  }
-
-  Cursor cursor() {
-    return new Cursor();
-  }
-
-  @Override
-  public Iterator<Record> iterator() {
-    return cursor();
-  }
+	/**
+	 * Forces underlying file channel to close
+	 * 
+	 * @throws IOException
+	 */
+	public void closeForcibly() throws IOException {
+		file.close();
+	}
 
 }
