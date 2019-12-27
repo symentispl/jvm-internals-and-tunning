@@ -23,7 +23,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import introdb.api.Entry;
 import introdb.api.KeyValueStorage;
-import introdb.fs.HeapFileParser;
 
 class UnorderedHeapFileTest {
 
@@ -115,12 +114,9 @@ class UnorderedHeapFileTest {
 
 		// when
 		heapFile.put(newEntry(key, value));
-		HeapFileParser.parse(heapFilePath);
 		heapFile.remove(key);
-		HeapFileParser.parse(heapFilePath);
 
 		// then
-
 		assertNull(heapFile.get(key));
 
 	}
