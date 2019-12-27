@@ -11,6 +11,9 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 
+import introdb.api.Entry;
+import introdb.api.KeyValueStorage;
+
 @State(Scope.Benchmark)
 public class ReadUnorderedHeapFileBenchmark {
 	
@@ -19,7 +22,7 @@ public class ReadUnorderedHeapFileBenchmark {
 	@Param({"10","100","500"})
 	public String key;
 	
-	private Store heapFile;
+	private KeyValueStorage heapFile;
 	private Path tempFile;
 	
 	@Setup(Level.Trial)

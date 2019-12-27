@@ -1,8 +1,9 @@
 package introdb.heap;
 
-import static java.util.Arrays.fill;
+import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -10,16 +11,24 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Random;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import introdb.api.Entry;
+import introdb.api.KeyValueStorage;
+import introdb.fs.HeapFileParser;
 
 class UnorderedHeapFileTest {
 
 	private Path heapFilePath;
-	private Store heapFile;
+	private KeyValueStorage heapFile;
 
 	@BeforeEach
 	public void setUp() throws IOException {
@@ -30,6 +39,21 @@ class UnorderedHeapFileTest {
 	@AfterEach
 	public void tearDown() throws IOException {
 		Files.delete(heapFilePath);
+	}
+
+	@Test
+	void put_and_get_record() throws IOException, ClassNotFoundException {
+
+		// given
+		var firstkey = "1";
+		var firstvalue = "value1";
+
+		// when
+		heapFile.put(newEntry(firstkey, firstvalue));
+
+		// then
+		assertEquals(firstvalue, heapFile.get(firstkey));
+
 	}
 
 	@Test
@@ -49,28 +73,6 @@ class UnorderedHeapFileTest {
 		// then
 		assertEquals(firstvalue, heapFile.get(firstkey));
 		assertEquals(secondvalue, heapFile.get(secondkey));
-
-	}
-
-	@Test
-	void put_and_get_overflow_record() throws IOException, ClassNotFoundException {
-
-		// given
-		var firstkey = "1";
-		var firstvalue = new byte[2048];
-		fill(firstvalue, (byte) 1);
-
-		var secondkey = "2";
-		var secondvalue = new byte[2048];
-		fill(firstvalue, (byte) 2);
-
-		// when
-		heapFile.put(newEntry(firstkey, firstvalue));
-		heapFile.put(newEntry(secondkey, secondvalue));
-
-		// then
-		assertThat(firstvalue).isEqualTo((byte[]) heapFile.get(firstkey));
-		assertThat(secondvalue).isEqualTo((byte[]) heapFile.get(secondkey));
 
 	}
 
@@ -113,34 +115,81 @@ class UnorderedHeapFileTest {
 
 		// when
 		heapFile.put(newEntry(key, value));
+		HeapFileParser.parse(heapFilePath);
 		heapFile.remove(key);
+		HeapFileParser.parse(heapFilePath);
 
 		// then
-		assertNull((byte[]) heapFile.get(key));
+
+		assertNull(heapFile.get(key));
 
 	}
 
-	@Test
-	void small_values_overflow_page() throws ClassNotFoundException, IOException {
+	@ParameterizedTest
+	@ValueSource(ints = {256,2048})
+	void unique_keys_overflow_single_block(int valueSize) {
 
 		// given
-		byte[] value = new byte[256];
-		new Random().nextBytes(value);
+		List<Entry> entries = IntStream.range(0, 1000)
+				.mapToObj(i -> {
+					byte[] value = new byte[valueSize];
+					new Random().nextBytes(value);
+					return new Entry(Integer.toString(i), value);
+				})
+				.collect(toList());
 
 		// when
-		for (int i = 0; i < 1000; i++) {
-			heapFile.put(new Entry(Integer.toString(i), value));
-		}
+		entries.forEach(entry -> {
+			try {
+				heapFile.put(entry);
+			} catch (IOException e) {
+				fail("cannot put entry %s", e);
+			}
+		});
 
 		// then
-		for (int i = 0; i < 1000; i++) {
-			assertThat(value).isEqualTo((byte[]) heapFile.get(Integer.toString(i)));
-		}
+		entries.forEach(entry -> {
+			byte[] value = null;
+			try {
+				value = (byte[]) heapFile.get(entry.key());
+			} catch (ClassNotFoundException | IOException e) {
+				fail("cannot get entry %s", e);
+			}
+			assertThat(value).isEqualTo(entry.value());
+		});
+
+	}
+
+	@ParameterizedTest
+	@ValueSource(ints = {256,2048})
+	void same_key_small_overflow_single_block(int valueSize) throws Exception {
+
+		// given
+		List<Entry> entries = IntStream.range(0, 1000)
+				.mapToObj(i -> {
+					byte[] value = new byte[valueSize];
+					new Random().nextBytes(value);
+					return new Entry("1", value);
+				})
+				.collect(toList());
+
+		// when
+		entries.forEach(entry -> {
+			try {
+				heapFile.put(entry);
+			} catch (IOException e) {
+				fail("cannot put entry %s", e);
+			}
+		});
+
+		// then
+		var value = (byte[]) heapFile.get("1");
+		assertThat(value).isEqualTo(entries.get(999).value());
 
 	}
 
 	@Test
-	void throw_exception_when_entry_too_large() throws ClassNotFoundException, IOException {
+	void throw_exception_when_entry_too_large() {
 
 		// given
 		byte[] value = new byte[4 * 1024];
