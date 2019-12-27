@@ -28,7 +28,7 @@ public class WriteUnorderedHeapFileBenchmark {
 	private int key;
 	private List<UnorderedHeapFile> copies;
 
-	@Setup(Level.Invocation)
+	@Setup(Level.Iteration)
 	public void setUp() throws Exception {
 		buffer = new byte[bufferSize];
 		key = 0;
@@ -44,7 +44,7 @@ public class WriteUnorderedHeapFileBenchmark {
 				.collect(toList());
 	}
 
-	@TearDown(Level.Invocation)
+	@TearDown(Level.Iteration)
 	public void tearDown() throws IOException {
 		for(UnorderedHeapFile heapFile:copies) {
 			heapFile.closeForcibly();
