@@ -1,42 +1,62 @@
 package introdb.heap;
 
+import static java.util.stream.Collectors.toList;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.IntStream;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
+import org.openjdk.jmh.annotations.OperationsPerInvocation;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 
+import introdb.api.Entry;
+
 @State(Scope.Benchmark)
 public class WriteUnorderedHeapFileBenchmark {
-		
-	@Param( {"512","1024","2048"})
-	public int bufferSize; 
+
+	@Param({ "512", "1024", "2048" })
+	public int bufferSize;
 	private byte[] buffer;
-	private Store heapFile;
 	private int key;
-	private Path tempFile;
-	
-	@Setup(Level.Iteration)
+	private List<UnorderedHeapFile> copies;
+
+	@Setup(Level.Invocation)
 	public void setUp() throws Exception {
-		tempFile = Files.createTempFile("heap", "0001");
-		heapFile = new UnorderedHeapFile(tempFile, 50000, 4*1024);
 		buffer = new byte[bufferSize];
 		key = 0;
+
+		copies = IntStream.range(0, 1000)
+				.mapToObj(i -> {
+					try {
+						return new UnorderedHeapFile(Files.createTempFile("heap.", "." + i), 50000, 4 * 1024);
+					} catch (IOException e) {
+						throw new UncheckedIOException(e);
+					}
+				})
+				.collect(toList());
 	}
-	
-	@TearDown(Level.Iteration)
-	public void tearDown() throws Exception{
-		Files.delete(tempFile);
+
+	@TearDown(Level.Invocation)
+	public void tearDown() throws IOException {
+		for(UnorderedHeapFile heapFile:copies) {
+			heapFile.closeForcibly();
+		}
 	}
-	
-    @Benchmark
-    public void writeBuffer() throws Exception {
-    	heapFile.put(new Entry(key++,buffer));
-    }
+
+	@Benchmark
+	@OperationsPerInvocation(1000)
+	public void writeBuffer() throws Exception {
+		for(UnorderedHeapFile heapFile:copies) {
+			heapFile.put(new Entry(key++, buffer));			
+		}
+	}
 
 }
