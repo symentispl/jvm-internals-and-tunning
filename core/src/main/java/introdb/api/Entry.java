@@ -1,8 +1,8 @@
-package introdb.heap;
+package introdb.api;
 
 import java.io.Serializable;
 
-class Entry {
+public class Entry {
 
 	private final Serializable key;
 	private final Serializable value;
