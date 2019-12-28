@@ -8,11 +8,8 @@ import pl.symentis.wordcount.WordCount;
 
 import java.io.File;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedDeque;
 
-import static java.util.Map.entry;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class BatchingParallelJoinMapReduceTest {
@@ -37,17 +34,5 @@ public class BatchingParallelJoinMapReduceTest {
         assertThat(fmap).isEqualTo(smap);
     }
 
-    @Test
-    public void mergeResults() {
-        Map<String, List<String>> map0 = Map.of("one", List.of("0"));
-        Map<String, List<String>> map1 = Map.of("one", List.of("1"));
-
-        ConcurrentLinkedDeque<Map<String, List<String>>> dequeue = new ConcurrentLinkedDeque<>();
-        dequeue.offer(map0);
-        dequeue.offer(map1);
-
-        Map<String, List<String>> map = BatchingParallelMapReduce.merge(dequeue);
-        assertThat(map).containsExactly(entry("one", List.of("0", "1")));
-    }
 
 }
