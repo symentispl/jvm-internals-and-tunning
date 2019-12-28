@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -eux
+set -eu
 
 #
 # this script builds virtualbox image for the training
@@ -30,25 +30,30 @@ fi
 
 
 if [[ ! -f "$ssh_private_key_file" ]]; then
-  #statements
-  echo -e "SSH private key $ssh_private_key_file doesn't exist, please generate keys with:\n\tssh-keygen -f workshops.key"
+  __usage="SSH private key $ssh_private_key_file doesn't exist, please generate keys with:
+	ssh-keygen -f workshops.key
+or run with build.sh --ssh-private-key-file [private-key-file]"
+  echo "$__usage"
   exit 1
 fi
 
 ssh_public_key_file="${ssh_private_key_file}.pub"
 
 if [[ ! -f "$ssh_public_key_file" ]]; then
-  #statements
-  echo -e "SSH public key $ssh_public_key_file doesn't exist, please generate keys with:\n\tssh-keygen -f workshops.key"
+  __usage="SSH public key $ssh_public_key_file doesn't exist, please generate keys with:
+	ssh-keygen -f workshops.key
+or run with build.sh --ssh-public-key-file [public-key-file]"
+  echo "$__usage"
   exit 1
 fi
 
 if [[ ! -f "$source_path" ]]; then
-	echo "VirtualBox image at $source_path, doesn't exist"
+	echo "VirtualBox image at $source_path, doesn't exist copy image or run with --source-path [source-path]"
 	exit 1
 fi
 
-# generate iso
+##
+# generate iso for cloud init
 temp_iso_dir=$(mktemp -d)
 
 cat <<EOT >> "$temp_iso_dir/user-data"
@@ -73,10 +78,10 @@ iso_image_output=cloud-init-data.iso
 
 cloud_init_data_iso="$temp_iso_dir/$iso_image_output"
 
-
+##
 # run packer
 PACKER_LOG=1 packer build \
   -var "ssh_private_key_file=$ssh_private_key_file" \
   -var "cloud_init_data_iso=$cloud_init_data_iso" \
-  -var "source_path=/home/jarek/Pobrane/ubuntu-19.10-server-cloudimg-amd64.ova" \
+  -var "source_path=$source_path" \
   template.json

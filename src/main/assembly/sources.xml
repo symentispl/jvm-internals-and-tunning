@@ -7,6 +7,9 @@
 	</formats>
 	<fileSets>
 		<fileSet>
+			<excludes>
+				<exclude>modules/src/**</exclude>
+			</excludes>
 			<includes>
 				<include>mvnw</include>
 				<include>mvnw.cmd</include>

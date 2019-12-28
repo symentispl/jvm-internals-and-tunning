@@ -11,6 +11,8 @@
     "ssh_timeout": "30m",
     "shutdown_command": "{{user `shutdown_command`}}",
     "headless" : "{{ user `headless` }}",
+    "format" : "ova",
+    "output_directory" : "jvm-workshops",
     "vboxmanage": [
       ["modifyvm", "{{.Name}}", "--memory", "4096"],
       ["modifyvm", "{{.Name}}", "--cpus", "4"],
