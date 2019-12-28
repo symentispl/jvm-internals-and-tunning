@@ -46,11 +46,11 @@ public class BatchingParallelMapReduce implements MapReduce {
     }
 
     @Override
-    public <In, MapperKey, MapperValue, ReducerKey, ReducerValue> void run(
+    public <In, MK, MV, RK, RV> void run(
             Input<In> input,
-            Mapper<In, MapperKey, MapperValue> mapper,
-            Reducer<MapperKey, MapperValue, ReducerKey, ReducerValue> reducer,
-            Output<ReducerKey, ReducerValue> output) {
+            Mapper<In, MK, MV> mapper,
+            Reducer<MK, MV, RK, RV> reducer,
+            Output<RK, RV> output) {
 
         Phaser rootPhaser = new Phaser() {
             @Override
@@ -63,7 +63,7 @@ public class BatchingParallelMapReduce implements MapReduce {
         int tasksPerPhaser = 0;
         Phaser phaser = new Phaser(rootPhaser);
 
-        ConcurrentLinkedDeque<Map<MapperKey, List<MapperValue>>> mapResults = new ConcurrentLinkedDeque<>();
+        ConcurrentLinkedDeque<Map<MK, List<MV>>> mapResults = new ConcurrentLinkedDeque<>();
         ArrayList<In> batch = new ArrayList<>(batchSize);
 
         while (input.hasNext()) {
@@ -86,23 +86,26 @@ public class BatchingParallelMapReduce implements MapReduce {
         rootPhaser.awaitAdvance(0);
 
         // merge map results
-        Map<MapperKey, List<MapperValue>> map = merge(mapResults);
+        Map<MK, List<MV>> map = merge(mapResults,reducer);
 
         // reduce
-        // reduce(reducer, output, map);
+        reduce(reducer, output, map);
 
     }
 
-    private <MapperKey, MapperValue, ReducerKey, ReducerValue> void reduce(
-            Reducer<MapperKey, MapperValue, ReducerKey, ReducerValue> reducer, Output<ReducerKey, ReducerValue> output,
-            Map<MapperKey, List<MapperValue>> map) {
-        Set<MapperKey> keys = map.keySet();
-        for (MapperKey key : keys) {
+    private <MK, MV, RK, RV> void reduce(
+            Reducer<MK, MV, RK, RV> reducer, 
+            Output<RK, RV> output,
+            Map<MK, List<MV>> map) {
+        Set<MK> keys = map.keySet();
+        for (MK key : keys) {
             reducer.reduce(key, map.get(key), output);
         }
     }
 
-    public static  <V, K,ReducerKey,ReducerV> Map<K, List<V>> merge(ConcurrentLinkedDeque<Map<K, List<V>>> mapResults, Reducer<K,V,ReducerKey,ReducerV> reducer) {
+    static  <MK, MV, RK,RV> Map<MK, List<MV>> merge(
+    		ConcurrentLinkedDeque<Map<MK, List<MV>>> mapResults, 
+    		Reducer<MK,MV,RK,RV> reducer) {
         return mapResults.parallelStream()
                 .map(Map::entrySet)
                 .flatMap(Set::stream)
@@ -111,7 +114,7 @@ public class BatchingParallelMapReduce implements MapReduce {
                                 Map.Entry::getKey,
                                 mapping(
                                         entry -> {
-                                            HashMapOutput<ReducerKey, ReducerV> out = new HashMapOutput<>();
+                                            HashMapOutput<RK, RV> out = new HashMapOutput<>();
                                             reducer.reduce(entry.getKey(), entry.getValue(), out);
                                             return entry.getValue();
                                         },

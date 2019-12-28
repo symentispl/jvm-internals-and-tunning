@@ -48,21 +48,21 @@ public class SequentialMapReduce implements MapReduce {
     }
 
     @Override
-    public <In, MapperKey, MapperValue, ReducerKey, ReducerValue> void run(
+    public <In, MK, MV, RK, RV> void run(
             Input<In> input,
-            Mapper<In, MapperKey, MapperValue> mapper,
-            Reducer<MapperKey, MapperValue, ReducerKey, ReducerValue> reducer,
-            Output<ReducerKey, ReducerValue> output) {
+            Mapper<In, MK, MV> mapper,
+            Reducer<MK, MV, RK, RV> reducer,
+            Output<RK, RV> output) {
 
         @SuppressWarnings("unchecked")
-        MapperOutput<MapperKey, MapperValue> mapperOutput = mapperOutputSupplier.get();
+        MapperOutput<MK, MV> mapperOutput = mapperOutputSupplier.get();
 
         while (input.hasNext()) {
             mapper.map(input.next(), mapperOutput);
         }
 
-        Set<MapperKey> keys = mapperOutput.keys();
-        for (MapperKey key : keys) {
+        Set<MK> keys = mapperOutput.keys();
+        for (MK key : keys) {
             reducer.reduce(key, () -> mapperOutput.values(key), output);
         }
     }
