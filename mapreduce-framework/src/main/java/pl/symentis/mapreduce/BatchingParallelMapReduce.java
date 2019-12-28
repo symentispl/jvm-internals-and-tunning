@@ -4,8 +4,6 @@ import pl.symentis.mapreduce.mapper.HashMapOutput;
 
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.*;
 
@@ -15,7 +13,7 @@ public class BatchingParallelMapReduce implements MapReduce {
 
         private int threadPoolMaxSize = Runtime.getRuntime().availableProcessors();
         private int phaserMaxTasks = 1000;
-        private int batchSize = 1000;
+        private int batchSize = 10000;
 
         public Builder withThreadPoolSize(int threadPoolMaxSize) {
             this.threadPoolMaxSize = threadPoolMaxSize;
@@ -91,7 +89,7 @@ public class BatchingParallelMapReduce implements MapReduce {
         Map<MapperKey, List<MapperValue>> map = merge(mapResults);
 
         // reduce
-        reduce(reducer, output, map);
+        // reduce(reducer, output, map);
 
     }
 
@@ -104,7 +102,7 @@ public class BatchingParallelMapReduce implements MapReduce {
         }
     }
 
-    public static  <V, K> Map<K, List<V>> merge(ConcurrentLinkedDeque<Map<K, List<V>>> mapResults) {
+    public static  <V, K,ReducerKey,ReducerV> Map<K, List<V>> merge(ConcurrentLinkedDeque<Map<K, List<V>>> mapResults, Reducer<K,V,ReducerKey,ReducerV> reducer) {
         return mapResults.parallelStream()
                 .map(Map::entrySet)
                 .flatMap(Set::stream)
@@ -112,7 +110,11 @@ public class BatchingParallelMapReduce implements MapReduce {
                         groupingBy(
                                 Map.Entry::getKey,
                                 mapping(
-                                        Map.Entry::getValue,
+                                        entry -> {
+                                            HashMapOutput<ReducerKey, ReducerV> out = new HashMapOutput<>();
+                                            reducer.reduce(entry.getKey(), entry.getValue(), out);
+                                            return entry.getValue();
+                                        },
                                         reducing(
                                                 new ArrayList<>(),
                                                 BatchingParallelMapReduce::sum))));

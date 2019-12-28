@@ -2,7 +2,6 @@ package pl.symentis.concurrency.mapreduce;
 
 import org.junit.jupiter.api.Test;
 import pl.symentis.mapreduce.BatchingParallelMapReduce;
-import pl.symentis.mapreduce.ForkJoinMapReduce;
 import pl.symentis.mapreduce.MapReduce;
 import pl.symentis.mapreduce.SequentialMapReduce;
 import pl.symentis.wordcount.WordCount;
@@ -13,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
+import static java.util.Map.entry;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class BatchingParallelJoinMapReduceTest {
@@ -24,19 +24,13 @@ public class BatchingParallelJoinMapReduceTest {
 
         MapReduce workflow = new SequentialMapReduce.Builder().build();
         Map<String, Long> smap = new HashMap<>();
-        workflow.run(
-                wordCount.input(new File("src/test/resources/big.txt")),
-                wordCount.mapper(),
-                wordCount.reducer(),
+        workflow.run(wordCount.input(new File("src/test/resources/big.txt")), wordCount.mapper(), wordCount.reducer(),
                 smap::put);
         workflow.shutdown();
 
         workflow = new BatchingParallelMapReduce.Builder().build();
         Map<String, Long> fmap = new HashMap<>();
-        workflow.run(
-                wordCount.input(new File("src/test/resources/big.txt")),
-                wordCount.mapper(),
-                wordCount.reducer(),
+        workflow.run(wordCount.input(new File("src/test/resources/big.txt")), wordCount.mapper(), wordCount.reducer(),
                 fmap::put);
         workflow.shutdown();
 
@@ -44,7 +38,7 @@ public class BatchingParallelJoinMapReduceTest {
     }
 
     @Test
-    public void mergeResults(){
+    public void mergeResults() {
         Map<String, List<String>> map0 = Map.of("one", List.of("0"));
         Map<String, List<String>> map1 = Map.of("one", List.of("1"));
 
@@ -53,7 +47,7 @@ public class BatchingParallelJoinMapReduceTest {
         dequeue.offer(map1);
 
         Map<String, List<String>> map = BatchingParallelMapReduce.merge(dequeue);
-        System.out.println(map);
+        assertThat(map).containsExactly(entry("one", List.of("0", "1")));
     }
 
 }
