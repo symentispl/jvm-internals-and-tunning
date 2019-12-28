@@ -1,0 +1,9 @@
+image: symentis/adoptopenjdk11-build-essential
+
+pipelines:
+  default:
+    - step:
+        caches:
+          - maven
+        script: # Modify the commands below to build your repository.
+          - ./mvnw -B verify # -B batch mode makes Maven less verbose
