@@ -1,13 +1,13 @@
 package pl.symentis.bytecode.instrument;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Map;
 
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 import javassist.ClassPool;
 import javassist.CtClass;
@@ -15,7 +15,7 @@ import javassist.CtClass;
 public class AgentTest {
 
 	@Test
-	@Ignore
+	@Disabled
 	public void generate_memoized_method() throws Exception {
 
 		ClassPool classPool = ClassPool.getDefault();

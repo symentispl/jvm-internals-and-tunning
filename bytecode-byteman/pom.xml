@@ -141,7 +141,7 @@
 
 		<dependency>
 			<groupId>org.jboss.byteman</groupId>
-			<artifactId>byteman-bmunit</artifactId>
+			<artifactId>byteman-bmunit5</artifactId>
 			<version>${byteman.version}</version>
 			<scope>test</scope>
 		</dependency>
@@ -154,8 +154,8 @@
 		</dependency>
 
 		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
