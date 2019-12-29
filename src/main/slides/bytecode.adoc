@@ -1,8 +1,4 @@
-== Mutants, xenomorphs and bytecode
-
 == bytecode
-
-image::xenomorph.png[background]
 
 == !
 
@@ -12,24 +8,28 @@ Java bytecode is an assembly language for a non existing CPU
 
 stack +
 local variables +
-method area (+ bci)
+method area (+ bci(**b**yte **c**ode **i**ndex))
 
+[role="highlight_title"]
 === stack
 
 image::17042623299_eb189a7209_b-752x490.jpg[background]
 
-
+[role="highlight_title"]
 === local variables
 
-image::http://www.ipadinfo.nl/wp-content/uploads/2011/10/blauwbord.jpg[background]
+image::blauwbord.jpg[background]
 
+[role="highlight_title"]
 === method area (+ bci)
 
 image::libraries.jpg[background]
 
-=== WARNING
+=== WARNING!
 
-this is true only for interpter frame
+this is only true for interpreter frame
+
+(we are going to explain this in next chapters)
 
 === !
 
@@ -42,19 +42,17 @@ public class HelloWorld{
 }
 ----
 
-=== hello javap
+=== javap (disassembler)
 
-a tool bundled with jdk, bytecode disassembler
+a tool bundled with JDK, bytecode disassembler
 
   javap -c -v ClassName
 
 == classfile
 
-Bytecode is stored in files, +
+bytecode is stored in files, +
 which format is defined by
 link:http://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html[class file format spec] +
-
-Bytecode is a stream of single byte size opcodes followed by defined set operands
 
 === !
 
@@ -66,9 +64,10 @@ implemented interfaces +
 fields (and attributes) +
 methods (and attributes)
 
+
 === classpool?
 
-kind of dictionary of all symbols used in a class like:
+dictionary of all symbols used in a class:
 
 * imported class names
 * methods names
@@ -77,7 +76,8 @@ kind of dictionary of all symbols used in a class like:
 
 === attributes?
 
-a place for future use :)
+a place where all  +
+**for future use things** go :)
 
 * annotations
 * stack map table
@@ -86,25 +86,38 @@ a place for future use :)
 
 will comeback to it!
 
+=== !
+
+bytecode is a stream of single byte size opcodes followed by number of operands
+
 === example
 
 [code, nasm]
 ----
 iload       #16
   ^          ^
-  op   word size offset
+operand   word size
+        22(index in classpool)
 ----
 
-== stack manipulation
+=== stack manipulation
 
 [source, nasm]
 ----
-astore   # store top of stack in variables
-aload    # load from variables to top of stack
+astore   # store reference from top of stack to variables
+aload    # load reference from variables to top of stack
+areturn  # return reference from top of stack to caller
 dup      # duplicate top of stack
-areturn  # return top of stack from function
 pop      # discard top of stack
 ----
+
+=== operand prefixes
+
+* __i__ integer
+* __l__ long
+* __b__ byte
+* __d__ double
+* __a__ reference
 
 == invoke*
 
@@ -120,9 +133,9 @@ invokedynamic     # oh my god, things are getting weird
 === virtual methods table
 
 Java uses "single method dispatch", it means it uses single object (`this`) to
-resolve method. +
+resolve target method.
 
-Because of this it can use virtual table techniques.
+Because of this it can use **virtual methods table** technique.
 
 === !
 
@@ -130,40 +143,46 @@ Because of this it can use virtual table techniques.
 ----
 class A {
   void method1(){
-    System.out.println("A.method1");
+    out.println("A.method1");
   }
 }
 
 class B extends A{
   void method1(){
-    System.out.println("B.method1");
+    out.println("B.method1");
   }
 
   void method2(){
-    System.out.println("B.method1");
+    out.println("B.method1");
   }
-
 }
 ----
 
-=== !
+=== *class A vtable*
 
-*class A vtable*
+[%autowidth,frames=sides,grid=columns]
 |===
-| 0 | `System.out.println("A.method1");`
+|index | target method
+
+| 0 | `out.println("A.method1");`
+
 |===
 
-*class B vtable*
+=== *class B vtable*
+
+[%autowidth,frames=sides,grid=columns]
 |===
-| 0 | `System.out.println("B.method1");`
-| 1 | `System.out.println("B.method2");`
+|index | target method
+
+| 0 | `out.println("B.method1");`
+| 1 | `out.println("B.method2");`
+
 |===
 
 === invokeinterface
 
 [source, java]
 ----
-
 interface Intrf {
   void method1();
 }
@@ -183,21 +202,28 @@ class B  implements Intrf{
   void method1(){
     System.out.println("B.method1");
   }
-
 }
 ----
 
-=== !
+=== *class A vtable*
 
-*class A vtable*
+[%autowidth,frames=sides,grid=columns]
 |===
-| 0 | `System.out.println("A.method1");`
+|index | target method
+
+| 0 | `out.println("A.method1");`
+
 |===
 
-*class B vtable*
+=== *class B vtable*
+
+[%autowidth,frames=sides,grid=columns]
 |===
-| 0 | `System.out.println("B.method2");`
-| 1 | `System.out.println("B.method1");`
+|index | target method
+
+| 0 | `out.println("B.method2");`
+| 1 | `out.println("B.method1");`
+
 |===
 
 === invokespecial
@@ -208,14 +234,15 @@ we don't need to lookup vtable at call site +
 
 === !
 
-yes, invokevirtual and invokeinterface are "late bound" +
-so method lookup is required every time you hit call site,
-
+yes, `invokevirtual` and `invokeinterface` are "late bound"
 
 === gif me moar!!!
 
-http://www.cs.ucsb.edu/~urs/oocsb/papers/TRCS99-24.pdf[Software and Hardware Techniques for Efficient Polymorphic Calls]
+http://www.cs.ucsb.edu/~urs/oocsb/papers/TRCS99-24.pdf[Software and Hardware Techniques for Efficient Polymorphic Calls by Karel Driesen]
 
+https://shipilev.net/blog/2015/black-magic-method-dispatch/[The Black Magic of (Java) Method Dispatch by Aleksey Shipilёv]
+
+[role="highlight_title"]
 === invokedynamic
 
 image::https://media.giphy.com/media/3ohfFr0PcMTsonsgb6/giphy.gif[background]
@@ -226,7 +253,6 @@ it is like having vtable generated at runtime, +
 + +
 you can have multiple dispatch (sort of)
 
-
 === control flow
 
 if in doubt +
@@ -236,9 +262,32 @@ use `goto`
 
 take a look at exceptions table
 
+=== other attributes
+
+=== creating new objects
+
+== bytecode interpreter
+
+== classloading
+
+== what's in it for me?
+
+most modern "enterprise" frameworks heavily relay on bytecode manipulation
+
+* Hibernate
+* Spring
+* JEE containers
+* Mockito
+
+[role="highlight_title"]
 == javaagent
 
-image::http://www.radio-banovina.hr/wp-content/uploads/2016/10/1280x720-Mz9.jpg[background]
+image::1280x720-Mz9.jpg[background]
+
+=== !
+
+Java agent was introduced in JDK 1.5, it allows you to hook your code into
+class loading machinery, in order to modify loaded classes.
 
 === get you jar ready
 
@@ -250,13 +299,12 @@ Premain-Class: pl.symentis.agent.Agent
 
 [source,java]
 ----
-package pl.symentic.agent;
-
 import java.lang.instrument.Instrumentation;
 
 public clas Agent {
 
-  public static void premain(String agentArgs, Instrumentation inst) {
+  public static void premain(String agentArgs,
+                             Instrumentation inst) {
     inst.addTransformer(new CustomCodeTransformer());
   }
 
@@ -274,8 +322,10 @@ import java.security.ProtectionDomain;
 public class CustomCodeTransformer implements ClassFileTransformer{
 
   public byte[] transform(
-    ClassLoader loader, String className,
-    Class<?> classBeingRedefined,ProtectionDomain protectionDomain,
+    ClassLoader loader,
+    String className,
+    Class<?> classBeingRedefined,
+    ProtectionDomain protectionDomain,
     byte[] classfileBuffer) throws IllegalClassFormatException{}
 
       // HERE YOU CAN DO FANCY THINGS WITH BYTECODE
@@ -295,6 +345,7 @@ java -javaagent:agent.jar Main
 
 image::http://i.giphy.com/gVE7nURcnD9bW.gif[background]
 
+[role="highlight_title"]
 == tools
 
 image::old-tools.jpg[background]

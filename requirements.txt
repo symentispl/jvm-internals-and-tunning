@@ -1,4 +1,2 @@
-pycairo
 invoke
 livereload
-shaape
