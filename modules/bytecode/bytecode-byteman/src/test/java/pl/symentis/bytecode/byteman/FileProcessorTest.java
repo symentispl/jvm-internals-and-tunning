@@ -1,24 +1,20 @@
 package pl.symentis.bytecode.byteman;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import org.jboss.byteman.contrib.bmunit.BMRule;
-import org.jboss.byteman.contrib.bmunit.BMUnitRunner;
-import org.junit.Ignore;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.runner.RunWith;
+import org.jboss.byteman.contrib.bmunit.WithByteman;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 /**
  * This is example of fault injection testing with Byteman
  *
  */
-@RunWith(BMUnitRunner.class)
-@Ignore( "cannot attach to JVM under JDK 11")
+@WithByteman
+@Disabled("failes under JDK 11")
 public class FileProcessorTest {
 
-	@Rule
-	public ExpectedException expectedException =  ExpectedException.none(); 
-	
 	@BMRule(
 		name = "throw security exception", 
 		targetClass = "FileInputStream", 
@@ -29,9 +25,9 @@ public class FileProcessorTest {
 	public void testSecurityException() throws Exception {
 		FileProcessor fileProcessor = new FileProcessor();
 		
-		expectedException.expect(IllegalArgumentException.class);
-		
-		fileProcessor.processFile("badname.txt");
+		assertThrows(IllegalArgumentException.class, 
+					 () -> fileProcessor.processFile("badname.txt"));
+
 	}
 
 }
