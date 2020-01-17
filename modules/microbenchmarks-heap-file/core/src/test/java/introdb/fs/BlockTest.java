@@ -11,8 +11,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import introdb.api.Entry;
-import introdb.fs.Block;
-import introdb.fs.Block.Cursor;
+import introdb.fs.ByteBufferBlock;
+import introdb.fs.ByteBufferBlock.BLockRecordCursor;
 import introdb.record.PersistentRecord;
 import introdb.record.Record;
 import introdb.record.TransientRecord;
@@ -21,31 +21,30 @@ public class BlockTest {
 
 	@Test
 	public void emptyBlockIteratorisEmpty() {
-		var block = Block.create(0, Block.DEFAULT_BLOCK_SIZE);
-		var iterator = block.iterator();
-		assertThat(iterator.hasNext()).isFalse();
-		assertThat(iterator.hasNext()).isFalse();
+		var block = ByteBufferBlock.create(0, ByteBufferBlock.DEFAULT_BLOCK_SIZE);
+		var cursor = block.cursor();
+		assertThat(cursor.hasNext()).isFalse();
+		assertThat(cursor.hasNext()).isFalse();
 	}
 
 	@Test
 	public void emptyBlockIteratorThrowsNoSuchElementOnNext() {
-		var block = Block.create(0, Block.DEFAULT_BLOCK_SIZE);
-		var iterator = block.iterator();
-		assertThatThrownBy(() -> iterator.next()).isInstanceOf(NoSuchElementException.class);
+		var block = ByteBufferBlock.create(0, ByteBufferBlock.DEFAULT_BLOCK_SIZE);
+		var cursor = block.cursor();
+		assertThatThrownBy(() -> cursor.next()).isInstanceOf(NoSuchElementException.class);
 	}
 
 	@Test
 	public void emptyBlockIteratorThrowsNoSuchElementOnNextAfterHasNext() {
-		var block = Block.create(0, Block.DEFAULT_BLOCK_SIZE);
-		var iterator = block.iterator();
-
-		iterator.hasNext();
-		assertThatThrownBy(() -> iterator.next()).isInstanceOf(NoSuchElementException.class);
+		var block = ByteBufferBlock.create(0, ByteBufferBlock.DEFAULT_BLOCK_SIZE);
+		var cursor = block.cursor();
+		cursor.hasNext();
+		assertThatThrownBy(() -> cursor.next()).isInstanceOf(NoSuchElementException.class);
 	}
 
 	@Test
 	public void blockCursorSamePositionWhenHasNextFalse() {
-		var block = Block.create(0, Block.DEFAULT_BLOCK_SIZE);
+		var block = ByteBufferBlock.create(0, ByteBufferBlock.DEFAULT_BLOCK_SIZE);
 		var cursor = block.cursor();
 		var position = cursor.position();
 		assertThat(cursor.hasNext()).isFalse();
@@ -54,34 +53,34 @@ public class BlockTest {
 
 	@Test
 	public void readBlockFromFullBuffer() {
-		ByteBuffer buffer = ByteBuffer.allocate(Block.DEFAULT_BLOCK_SIZE)
+		var buffer = ByteBuffer.allocate(ByteBufferBlock.DEFAULT_BLOCK_SIZE)
 									  .putInt(Integer.MAX_VALUE)
 									  .putInt(0)
 									  .rewind();
 		
-		Block block = Block.read(0, Block.DEFAULT_BLOCK_SIZE, buffer);
+		var block = ByteBufferBlock.read(0, ByteBufferBlock.DEFAULT_BLOCK_SIZE, buffer);
 		assertThat(block.remaining()).isEqualTo(0);
-		Cursor cursor = block.cursor();
+		var cursor = block.cursor();
 		assertThat(cursor.hasNext()).isFalse();
 	}
 
 	@Test
 	public void readBlockFromEmptyBuffer() {
 		// given
-		ByteBuffer buffer = ByteBuffer.allocate(Block.DEFAULT_BLOCK_SIZE)
+		ByteBuffer buffer = ByteBuffer.allocate(ByteBufferBlock.DEFAULT_BLOCK_SIZE)
 									  .putInt(Integer.MAX_VALUE)
-									  .putInt(Block.DEFAULT_BLOCK_SIZE - Block.BLOCK_HEADER_SIZE)
+									  .putInt(ByteBufferBlock.DEFAULT_BLOCK_SIZE - ByteBufferBlock.BLOCK_HEADER_SIZE)
 									  .rewind();
 
 		// when
-		Block block = Block.read(0, Block.DEFAULT_BLOCK_SIZE, buffer);
+		Block block = ByteBufferBlock.read(0, ByteBufferBlock.DEFAULT_BLOCK_SIZE, buffer);
 
 		// than
-		assertThat(block.remaining()).isEqualTo(Block.DEFAULT_BLOCK_SIZE - Block.BLOCK_HEADER_SIZE);
-		assertThat(block.position()).isEqualTo(Block.BLOCK_HEADER_SIZE);
+		assertThat(block.remaining()).isEqualTo(ByteBufferBlock.DEFAULT_BLOCK_SIZE - ByteBufferBlock.BLOCK_HEADER_SIZE);
+		assertThat(block.position()).isEqualTo(ByteBufferBlock.BLOCK_HEADER_SIZE);
 
 		// when
-		Cursor cursor = block.cursor();
+		RecordCursor cursor = block.cursor();
 
 		// then
 		assertThat(cursor.hasNext()).isFalse();
@@ -90,11 +89,11 @@ public class BlockTest {
 	@Test
 	public void writeRecordToBlock() throws IOException {
 		// given
-		ByteBuffer buffer = ByteBuffer.allocate(Block.DEFAULT_BLOCK_SIZE)
+		ByteBuffer buffer = ByteBuffer.allocate(ByteBufferBlock.DEFAULT_BLOCK_SIZE)
 									  .putInt(Integer.MAX_VALUE)
-							          .putInt(Block.DEFAULT_BLOCK_SIZE - Block.BLOCK_HEADER_SIZE)
+							          .putInt(ByteBufferBlock.DEFAULT_BLOCK_SIZE - ByteBufferBlock.BLOCK_HEADER_SIZE)
 							          .rewind();
-		Block block = Block.read(0, Block.DEFAULT_BLOCK_SIZE, buffer);
+		Block block = ByteBufferBlock.read(0, ByteBufferBlock.DEFAULT_BLOCK_SIZE, buffer);
 		TransientRecord transientRecord0 = TransientRecord.of(new Entry("1", "1"));
 
 		// when
@@ -103,10 +102,10 @@ public class BlockTest {
 		// then
 		assertThat(record0).get().satisfies(persistenRecord -> {
 			assertThat(persistenRecord.mark()).isEqualTo(Record.Mark.PRESENT);
-			assertThat(persistenRecord.offset()).isEqualTo(Block.BLOCK_HEADER_SIZE);
+			assertThat(persistenRecord.offset()).isEqualTo(ByteBufferBlock.BLOCK_HEADER_SIZE);
 		});
 		assertThat(block.remaining())
-				.isEqualTo(Block.DEFAULT_BLOCK_SIZE - Block.BLOCK_HEADER_SIZE - transientRecord0.size());
+				.isEqualTo(ByteBufferBlock.DEFAULT_BLOCK_SIZE - ByteBufferBlock.BLOCK_HEADER_SIZE - transientRecord0.size());
 
 		// given
 		TransientRecord transientRecord1 = TransientRecord.of(new Entry("2", "2"));
@@ -115,9 +114,9 @@ public class BlockTest {
 		Optional<PersistentRecord> record1 = block.write(transientRecord1);
 		assertThat(record1).get().satisfies(persistenRecord -> {
 			assertThat(persistenRecord.mark()).isEqualTo(Record.Mark.PRESENT);
-			assertThat(persistenRecord.offset()).isEqualTo(Block.BLOCK_HEADER_SIZE + transientRecord0.size());
+			assertThat(persistenRecord.offset()).isEqualTo(ByteBufferBlock.BLOCK_HEADER_SIZE + transientRecord0.size());
 		});
-		assertThat(block.remaining()).isEqualTo(Block.DEFAULT_BLOCK_SIZE - Block.BLOCK_HEADER_SIZE
+		assertThat(block.remaining()).isEqualTo(ByteBufferBlock.DEFAULT_BLOCK_SIZE - ByteBufferBlock.BLOCK_HEADER_SIZE
 				- transientRecord0.size() - transientRecord1.size());
 
 	}
@@ -125,12 +124,12 @@ public class BlockTest {
 	@Test
 	public void dontwriteRecordToBlockWhenNoSpaceRemaining() throws IOException {
 		// given
-		ByteBuffer buffer = ByteBuffer.allocate(Block.DEFAULT_BLOCK_SIZE)
+		ByteBuffer buffer = ByteBuffer.allocate(ByteBufferBlock.DEFAULT_BLOCK_SIZE)
 				                      .putInt(Integer.MAX_VALUE)
-				                      .putInt(Block.DEFAULT_BLOCK_SIZE - Block.BLOCK_HEADER_SIZE)
+				                      .putInt(ByteBufferBlock.DEFAULT_BLOCK_SIZE - ByteBufferBlock.BLOCK_HEADER_SIZE)
 				                      .rewind();
-		Block block = Block.read(0, Block.DEFAULT_BLOCK_SIZE, buffer);
-		TransientRecord transientRecord = TransientRecord.of(new Entry("1", new byte[Block.DEFAULT_BLOCK_SIZE]));
+		Block block = ByteBufferBlock.read(0, ByteBufferBlock.DEFAULT_BLOCK_SIZE, buffer);
+		TransientRecord transientRecord = TransientRecord.of(new Entry("1", new byte[ByteBufferBlock.DEFAULT_BLOCK_SIZE]));
 		
 		// when
 		Optional<PersistentRecord> record = block.write(transientRecord);

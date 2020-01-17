@@ -19,7 +19,7 @@ import java.nio.file.StandardOpenOption;
 public class HeapFileParser {
 
 	public static void parse(Path path) throws IOException {
-		ByteBuffer buffer = ByteBuffer.allocate(Block.DEFAULT_BLOCK_SIZE);
+		ByteBuffer buffer = ByteBuffer.allocate(ByteBufferBlock.DEFAULT_BLOCK_SIZE);
 		int blockNr = 0;
 		try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE)) {
 			while (true) {
@@ -54,7 +54,7 @@ public class HeapFileParser {
 
 	private static void clear(ByteBuffer buffer) {
 		buffer.rewind();
-		buffer.put(new byte[Block.DEFAULT_BLOCK_SIZE]);
+		buffer.put(new byte[ByteBufferBlock.DEFAULT_BLOCK_SIZE]);
 		buffer.rewind();
 	}
 

@@ -1,17 +1,12 @@
 package introdb.heap;
 
-import introdb.api.Entry;
-import introdb.api.KeyValueStorage;
+import static java.lang.String.format;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.Set;
 import java.util.logging.Logger;
 
 import introdb.api.Entry;
@@ -20,39 +15,29 @@ import introdb.fs.Block;
 import introdb.fs.BlockFile;
 import introdb.record.TransientRecord;
 
-import static java.lang.String.format;
-
 class UnorderedHeapFile implements KeyValueStorage, Iterable<TransientRecord> {
 
 	private static final Logger LOGGER = Logger.getLogger(UnorderedHeapFile.class.getName());
 
-	private final int maxBlockNumber;
-	private final int blockSize;
-
 	private int lastBlockNumber = 0;
 
-	private final FileChannel file;
 	private final BlockFile blockFile;
 
-	UnorderedHeapFile( Path path, int maxBlockNumber, int blockSize ) throws IOException {
-		this.file = FileChannel.open(path,
-				Set.of(StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE));
-		blockFile = new BlockFile( file, blockSize );
-		this.maxBlockNumber = maxBlockNumber;
-		this.blockSize = blockSize;
+	UnorderedHeapFile( BlockFile blockFile ) throws IOException {
+		this.blockFile = blockFile;
 	}
 
 	@Override
 	public Iterator<TransientRecord> iterator() {
-		return null;
+		throw new UnsupportedOperationException();
 	}
 
 	@Override
 	public Object remove(Serializable key) throws IOException, ClassNotFoundException {
-		byte[] keySer = TransientRecord.serializeKey(key);
+		var keySer = TransientRecord.serializeKey(key);
 		var localLastBlockNumber = lastBlockNumber;
 		for ( int currentPage = 0; currentPage <= localLastBlockNumber; currentPage++) {
-			var block = blockFile.read(currentPage, () -> ByteBuffer.allocate( blockSize ));
+			var block = blockFile.read(currentPage, () -> ByteBuffer.allocate( blockFile.blockSize() ));
 			var cursor = block.cursor();
 			while (cursor.hasNext()) {
 				var record = cursor.next();
@@ -72,7 +57,7 @@ class UnorderedHeapFile implements KeyValueStorage, Iterable<TransientRecord> {
 		byte[] keySer = TransientRecord.serializeKey(key);
 		var localLastBlockNumber = lastBlockNumber;
 		for ( int currentPage = 0; currentPage <= localLastBlockNumber; currentPage++) {
-			var block = blockFile.read(currentPage, () -> ByteBuffer.allocate( blockSize ));
+			var block = blockFile.read(currentPage, () -> ByteBuffer.allocate( blockFile.blockSize() ));
 			for (var record : block) {
 				if (record.isPresent()) {
 					if (Arrays.equals(keySer, record.key())) {
@@ -94,13 +79,13 @@ class UnorderedHeapFile implements KeyValueStorage, Iterable<TransientRecord> {
 
 		// create record, check if it fits in page
 		var newRecord = TransientRecord.of(entry);
-		if ( newRecord.size() > blockSize ) {
+		if ( newRecord.size() > blockFile.blockSize()) {
 			throw new IllegalArgumentException("record to large");
 		}
 		var localLastBlockNumber=lastBlockNumber;
 		// iterate over pages
 		for ( int currentPage = 0; currentPage <= localLastBlockNumber; currentPage++) {
-			var block = blockFile.read(currentPage, () -> ByteBuffer.allocate( blockSize ));
+			Block block = blockFile.read(currentPage, () -> ByteBuffer.allocate( blockFile.blockSize() ));
 			var cursor = block.cursor();
 			while (cursor.hasNext()) {
 				var record = cursor.next();
@@ -117,10 +102,10 @@ class UnorderedHeapFile implements KeyValueStorage, Iterable<TransientRecord> {
 
 	private void append(TransientRecord record) throws IOException {
 
-		var block = blockFile.read( lastBlockNumber, () -> ByteBuffer.allocate( blockSize ));
+		Block block = blockFile.read( lastBlockNumber, () -> ByteBuffer.allocate( blockFile.blockSize() ));
 
 		if (block.remaining() < record.size()) {
-			block = Block.create( ++lastBlockNumber, blockSize );
+			block = blockFile.create( ++lastBlockNumber, blockFile.blockSize() );
 		}
 		append(record, block);
 	}
@@ -133,11 +118,10 @@ class UnorderedHeapFile implements KeyValueStorage, Iterable<TransientRecord> {
 
 	/**
 	 * Forces underlying file channel to close
-	 *
-	 * @throws IOException
+	 * @throws Exception 
 	 */
-	public void closeForcibly() throws IOException {
-		file.close();
+	public void closeForcibly() throws Exception {
+		blockFile.close();
 	}
 
 }
