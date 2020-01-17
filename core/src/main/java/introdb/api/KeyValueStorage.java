@@ -5,14 +5,16 @@ import java.io.Serializable;
 
 public interface KeyValueStorage {
 
-  Object remove(Serializable key) throws IOException, ClassNotFoundException;
+	Object remove(Serializable key) throws IOException, ClassNotFoundException;
 
-  Object get(Serializable key) throws IOException, ClassNotFoundException;;
+	Object get(Serializable key) throws IOException, ClassNotFoundException;;
 
-  void put(Entry entry) throws IOException;
+	void put(Entry entry) throws IOException;
 
-  /**
-   * Close underlying storage (for example file)
-   */
-  void closeForcibly() throws IOException;
+	/**
+	 * Close underlying storage (for example file)
+	 * 
+	 * @throws Exception
+	 */
+	void closeForcibly() throws Exception;
 }

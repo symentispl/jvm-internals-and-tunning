@@ -4,7 +4,9 @@ import static java.util.stream.Collectors.toList;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.stream.IntStream;
 
@@ -18,6 +20,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 
 import introdb.api.Entry;
+import introdb.fs.FileChannelBlockFile;
 
 @State(Scope.Benchmark)
 public class WriteUnorderedHeapFileBenchmark {
@@ -36,7 +39,10 @@ public class WriteUnorderedHeapFileBenchmark {
 		copies = IntStream.range(0, 1000)
 				.mapToObj(i -> {
 					try {
-						return new UnorderedHeapFile(Files.createTempFile("heap.", "." + i), 50000, 4 * 1024);
+						return new UnorderedHeapFile(
+								new FileChannelBlockFile(
+										FileChannel.open(Files.createTempFile("heap.", "." + i), StandardOpenOption.WRITE, StandardOpenOption.READ), 
+										4 * 1024));
 					} catch (IOException e) {
 						throw new UncheckedIOException(e);
 					}
@@ -45,7 +51,7 @@ public class WriteUnorderedHeapFileBenchmark {
 	}
 
 	@TearDown(Level.Iteration)
-	public void tearDown() throws IOException {
+	public void tearDown() throws Exception {
 		for(UnorderedHeapFile heapFile:copies) {
 			heapFile.closeForcibly();
 		}

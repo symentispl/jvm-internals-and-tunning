@@ -1,7 +1,9 @@
 package introdb.heap;
 
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
@@ -13,6 +15,7 @@ import org.openjdk.jmh.annotations.TearDown;
 
 import introdb.api.Entry;
 import introdb.api.KeyValueStorage;
+import introdb.fs.FileChannelBlockFile;
 
 @State(Scope.Benchmark)
 public class ReadUnorderedHeapFileBenchmark {
@@ -28,7 +31,9 @@ public class ReadUnorderedHeapFileBenchmark {
 	@Setup(Level.Trial)
 	public void setUp() throws Exception {
 		tempFile = Files.createTempFile("heap", "0001");
-		heapFile = new UnorderedHeapFile(tempFile, 50000, 4*1024);
+		heapFile = new UnorderedHeapFile(
+				new FileChannelBlockFile(FileChannel.open(tempFile, StandardOpenOption.READ, StandardOpenOption.WRITE), 
+				4*1024));
 		for(int i=0;i<1000;i++) {
 			heapFile.put(new Entry(Integer.toString(i),buffer));			
 		}
