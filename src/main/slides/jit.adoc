@@ -1,5 +1,12 @@
 == JIT me baby one more time
 
+From previous section, we know what Java bytecode is interpreted
+(actually interpreter is generated from template, but it isn't the point)
+
+Interpreted languages are know for being slow (like Python, Ruby, Lua. PHP).
+
+What makes Java fast?
+
 == what's jit
 
 Just In Time compiler, +
@@ -22,7 +29,7 @@ Smalltalk +
 
 image::Cif5ryKUUAAiSSJ.jpg[background, size=contain]
 
-[.highlight_section_title]
+[role=highlight_title]
 == it's huge
 
 image::lhc10.jpg[background, size=cover]
@@ -32,12 +39,12 @@ image::lhc10.jpg[background, size=cover]
 
 image::JDK9SLOC.png[]
 
-[.highlight_section_title]
+[role=highlight_title]
 == it's complex
 
 image::cms_detector_web_1024.jpg[background, size=cover]
 
-[.highlight_section_title]
+[role=highlight_title]
 == it's fast
 
 image::lhc-particle-collision-523875355-f.jpg[background, size=cover]
@@ -71,7 +78,7 @@ public static long fibonacci(int n) {
  execute time is 67 ms
  result is 46368
 
-[.highlight_section_title]
+[role="highlight_title"]
 == it's magic
 
 image::bbb.jpg[background, size=cover]
@@ -103,7 +110,7 @@ uses both compilers for better JVM start up time
 becaused JVM suffered from so called _warmups_, +
 it didn't solve the problem, just made it less annoying
 
-[.highlight_section_title]
+[role=highlight_title]
 == any questions?
 
 image::kdLCmqOWPMOSQ.gif[background, size=cover]
@@ -175,7 +182,7 @@ optimizations are driven by hardware +
 which is designed +
 with these two design constraints in mind
 
-[.highlight_section_title]
+[role="highlight_title"]
 == the world is a magnetic tape
 
 image::audio-cassette.jpg[background, size=cover]
@@ -187,7 +194,7 @@ image::audio-cassette.jpg[background, size=cover]
 *branch prediction* +
 *type profile* (specific for OO languages)
 
-[.highlight_section_title]
+[role="highlight_title"]
 == data locality
 
 image::messy-desk_2637008b.jpg[background, size=cover]
@@ -199,7 +206,7 @@ image::messy-desk_2637008b.jpg[background, size=cover]
 *&* +
 *register allocation*
 
-[.highlight_section_title]
+[role="highlight_title]
 == inlining: expanding optimizations horizon
 
 image::horizon-013.jpg[background]
@@ -260,7 +267,7 @@ public void nullCheckFolding() {
 }
 ----
 
-[.highlight_section_title]
+[role="highlight_title]
 == we need to go deeper
 
 image::cave-light-2.gif[background, size=cover]
@@ -293,7 +300,9 @@ test   %eax,0x16b74929(%rip)        # 0x00007f6cd3c86000
 retq
 ----
 
-[.highlight_section_title]
+// TODO describe function-calling conventions http://unixwiz.net/techtips/win32-callconv-asm.html
+
+[role="highlight_title"]
 == JIT is speculating
 
 image::tumblr_nu2sk1SnbJ1snwccbo2_500.gif[background]
@@ -379,7 +388,7 @@ for (int i = 0; i < 250; ++i) {
 * when CHA (class hierachy analisys) notices change in class hierarchy
 * when method is no longer "hot", profile traces method frequency invocation
 
-[.highlight_section_title]
+[role="highlight_title"]
 == made not entrant
 
 image::shall-not-pass.gif[background]
@@ -471,7 +480,7 @@ public static int lockEllision(int j) {
 [%notitle]
 === to understand JIT
 
-if there is one thing you should take away from this presentation
+if there is one thing you should take away from this chapter
 
 there are people who understand JIT, really, and will make every effort
 to make it produce code that is fast and CPU friendly
@@ -511,6 +520,8 @@ so choose your small and private methods wisely +
 choose _hot path_ in your application code
 
 and watch it with JITWatch
+
+=== what is JITWatch
 
 === more warnings
 

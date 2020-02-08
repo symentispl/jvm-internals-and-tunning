@@ -416,6 +416,4 @@ with no reason
 
 image::blue-deep-diver-94241.jpg[background]
 
-
-
 == !
