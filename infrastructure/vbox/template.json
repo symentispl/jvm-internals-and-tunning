@@ -30,7 +30,8 @@
     "vboxmanage_post" : [
       ["storageattach","{{.Name}}", "--storagectl",
        "IDE","--port","0","--device","0","--type","dvddrive",
-       "--medium","none"]      
+       "--medium","none"],
+       ["modifyvm","{{.Name}}", "--natpf1","guestssh,tcp,,2222,,22"]      
     ]
   }],
   "provisioners": [

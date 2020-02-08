@@ -1,4 +1,4 @@
-== bytecode
+== Mutants, xenomorphs and bytecode
 
 == !
 
@@ -54,7 +54,7 @@ bytecode is stored in files, +
 which format is defined by
 link:http://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html[class file format spec] +
 
-=== !
+=== every class
 
 classname +
 modifiers +
@@ -86,18 +86,41 @@ a place where all  +
 
 will comeback to it!
 
+=== methods
+
+methods in class have following information
+
+[source]
+----
+public void main(java.lang.String[]);
+  descriptor: ([Ljava/lang/String;)V
+  flags: (0x0001) ACC_PUBLIC
+  Code:
+        stack=2, locals=4, args_size=2
+----
+
 === !
 
-bytecode is a stream of single byte size opcodes followed by number of operands
+methods signature, descriptor and flags are kind of obvious, but what are
+`stack=2` and `locals=4`?
+
+These are calculated by compiler (javac) or bytecode library sizes of stack and
+local variable table, that need to be allocated when stack frame is
+created (method is invoked)
+
+=== !
+
+bytecode is a stream of single byte size opcodes (operators) followed by number of operands
 
 === example
 
 [code, nasm]
 ----
-iload       #16
-  ^          ^
-operand   word size
-        22(index in classpool)
+iload                   #16
+  ^                      ^
+byte size operator   word size operand
+                      (index in local
+                       variable table)
 ----
 
 === stack manipulation
@@ -111,7 +134,7 @@ dup      # duplicate top of stack
 pop      # discard top of stack
 ----
 
-=== operand prefixes
+=== operator prefixes
 
 * __i__ integer
 * __l__ long
@@ -256,19 +279,171 @@ you can have multiple dispatch (sort of)
 === control flow
 
 if in doubt +
-use `goto`
+use `goto` ;)
+
+=== !
+
+whole family of `if*` bytecodes, which are followed by
+wordsize branch offset
+
+=== example
+
+[source,java]
+----
+for(int i=0;i<10;i++){
+         System.out.println(i);
+ }
+----
+
+=== example in bytecode
+
+[source]
+----
+0: iconst_0
+1: istore_1
+2: iload_1
+3: bipush        10
+5: if_icmpge     21
+8: getstatic     #2                  // Field java/lang/System.out:Ljava/io/PrintStream;
+11: iload_1
+12: invokevirtual #3                  // Method java/io/PrintStream.println:(I)V
+15: iinc          1, 1
+18: goto          2
+21: return
+----
 
 === exceptions
 
-take a look at exceptions table
+JVM uses exceptions table, which is store as attribute for a method
+
+=== example
+
+[source,java]
+----
+try{
+        File f = new File("io.txt");
+        f.createNewFile();
+}
+catch( IOException e){
+        System.exit(0);
+}
+catch(Throwable e){
+        e.printStackTrace();
+}
+----
+
+=== !
+
+[source]
+----
+0: new           #2                  // class java/io/File
+3: dup
+4: ldc           #3                  // String io.txt
+6: invokespecial #4                  // Method java/io/File."<init>":(Ljava/lang/String;)V
+9: astore_2
+10: aload_2
+11: invokevirtual #5                  // Method java/io/File.createNewFile:()Z
+14: pop
+15: goto          31
+18: astore_2
+19: iconst_0
+20: invokestatic  #7                  // Method java/lang/System.exit:(I)V
+23: goto          31
+26: astore_2
+27: aload_2
+28: invokevirtual #9                  // Method java/lang/Throwable.printStackTrace:()V
+31: return
+----
+
+
+=== where is catch?
+
+[source]
+-----
+Exception table:
+   from    to  target type
+       0    15    18   Class java/io/IOException
+       0    15    26   Class java/lang/Throwable
+-----
 
 === other attributes
 
+* line number table (used for debugging)
+* stack map table (used by bytecode verifier)
+
+=== stack map table
+
+add in Java 6, required from Java 7
+
+[quote,StackOverflow,What is stack map table]
+  thing is that bytecode by itself contains no explicit type information.
+  Types are determined implicitly through dataflow analysis
+  classic verifier solved this by iterating through the code until everything
+  stopped changing, potentially requiring multiple passes
+
+=== !
+
+[quote,,]
+  storing the type for every single value at every single point in the code
+  would obviously take up a lot of space and be very wasteful. In order to
+  make the metadata smaller and more efficient, they decided to have it only
+  list the types at positions which are targets of jumps.
+
+=== !
+
+[quote,,]
+  If you think about it,
+  this is the only time you need the extra information to do a single pass
+  verification. In between jump targets, all control flow is linear,
+  so you can infer the types at in between positions using the old inference rules.
+
 === creating new objects
 
-== bytecode interpreter
+[source,java]
+----
+Object obj = new Object();
+Object[] array = new Object[1];
+----
+
+=== !
+
+[source]
+----
+0: new           #2                  // class java/lang/Object
+3: dup
+4: invokespecial #1                  // Method java/lang/Object."<init>":()V
+7: astore_2
+8: iconst_1
+9: anewarray     #2                  // class java/lang/Object
+12: astore_3
+13: return
+----
 
 == classloading
+
+Class loaders are responsible for loading class into memory.
+
+The `java.lang.ClassLoader.loadClass()` method is responsible for loading
+the class definition into runtime. It tries to load the class based on a
+fully qualified name.
+
+If the class isn't already loaded, it delegates the request to the
+parent class loader. This process happens recursively.
+
+=== classloader are classes too
+
+if classloader are classes too, who loads `ClassLoader`?
+
+There is bootstrap classloader, which is written in C++ code, and is part of JVM,
+not JDK.
+
+=== !
+
+There are three main stages:
+
+. loading of classes from input source, be it file, network, database
+. bytecode verifier, this is where my check if bytecode makes sens
+. class defintion, this where we create instance of `Class` class.
 
 == what's in it for me?
 
@@ -278,6 +453,17 @@ most modern "enterprise" frameworks heavily relay on bytecode manipulation
 * Spring
 * JEE containers
 * Mockito
+
+== !
+
+almost all JVM languages relay on bytecode generation, including Scala and
+Kotlin
+
+(some, like Frege, do source code transpilation to Java code)
+
+=== !
+
+So how can we modify existing bytecode?
 
 [role="highlight_title"]
 == javaagent
@@ -350,10 +536,14 @@ image::http://i.giphy.com/gVE7nURcnD9bW.gif[background]
 
 image::old-tools.jpg[background]
 
-=== asm
+=== tools
 
-=== bytebuddy
+* asm, low-level library for parsing and writing bytecode
+* bytebuddy, high-level library for bytecode manipulation, mostly focused on bytecode transformation, creating proxies, adapters and wrappers, uses Java DSL.
 
-=== byteman
+=== tools
+
+* byteman, high-level library focused on interception of bytecode behaviour, useful for code instrumentation at runtime or fault injection testing, uses it's own rule based scripting language
+* javaassist, low-level library for bytecode parsing, has some capabilities for bytecode generation, uses Java pseudo source code
 
 == q&a
