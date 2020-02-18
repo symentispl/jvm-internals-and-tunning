@@ -1,49 +1,20 @@
 == Garbage collection
 
-== Automatyczne zarządzenie pamięcią
+=== Agenda
 
-* Automatyczne zarządzanie pamięcią (odśmiecanie) to nie nowy problem
-* John McCarthy w 1959 proponuje automatyczne zarządzanie pamięcią na potrzeby
-implementacji języka Lisp
-* Najpopularniejsze techniki
-** Reference counting
-** Tracing garbage collectors
+* Garbage collection techniques
+* Understanding reference tracing
+* Generational garbage collection
+* Garbage collection in JVM
+* Garbage collection performance and tuning
 
-=== Zliczanie referencji
+=== Garbage collection techniques
 
-Zliczanie referencji to forma automatycznego zarządzania pamięcią w której każdy
-obiekt ma licznik ilości odniesień do niego. Śmieci są identyfikowane poprzez
-posiadanie liczby odniesienia równej zero. Licznik odwołań jest zwiększany,
-gdy odniesienie do obiektu jest tworzone i zmniejszany, gdy odwołanie jest
-usuwane. Pamięć zajmowana przez obiekt jest zwalniana, gdy liczba osiągnie zero.
+* Reference counting
+* Reference tracing
+* Reference scope
 
-=== Wady i zalety
-
-* Pamięć jest zwalniana natychmiast gdy wartość licznika osiągnie zero
-* Wymaga dodatkowych technik aby wykryć cykle odwołań
-* W środowisku wieloprocesorowym dostęp do licznika referencji musi być
-synchronizowany (atomowy)
-
-=== Śledzenie referencji
-
-* Tracing garbage collector najpierw określa które obiekty są dostępne
-(osiągalne), tzw. "reachability analisys"
-*  następnie usuwa te które są nieosiągalne
-* "reachability analisys" umożliwia określenie czy dany obiekt jest osiągalny
-(czasami określany jako „live object”)
-* Obiekt jest osiągalny/”żywy” gdy jest co najmniej jedno odwołanie do tego
-obiektu, z innego obiektu który jest osiągalny, bezpośrednio lub też poprzez
-innego obiekty, które są osiągalne (transistive closure)
-
-=== Korzenie odśmiecania
-
-* „reachability analisys” rozpoczyna się od tzw. „garbage collection roots”,
-** Obiekty znajdując się na stosie wątku, „żywego wątku”
-** Klasy załadowane przez systemowy „class loader”
-** Zmienne lokalne i globalne JNI (Java Native Interface)
-** Obiekty wykorzystywane jako monitory podczas synchronizacji
-
-=== Śledzenie
+=== Reference tracing
 
 [graphviz]
 ----
@@ -68,43 +39,60 @@ digraph {
 }
 ----
 
-=== Reachability analisys
+=== Root set
 
 * An object is alive if it is referenced by a live object
 * An object is alive if a static reference to it exists (part of the root set)
 * An object is alive if a stack reference to it exists (part of the root set)
 * An object is alive if a object is part of root set
 
-=== Pokoleniowa analiza
+=== Mark, sweep & copy
 
-    It has been empirically observed that in many programs,
-    the most recently created objects are also those most
-    likely to become unreachable quickly
-    (known as infant mortality or the generational hypothesis)
-    - Wikipedia
+=== Stop the world
 
-=== Założenie teorii pokoleniowej
+=== Generational garbage collection
 
-* Pokoleniowy odśmiecanie pamięci bazuje na dwóch założeniach,
-** Większość nowych obiektów szybko staje się nieosiągalnych
-** Ilość odwołań z starych obiektów do nowych obiektów jest niewielka
+[quote,,memorymanagement.org]
+Generational garbage collection is tracing garbage collection that makes use of the generational hypothesis. Objects are gathered together in generations. New objects are allocated in the youngest or nursery generation, and promoted to older generations if they survive. Objects in older generations are condemned less frequently, saving CPU time.
 
-== Automatyczne zarządzanie pamięcią a JVM
+It is typically rare for an object to refer to a younger object. Hence, objects in one generation typically have few references to objects in younger generations. This means that the scanning of old generations in the course of collecting younger generations can be done more efficiently by means of remembered sets.
 
-* Oracle JVM/OpenJDK
-** Serial
-** Parallel
-** Concurrent mark sweep
-** G1 - Garbage First
+In some purely functional languages (that is, without update), all references are backwards in time, in which case remembered sets are unnecessary.
 
-=== Poza Oracle/OpenJDK
 
-* Shenandoah: http://openjdk.java.net/jeps/189[An Ultra-Low-Pause-Time Garbage Collector]
-* Oracle JRockit Real Time
-* IBM Websphere Real Time
-* Azul Zing (C4)
+=== Garbage collection in JVM
 
-=== Organizacja pamięci w JVM
+This is where things get hairy
+
+* Object allocation (TLAB)
+* Card-marking
+* Write/read barriers
+* Global safepoints
+
+=== !
+
+* Footprint vs throughput vs pause
+* ParallelOld GC
+* ConcurrentMarkSweep GC
+* G1 GC
+* Shenandoah GC
+* ZGC GC
+* Epsilon GC
+
+=== Object allocation in TLAB
+
+[shaape]
+----
+Thread1    Thread2    Thread3    Thread4
++---+----+ +--------+ +--------+ +--------+
+|   |    | |        | |        | |        |
+|   |    | |        | |        | |        |
++---+----+ +--------+ +--------+ +--------+
+options:
+- ".*": {fill: [white, no-shadow], frame: [blue, dashed]}
+----
+
+=== Heap in JVM
 
 [shaape]
 ----
@@ -119,6 +107,61 @@ digraph {
 +---------------------------------------------------------------+
 ----
 
+=== Card marking
+
+=== Read/write barriers
+
+=== Global safepoint
+
+=== ParallelOld GC
+
+=== ConcurrentMarkSweep GC
+
+=== Problems with old collectors
+
+* generation sizing (people were spending too much time on this)
+* even with adaptive sizing policy, which still poorly responded to memory
+application pressure changes
+* due to whole-heap GC, long pauses on large heaps
+
+=== G1 GC
+
+aka Garbage First
+
+https://en.wikipedia.org/wiki/Garbage-first_collector
+https://www.dynatrace.com/news/blog/understanding-g1-garbage-collector-java-9/
+
+=== Shenandoah GC
+
+https://developers.redhat.com/blog/2019/07/01/shenandoah-gc-in-jdk-13-part-3-architectures-and-operating-systems/
+
+=== ZGC
+
+https://hub.packtpub.com/getting-started-with-z-garbage-collectorzgc-in-java-11-tutorial/
+https://www.opsian.com/blog/javas-new-zgc-is-very-exciting/
+
+
+=== Garbage collection performance and tuning
+
+=== !
+
+*allocate less*
+
+=== THE END
+
+=== when tuning makes sens
+
+* you know memory allocation pressure profile and you know it will likely not change
+(for example batch jobs)
+* you don't own the code, and there is nothing you can do about it
+
+=== use tools
+
+* gather logs (from long and representative period of time)
+* use tools
+** Censum
+** GcEasy
+
 === Alokacja pamięci
 
 * W przypadku pokoleniowego („generational” GC),
@@ -129,16 +172,6 @@ alokacja nowych obiektów odbywa się tylko w przestrzeni „Eden”
 
 === TLAB
 
-[shaape]
-----
-      Thread1    Thread2    Thread3    Thread4
-    +---+----+ +--------+ +--------+ +--------+
-    |   |    | |        | |        | |        |
-    |   |    | |        | |        | |        |
-    +---+----+ +--------+ +--------+ +--------+
-options:
- - ".*": {fill: [white, no-shadow], frame: [blue, dashed]}
-----
 
 === Faza "mark"
 
