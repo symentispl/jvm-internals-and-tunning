@@ -11,8 +11,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import introdb.api.Entry;
-import introdb.fs.ByteBufferBlock;
-import introdb.fs.ByteBufferBlock.BLockRecordCursor;
 import introdb.record.PersistentRecord;
 import introdb.record.Record;
 import introdb.record.TransientRecord;
