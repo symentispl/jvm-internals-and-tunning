@@ -93,7 +93,7 @@ class ByteBufferBlock implements Block {
 
 	@Override
 	public RecordCursor cursor() {
-		return new BLockRecordCursor(buffer.asReadOnlyBuffer().position(BLOCK_HEADER_SIZE));
+		return new BlockRecordCursor(buffer.asReadOnlyBuffer().position(BLOCK_HEADER_SIZE));
 	}
 
 	@Override
@@ -116,13 +116,13 @@ class ByteBufferBlock implements Block {
 		bf.write(blockNr, buffer.asReadOnlyBuffer().rewind());
 	}
 
-	public class BLockRecordCursor implements RecordCursor {
+	public class BlockRecordCursor implements RecordCursor {
 
 		private final ByteBuffer roBuffer;
 		private boolean hasNext;
 		private PersistentRecord record;
 
-		public BLockRecordCursor(ByteBuffer roBuffer) {
+		public BlockRecordCursor(ByteBuffer roBuffer) {
 			this.roBuffer = roBuffer;
 		}
 

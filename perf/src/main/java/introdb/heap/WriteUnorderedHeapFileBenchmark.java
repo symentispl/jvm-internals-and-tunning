@@ -41,7 +41,9 @@ public class WriteUnorderedHeapFileBenchmark {
 					try {
 						return new UnorderedHeapFile(
 								new FileChannelBlockFile(
-										FileChannel.open(Files.createTempFile("heap.", "." + i), StandardOpenOption.WRITE, StandardOpenOption.READ), 
+										FileChannel.open(
+												Files.createTempFile("heap.", "." + i), 
+												StandardOpenOption.WRITE, StandardOpenOption.READ), 
 										4 * 1024));
 					} catch (IOException e) {
 						throw new UncheckedIOException(e);
@@ -59,7 +61,7 @@ public class WriteUnorderedHeapFileBenchmark {
 
 	@Benchmark
 	@OperationsPerInvocation(1000)
-	public void writeBuffer() throws Exception {
+	public void writeKey() throws Exception {
 		for(UnorderedHeapFile heapFile:copies) {
 			heapFile.put(new Entry(key++, buffer));			
 		}
