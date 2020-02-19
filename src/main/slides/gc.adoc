@@ -81,7 +81,7 @@ This is where things get hairy
 
 === Object allocation in TLAB
 
-[shaape]
+[ditaa]
 ----
 Thread1    Thread2    Thread3    Thread4
 +---+----+ +--------+ +--------+ +--------+
@@ -94,7 +94,7 @@ options:
 
 === Heap in JVM
 
-[shaape]
+[ditaa]
 ----
 +---------------------------+-----------------+-----------------+
 |            New            |    Survivor0    |    Survivor1    |
@@ -128,8 +128,164 @@ application pressure changes
 
 aka Garbage First
 
-https://en.wikipedia.org/wiki/Garbage-first_collector
-https://www.dynatrace.com/news/blog/understanding-g1-garbage-collector-java-9/
+the goal of the G1 collector is to achieve a predictable soft-target pause time,
+defined through `-XX:MaxGCPauseMillis`, while also maintaining consistent
+application throughput
+
+A general rule with G1 is that the higher the pause time target, the achievable
+throughput, and overall latency become higher. The lower the pause time target,
+the achievable throughput and overall latency become lower.
+
+=== G1 regions
+
+a region represents a block of allocated space that can hold objects of any
+generation without the need to maintain contiguity with other regions of
+the same generation. In G1, the traditional Young and Tenured generations still
+exist. The young generation consists of Eden space, where all newly allocated
+objects start and Survivor space, where live eden objects are copied to during
+a collection. Objects remain in the Survivor space until they are either
+collected or old enough for promotion, defined by the `-XX:MaxTenuringThreshold`
+(defaults to 15). The Tenured generation consists of the Old space, where
+objects are promoted from the Survivor space when they reach the
+`-XX:MaxTenuringThreshold`
+
+
+=== !
+
+The region size is calculated and defined when the JVM starts. It is based on
+the principle of having as close to 2048 regions as possible where each region
+is sized as a power of 2 between 1 and 64 MB.
+You also have the option of explicitly specifying the region size through
+-XX:G1HeapRegionSize. When setting the region size, it’s important to
+understand the number of regions your heap-to-size ratio will create because
+the fewer the regions, the less flexibility G1 has and the longer it takes
+to scan, mark and collect each of them. In all cases, empty regions are
+added to an unordered linked list also known as the "free list".
+
+=== !
+
+When object production begins, a region is allocated from the free list as a
+thread-local allocation buffer (TLAB) using a compare and swap methodology to
+achieve synchronization. Objects can then be allocated within those
+thread-local buffers without the need for additional synchronization.
+When the region has been exhausted of space, a new region is selected,
+allocated and filled. This continues until the cumulative Eden region space
+has been filled, triggering an evacuation pause
+(also known as a young collection / young gc / young pause
+	or mixed collection / mixed gc / mixed pause). The cumulative amount of
+Eden space represents the number of regions we believe can be collected within
+the defined soft pause time target. The percentage of total heap allocated for
+Eden regions can range from 5% to 60% and gets dynamically adjusted after
+each young collection based on the performance of the previous young collection.
+
+=== !
+
+When the aforementioned young collection takes place, dead objects are
+collected and any remaining live objects are evacuated and compacted into
+the Survivor space. G1 has an explicit hard-margin, defined by the
+G1ReservePercent (default 10%), that results in a percentage of the heap
+always being available for the Survivor space during evacuation. Without this
+available space, the heap could fill to a point in which there are no
+available regions for evacuation. There is no guarantee this will not still
+happen, but that’s what tuning is for! This principle ensures that after
+every successful evacuation, all previously allocated Eden regions are
+returned to the free list and any evacuated live objects end up
+in Survivor space.
+
+=== !
+
+Continuing with this pattern, objects are again allocated into newly
+requested Eden regions. When Eden space fills up, another young
+collection occurs and, depending on the age (how many young collections
+the various objects have survived) of existing live objects,
+you will see promotion to Old regions. Given the Survivor space is part of
+the young generation, dead objects are collected or promoted during
+these young pauses.
+
+=== !
+
+G1 will continue with this pattern until one of three things happens:
+
+* It reaches a configurable soft-margin known as the InitiatingHeapOccupancyPercent.
+* It reaches its configurable hard-margin (G1ReservePercent)
+* It encounters a humongous allocation (will talk about it later).
+
+
+=== !
+
+Liveness ratio (InitiatingHeapOccupancyPercent) is constantly being calculated
+and evaluated as a component of each young collection. When one of these
+triggers are hit, a request is made to start a concurrent marking cycle.
+
+=== !
+
+In G1, concurrent marking is based on the principle of
+snapshot-at-the-beginning (SATB). This means, for efficiency purposes,
+it can only identify objects as being garbage if they existed when the
+initial snapshot was taken. Any newly allocated objects that appear during the
+concurrent marking cycle are considered to be live irrespective of their
+true state. This is important because the longer it takes for concurrent
+marking to complete, the higher the ratio will be of what is collectible
+versus what is considered to be implicitly live. If you allocate more
+objects during concurrent marking than you end up collecting, you will
+eventually exhaust your heap. During the concurrent marking cycle, you will
+see young collections continue as it is not a stop-the-world event.
+
+=== !
+
+Once the concurrent marking cycle completes, a young collection is immediately
+triggered, followed by a second type of evacuation, known as a mixed collection.
+A mixed collection works almost exactly like a young collection, with two major
+differences. First, a mixed collection is also going to collect, evacuate and
+compact a select set of old regions. Second, mixed collections are not based
+on the same evacuation triggers a young collection uses. They operate with
+the goal of collecting as quickly and as frequently as possible. They do this
+to minimize the number of allocated Eden / Survivor regions in order to
+maximize the number of Old regions selected within the soft pause target.
+
+=== !
+
+`G1HeapWastePercent` defines threshold, percentage of liveset, which triggers
+old region collection during mixed collection.
+
+Because we don’t want to perform wasted work, G1 stays true to the garbage
+first policy. Based on an ordered list, candidate regions are selected based
+on their live object percentage. If an Old region has fewer live objects than
+the percentage defined by `G1MixedGCLiveThresholdPercent`
+(defaults to 85% in JDK8u40+ and 65% in JDK7), we add it to the list. Simply put,
+if an Old region is greater than 65% (JDK7) or 85% (JDK8u40+) live,
+we don’t want to waste our time trying to collect and evacuate it during
+this mixed cycle.
+
+=== !
+
+Compared to a young collection, a mixed collection will look to collect all
+three generations within the same pause time target. It manages this through
+the incremental collection of the Old regions based on the value of
+`G1MixedGCCountTarget` (defaults to 8). Meaning, it will divide the number
+of candidate Old regions by the G1MixedGCCountTarget and try to collect at
+least that many regions during each cycle. After each cycle finishes,
+the liveness of the Old region is re-evaluated. If the reclaimable space is
+still greater than the G1HeapWastePercent, mixed collections will continue.
+
+=== !
+
+* Humongous allocation represents a single object, and as such, must be allocated into contiguous space. This can lead to significant fragmentation.
+* Humongous objects are allocated to a special humongous region directly within the Old generation. This is because the cost to evacuate and copy such an object across the young generations can be too high.
+* Even though the object in question is only 12.5 MB, it must consume four full regions accounting for 16 MB of total usage.
+* Humongous allocations always trigger a concurrent marking cycle, whether the IHOP criteria is met or not.
+
+=== !
+
+TODO card marking in G1 pre write barrier (armed before concurrent marking starts, stored in buffer)
+
+=== Useful links
+
+https://en.wikipedia.org/wiki/Garbage-first_collector[Garbage First Collector] +
+https://www.dynatrace.com/news/blog/understanding-g1-garbage-collector-java-9/[Understanding G1 Garbage Collector] +
+https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/g1_gc.html[Tuning G1 GC] +
+https://www.redhat.com/en/blog/part-1-introduction-g1-garbage-collector[Introduction to G1 Garbage Collector] +
+https://plumbr.io/handbook/garbage-collection-algorithms-implementations/g1[Garbage Collection Algorithms Implementation]
 
 === Shenandoah GC
 
