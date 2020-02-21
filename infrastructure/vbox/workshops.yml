@@ -22,6 +22,17 @@
       - git
       - ca-certificates
       - perl-modules
+      # we need to mount and access shared folders
+      - virtualbox-guest-utils
+      - virtualbox-guest-dkms
+    become: yes
+  - name: setup user
+    user:
+      name: ubuntu
+      append: yes
+      groups:
+        # we need to mount and access shared folders
+        - vboxsf
     become: yes
   - name: set perf_event_paranoid parameter
     sysctl:

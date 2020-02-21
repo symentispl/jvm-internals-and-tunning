@@ -48,36 +48,67 @@ digraph {
 
 === Mark, sweep & copy
 
+There are three major types of reference tracing garbage collectors
+
+* *mark & sweep*, which contain to main phases, marking phase and sweep phase,
+downside is that it leaves heap fragmented, it requires to maintain free list
+* *mark, sweep & copy*, it adds additional phase during which we copy
+objects to new region, to avoid defragmentation, which requires copying object
+and updating references to it
+* *mark, sweep & compat*, it compacts heap, when it is not able to allocate
+continuous memory region for new object
+
 === Stop the world
+
+Reference tracing collectors require "stop the world" pause, which means
+we stop all threads which mutate application heap.
 
 === Generational garbage collection
 
 [quote,,memorymanagement.org]
-Generational garbage collection is tracing garbage collection that makes use of the generational hypothesis. Objects are gathered together in generations. New objects are allocated in the youngest or nursery generation, and promoted to older generations if they survive. Objects in older generations are condemned less frequently, saving CPU time.
+	Generational garbage collection is tracing garbage collection that makes
+	use of the generational hypothesis. Objects are gathered together in
+	generations. New objects are allocated in the youngest or nursery
+	generation, and promoted to older generations if they survive. Objects
+	in older generations are condemned less frequently, saving CPU time.
 
-It is typically rare for an object to refer to a younger object. Hence, objects in one generation typically have few references to objects in younger generations. This means that the scanning of old generations in the course of collecting younger generations can be done more efficiently by means of remembered sets.
+=== !
 
-In some purely functional languages (that is, without update), all references are backwards in time, in which case remembered sets are unnecessary.
+[quote,,memorymanagement.org]
+	It is typically rare for an object to refer to a younger object. Hence,
+	objects in one generation typically have few references to objects in
+	younger generations. This means that the scanning of old generations in
+	the course of collecting younger generations can be done more efficiently
+	by means of remembered sets.
 
+=== !
+
+[quote,,memorymanagement.org]
+	In some purely functional languages (that is, without update), all
+	references are backwards in time, in which case remembered sets
+	are unnecessary.
 
 === Garbage collection in JVM
 
 This is where things get hairy
 
 * Object allocation (TLAB)
+* Oops maps
 * Card-marking
 * Write/read barriers
 * Global safepoints
 
 === !
 
+* Old collectors
+** ParallelOld GC
+** ConcurrentMarkSweep GC
 * Footprint vs throughput vs pause
-* ParallelOld GC
-* ConcurrentMarkSweep GC
-* G1 GC
-* Shenandoah GC
-* ZGC GC
-* Epsilon GC
+* next generation collectors
+** G1 GC
+** Shenandoah GC
+** ZGC GC
+** Epsilon GC
 
 === Object allocation in TLAB
 
@@ -88,9 +119,198 @@ Thread1    Thread2    Thread3    Thread4
 |   |    | |        | |        | |        |
 |   |    | |        | |        | |        |
 +---+----+ +--------+ +--------+ +--------+
-options:
-- ".*": {fill: [white, no-shadow], frame: [blue, dashed]}
 ----
+
+=== Card marking
+
+[quote,Brian Goetz,GC in the HotSpot JVM]
+	Tracing garbage collectors, such as copying, mark-sweep, and mark-compact,
+	all start scanning from the root set, traversing references between objects,
+	until all live objects have been visited. A generational tracing collector
+	starts from the root set, but does not traverse references that lead to
+	objects in the older generation, which reduces the size of the object
+	graph to be traced. But this creates a problem -- what if an object in the
+	older generation references a younger object, which is not reachable through
+	any other chain of references from a root?
+
+=== !
+
+[quote,Brian Goetz,GC in the HotSpot JVM]
+	Whether an old-to-young reference is created by promotion or a pointer
+	modification, the garbage collector needs to have a comprehensive set
+	of old-to-young references when it wants to perform a minor collection.
+	One way to do this would be to trace the old generation, but this clearly
+	has significant overhead. Somewhat better would be to linearly scan the
+	old generation looking for references to young objects. This approach is
+	faster than tracing and has better locality, but is still considerable work.
+
+=== !
+
+[quote,Brian Goetz,GC in the HotSpot JVM]
+ JDKs use an optimized variant of an algorithm called card marking to identify
+ modifications to pointers held in fields of old-generation objects. In this
+ approach, the heap is divided into a set of cards, each of which is usually
+ smaller than a memory page. The JVM maintains a card map, with one bit
+ (or byte, in some implementations) corresponding to each card in the heap.
+ Each time a pointer field in an object in the heap is modified, the
+ corresponding bit in the card map for that card is set.
+
+
+=== !
+
+[quote,Brian Goetz,GC in the HotSpot JVM]
+ At garbage collection time, the mark bits associated with cards in the old
+ generation are examined, and dirty cards are scanned for objects containing
+ references into the younger generation. Then the mark bits are cleared.
+ There are several costs to card marking – additional space for the card
+ map, additional work to be done on each pointer store, and additional
+ work to be done at garbage collection time. Card marking algorithms can
+ add as little as two or three machine instructions per non-initializing
+ heap pointer store, and entails scanning any objects on dirty cards at
+ minor collection time.
+
+
+=== Read/write barriers
+
+[quote,Alexey Ragozin,Understanding GC pauses in JVM, HotSpot's minor GC]
+	Principle of dirty card write-barrier is very simple. Each time when program
+	modifies reference in memory, it should mark modified memory page as dirty.
+	There is a special card table in JVM and each 512 byte page of memory has
+	associated byte in card table.
+
+=== !
+
+[quote,Nitsan Wakart,The JVM Write Barrier - Card Marking]
+	So setting a reference throws in the overhead of a few instructions,
+	which boil down to:
+	 CARD_TABLE [this address >> 9] = 0;
+	This is significant overhead when compared to primitive fields, but is
+	considered necessary tax for memory management. The tradeoff here is
+	between the benefit of card marking (limiting the scope of required
+	old generation scanning on young generation collection) vs.
+	the fixed operation overhead for all reference writes. The associated write
+	to memory for card marking can sometimes cause performance issues for
+	highly concurrent code. This is why in OpenJDK7 we have a new option called
+	UseCondCardMark.
+
+=== Conditional card marking
+
+=== Usefull links
+
+http://psy-lob-saw.blogspot.com/2014/10/the-jvm-write-barrier-card-marking.html[The JVM Write Barrier - Card Marking] +
+https://www.ibm.com/developerworks/library/j-jtp11253/[Garbage collection in the HotSpot JVM] +
+http://blog.ragozin.info/2011/06/understanding-gc-pauses-in-jvm-hotspots.html[Understanding GC pauses in JVM, HotSpot's minor GC] +
+
+=== Global safepoint
+
+[quote,Nitsan Wakart,Safepoints: Meaning, Side Effects and Overheads ]
+A safepoint is a range of execution where the state of the executing thread is well described. Mutator threads are threads which manipulate the JVM heap (all your Java Threads are mutators. Non-Java threads may also be regarded as mutators when they call into JVM APIs which interact with the heap).
+At a safepoint the mutator thread is at a known and well defined point in it's interaction with the heap. This means that all the references on the stack are mapped (at known locations) and the JVM can account for all of them. As long as the thread remains at a safepoint we can safely manipulate the heap + stack such that the thread's view of the world remains consistent when it leaves the safepoint.
+
+=== !
+
+[quote,Nitsan Wakart,Safepoints: Meaning, Side Effects and Overheads ]
+	A JVM will therefore need means of bringing threads to safepoints
+	(and keeping them there) so that all sorts of runtime magic can happen.
+	Here's a partial list of activities which JVMs run only once all mutator
+	threads are at a safepoint and cannot leave it until released
+	(at a global safepoint), these are sometime called safepoint operations:
+
+=== !
+
+	 * Some GC phases (the Stop The World kind)
+	 * JVMTI stack sampling methods (not always a global safepoint operation for Zing))
+	 * Class redefinition
+	 * Heap dumping
+	 * Monitor deflation (not a global safepoint operation for Zing)
+	 * Lock unbiasing
+	 * Method deoptimization (not always)
+	 * And many more!
+
+=== Safepoint polling
+
+[quote,Nitsan Wakart,Safepoints: Meaning, Side Effects and Overheads ]
+	So having threads at a safepoint allows the JVM to get on with it's managed
+	runtime magic show, great! When is this groovy state happening?
+
+
+=== !
+
+	 * A Java thread is at a safepoint if it is blocked on a lock or synchronized block, waiting on a monitor, parked, or blocked on blocking IO. Essentially these all qualify as orderly de-scheduling events for the Java thread and as part of tidying up before put on hold the thread is brought to a safepoint.
+	 * A Java thread is at a safepoint while executing JNI code. Before crossing the native call boundary the stack is left in a consistent state before handing off to the native code. This means that the thread can still run while at a safepoint.
+	 * A Java thread which is executing bytecode is NOT at a safepoint (or at least the JVM cannot assume that it is at a safepoint).
+	 * A Java thread which is interrupted (by the OS) while not at a safepoint is not brought to a safepoint before being de-scheduled.
+
+=== !
+
+The JVM and your running Java threads have the following relationship around safepoints:
+
+* The JVM cannot force any thread into a safepoint state.
+* The JVM can stop threads from leaving a safepoint state.
+
+So how can the JVM bring all threads into a safepoint state? The problem is suspending a thread at a known state, not just interrupting it. To achieve this goal JVMs have the Java threads suspend themselves at convenient spots if they observe a 'safepoint flag'.
+
+=== !
+
+[quote,Nitsan Wakart,Safepoints: Meaning, Side Effects and Overheads ]
+	These considerations combined lead to the following locations for safepoint polls:
+
+=== !
+
+    * Between any 2 bytecodes while running in the interpreter (effectively)
+    * On 'non-counted' loop back edge in C1/C2 compiled code
+    * Method entry/exit (entry for Zing, exit for OpenJDK) in C1/C2 compiled code. Note that the compiler will remove these safepoint polls when methods are inlined.
+
+=== Time to Safepoint
+
+[quote,Nitsan Wakart,Safepoints: Meaning, Side Effects and Overheads ]
+	Each thread enters a safepoint when it hits a safepoint poll. But arriving at
+	a safepoint poll requires executing an unknown number of instructions.
+	We can see J1 hits a safepoint poll straight away and is suspended.
+	J2 and J3 are contending on the availability of CPU time. J3 grabs some CPU
+	time pushing J2 into the run queue, but J2  is not in a safepoint.
+	J3 arrives at a safepoint and suspends, freeing up the core for J2 to make
+	enough progress to get to a safepoint poll.
+
+
+=== Time to Safepoint
+
+[quote,Nitsan Wakart,Safepoints: Meaning, Side Effects and Overheads ]
+	J4 and J5 are already at a safepoint while executing JNI code, they are
+	not affected. Note that J5 is trying to leave JNI halfway through the
+	safepoint and is suspended before resuming Java code. Importantly we
+	observe that the time to safepoint varies from thread to thread and
+	some threads are paused for longer than others, Java threads which take
+	a long time to get to a safepoint can
+	delay many other threads.
+
+=== Diagnostics
+
+JDK 8 and previous versions
+
+`-XX:+PrintGCApplicationStoppedTime` +
+`-XX:+PrintSafepointStatistics`
+
+JDK 9 and later
+
+`-Xlog:safepoint=debug`
+
+
+=== Usefull links
+
+https://medium.com/software-under-the-hood/under-the-hood-java-peak-safepoints-dd45af07d766[Under the hood JVM: Safepoints] +
+https://shipilev.net/jvm/anatomy-quarks/22-safepoint-polls/[JVM Anatomy Quark #22: Safepoint Polls] +
+http://psy-lob-saw.blogspot.com/2015/12/safepoints.html[Safepoints: Meaning, Side Effects and Overheads] +
+https://psy-lob-saw.blogspot.com/2014/03/where-is-my-safepoint.html[Where is my safepoint?] +
+https://richardstartin.github.io/posts/garbage-collector-code-artifacts-card-marking[Garbage Collector Code Artifacts: Card Marking]
+
+=== Parallel GC
+
+* The majority of newly created objects are located in the Eden space.
+* After one GC in the Eden space, the surviving objects are moved to one of the Survivor spaces.
+* After a GC in the Eden space, the objects are piled up into the Survivor space, where other surviving objects already exist.
+* Once a Survivor space is full, surviving objects are moved to the other Survivor space. Then, the Survivor space that is full will be changed to a state where there is no data at all.
+* The objects that survived these steps that have been repeated a number of times are moved to the old generation.
 
 === Heap in JVM
 
@@ -98,7 +318,7 @@ options:
 ----
 +---------------------------+-----------------+-----------------+
 |            New            |    Survivor0    |    Survivor1    |
-+---------------------------+--------------+--------------------+
++---------------------------+-----------------+-----------------+
 |                        Tenured/Old                            |
 +---------------------------------------------------------------+
 
@@ -107,15 +327,48 @@ options:
 +---------------------------------------------------------------+
 ----
 
-=== Card marking
-
-=== Read/write barriers
-
-=== Global safepoint
+=== Object age
 
 === ParallelOld GC
 
+[quote,,Java Collection Handbook]
+	This combination of Garbage Collectors uses mark-copy in the Young Generation
+	and mark-sweep-compact in the Old Generation. Both Young and Old collections
+	trigger stop-the-world events, stopping all application threads to perform
+	garbage collection. Both collectors run marking and copying / compacting
+	phases using multiple threads, hence the name ‘Parallel’.
+	Using this approach, collection times can be considerably reduced.
+	The number of threads used during garbage collection is configurable via the
+	command line parameter `-XX:ParallelGCThreads=NNN`. The default value is
+	equal to the number of cores in your machine.
+
 === ConcurrentMarkSweep GC
+
+[quote,,]
+	Following up on the parallel collector is the CMS collector
+	(“concurrent-mark-sweep”). This algorithm uses multiple threads (“concurrent”)
+	to scan through the heap (“mark”) for unused objects that can be recycled
+	(“sweep”). This algorithm will enter “stop the world” (STW) mode in
+	two cases: when initializing the initial marking of roots
+	(objects in the old generation that are reachable from thread entry points or
+	static variables) and when the application has changed the state of the
+	heap while the algorithm was running concurrently, forcing it to go back and
+ 	do some final touches to make sure it has the right objects marked.
+
+=== Footprint vs throughput vs pause
+
+Three main GC properties
+
+* footprint, how much heap is needed
+* throughput, how much time is spent in application vs in GC
+* pause, for how long application is stopped, not doing any work
+
+=== !
+
+* `-Xmx`, footprint target
+* `-XX:MaxGCPauseMillis=200`, pause target
+* `-XX:GCTimeRatio=12`, throughput target
+* `-XX:+AdaptiveSizePolicy`, adaptive generation sizing
 
 === Problems with old collectors
 
@@ -277,7 +530,9 @@ still greater than the G1HeapWastePercent, mixed collections will continue.
 
 === !
 
-TODO card marking in G1 pre write barrier (armed before concurrent marking starts, stored in buffer)
+card marking in G1 uses write barrier (armed before concurrent marking starts)
+updates stored in buffer associated with region, which after concurrent mark
+phase update cards
 
 === Useful links
 
@@ -289,7 +544,84 @@ https://plumbr.io/handbook/garbage-collection-algorithms-implementations/g1[Garb
 
 === Shenandoah GC
 
+Shenandoah is the low pause time garbage collector that reduces GC pause times
+by performing more garbage collection work concurrently with the running Java
+program. Shenandoah does the bulk of GC work concurrently, including the
+*concurrent compaction*, which means its pause times are no longer directly
+proportional to the size of the heap. Garbage collecting a 200 GB
+heap or a 2 GB heap should have the similar low pause behavior.
+
+=== !
+
+Shenandoah is the regionalized collector, it maintains the heap as the collection of regions.
+
+=== !
+
+*Init Mark* initiates the concurrent marking. It prepares the heap and application threads for concurrent mark, and then scans the root set. This is the first pause in the cycle, and the most dominant consumer is the root set scan. Therefore, its duration is dependent on the root set size.
+
+=== !
+
+*Concurrent Marking* walks over the heap, and traces reachable objects. This phase runs alongside the application, and its duration is dependent on the number of live objects and the structure of object graph in the heap. Since the application is free to allocate new data during this phase, the heap occupancy goes up during concurrent marking.
+
+=== !
+
+*Final Mark* finishes the concurrent marking by draining all pending marking/update queues and re-scanning the root set. It also initializes evacuation by figuring out the regions to be evacuated (collection set), pre-evacuating some roots, and generally prepares runtime for the next phase. Part of this work can be done concurrently during Concurrent precleaning phase. This is the second pause in the cycle, and the most dominant time consumers here are draining the queues and scanning the root set.
+
+=== !
+
+*Concurrent Cleanup* reclaims immediate garbage regions – that is, the regions where no live objects are present, as detected after the concurrent mark.
+
+=== !
+
+*Concurrent Evacuation* copies the objects out of collection set to other regions. This is the major difference against other OpenJDK GCs. This phase is again running along with application, and so application is free to allocate. Its duration is dependent on the size of chosen collection set for the cycle.
+
+=== !
+
+*Init Update Refs* initializes the update references phase. It does almost nothing except making sure all GC and applications threads have finished evacuation, and then preparing GC for next phase. This is the third pause in the cycle, the shortest of them all.
+
+=== !
+
+*Concurrent Update References* walks over the heap, and updates the references to objects that were moved during concurrent evacuation. This is the major difference against other OpenJDK GCs. Its duration is dependent on number of objects in heap, but not the object graph structure, because it scans the heap linearly. This phase runs concurrently with the application.
+
+=== !
+
+*Final Update Refs* finishes the update references phase by re-updating the existing root set. It also recycles the regions from the collection set, because now heap does not have references to (stale) objects to them. This is the last pause in the cycle, and its duration is dependent on the size of root set.
+
+=== !
+
+*Concurrent Cleanup* reclaims the collection set regions, which now have no references to.
+
+=== Concurrent compaction
+
+[quote,,An open-source concurrent compacting garbage collector for OpenJDK]
+	Concurrent compaction is complicated because along with
+	moving a potentially in-use object, you also have to atom-
+	ically update all references to that object to point to the
+	new location. Simply finding those references may require
+	scanning the entire heap. Our solution is to add a forward-
+	ing pointer to each object, and requiring all uses of that
+	object to go through the forwarding pointer.
+
+=== Concurrent compaction
+
+[quote,,An open-source concurrent compacting garbage collector for OpenJDK]
+	This protocol allows us to move the object while the Java threads are
+	running. The GC threads and the mutator threads copy the
+	objects and use an atomic compare and swap (CAS) to update the
+	forwarding pointer. If multiple GC and mutator
+	threads were competing to move the same object only one
+	CAS would succeed. References are updated during the next
+	concurrent marking gc phase.
+
+=== updates in JDK 12 & 13
+
+Forwarding pointer is no longer needed.
+
+=== Useful links
+
 https://developers.redhat.com/blog/2019/07/01/shenandoah-gc-in-jdk-13-part-3-architectures-and-operating-systems/
+https://shipilev.net/talks/jugbb-Sep2019-shenandoah.pdf
+https://rkennke.wordpress.com/
 
 === ZGC
 
@@ -305,6 +637,27 @@ https://www.opsian.com/blog/javas-new-zgc-is-very-exciting/
 
 === THE END
 
+=== Sins of GC tunning
+
+* Premature GC tuning, don't do it if you don't need it
+* Not knowing about GC ergonomy and adaptive size policy, probably
+`-XX:MaxGCPauseMillis=<nnn>`, `-XX:GCTimeRatio=<nnn>` and `-Xmx` is all you need
+to touch
+* Faith that GC tuning can hide bad programming and architecture practices
+
+=== Sins of GC tunning
+
+* No systematic and holistic approach, lack of monitoring, performance tests
+* stackoverflow.com and google.com are *NOT* the places where you will find
+*YOUR* JVM parameters
+* Lack of undertanding how JVM and OS work and interact
+
+=== Sins of GC tunning
+
+* Different GC characteristics of applications
+** batch processing vs online
+** Stateful and stateless applications
+
 === when tuning makes sens
 
 * you know memory allocation pressure profile and you know it will likely not change
@@ -318,161 +671,19 @@ https://www.opsian.com/blog/javas-new-zgc-is-very-exciting/
 ** Censum
 ** GcEasy
 
-=== Alokacja pamięci
+=== Useful links
 
-* W przypadku pokoleniowego („generational” GC),
-alokacja nowych obiektów odbywa się tylko w przestrzeni „Eden”
-* Dostępne techniki to:
-** „bump-the-pointer”
-** TLAB (Thread Local Allocation Buffer)
+https://www.petefreitag.com/articles/gctuning/[Tuning Garbage Collection Outline]
 
-=== TLAB
-
-
-=== Faza "mark"
-
-* "reachability analisys" rozpoczyna się od obiektów znanych jako "GC roots"
-* każdy z tych obiektów jest odwiedzany, i oznaczany jako "alive"
-* pozostałe obiekty które nie zostały oznaczone jako "alive" są usuwane
-* faza ta wymaga zatrzymania wszystkich wątków aplikacji, tzw. "stop the world"
-* faza "mark" nie jest jedyną przyczyną pauz w aplikacjach działających pod
-kontrolą JVM (ale o tym później)
-
-=== Typy algorytmów
-
-* "mark+copy" aka compacting
-* mark+sweep+(and eventually copy)
-
-=== Znakowanie kart i bariery
-
-Warto zauważyć że podczas fazy "mark" analizowane są tylko obiekty w przestrzeni
-Young/New.
-W przeciwnym wypadku cała pokoleniowa hipoteza nie miałaby sensu wydajnościowego
-(analiza całej pamięci, zamiast tylko obszaru w którm zakładamy, że mamy krótko
-żyjące obiekty).
-
-Co z obiektami z przestrzeni Young/New, do których istnieje referencja z
-obiektów znajdujących się w przestrzeni Old/Tenured?
-
-=== Znakowanie kart i bariery
-
-W tym celu zostały wprowadzone dwa mechanizmy:
-
-* znakowanie kart, "card marking"
-* bariery (nie mylić ich z barierami odpowiedzialnymi za kolejność wykonywania
-  instrukcji przez CPU, tzw. "ordering barrier", ale o tym później)
-
-=== Znakowanie kart
-
-* obszar pamięci JVM, jest podzialone na małe fragmenty tzw. "cards", o
-rozmiarze mniejszym niż pojedyncza strona pamięci, domyślnie 512 bajtów
-* JVM utrzymuje "bitset" która przechowuje wartość flagi ("dirty") dla każdej
-karty
-* kiedy pole obiektu jest modyfikowane, ustawiana jest flaga "dirty"
-* jak to się dzieje?
-
-=== Bariery
-
-    A barrier is a block on reading from or writing to certain memory
-    locations by certain threads or processes.
-
-    Barriers can be implemented in either software or hardware.
-    Software barriers involve additional instructions around
-    load or store operations, which would typically be added
-    by a cooperative compiler. Hardware barriers don’t require
-    compiler support, and may be implemented on common
-    operating systems by using memory protection.
-
-=== Warunkowe znakowanie kart
-
-* W środowisku przy wysokim współczynniku współbieżności,
-zaznaczanie kart może być kosztowne
-* aby zmienjszyć ten koszt należy wykorzystać flagę `-XX:+/-UseCondCardMark`
-* wynika to z potencjalnego zajścia 'false sharing' w środowiskach
-wieloprocesorowych
-
-.TODO
-rozwinąć false sharing
-
-=== Małe, duże i pełne pauzy
-
-* minor, kolekcje w przestrzeni "Eden"
-* major, kolekcje w przestrzeni "Old"
-* full, kolekcja w przestrzeni Old, która wiąże się z kompaktowaniem tego obszaru
-
-=== Dla ciekawskich
-
-* http://psy-lob-saw.blogspot.com/2014/10/the-jvm-write-barrier-card-marking.html[The JVM Write Barrier - Card Marking]
-* http://www.ibm.com/developerworks/library/j-jtp11253/[Java theory and practice: Garbage collection in the HotSpot JVM]
-* http://blog.ragozin.info/2011/06/understanding-gc-pauses-in-jvm-hotspots.html[Understanding GC pauses in JVM, HotSpot's minor GC.]
-* http://www.memorymanagement.org[Memory Management Reference]
-
-== ParallelGC
-
-* włączany opcją `-XX:+UseParallelGC`
-* Od Java 5 domyślny “garbage collector” (z nadejściem JDK9, planowane
-  zastąpienie go przez G1)
-* Wykorzystuje wiele wątków do odśmiecania pamięci, zarówno podczas "minor" i "major" kolekcji
-
-=== ParallelGC
-
-* jest to odśmiecacz typu mark+copy, obiekty są kopiowane do przestrzeni Survivor
-* JVM posiada dwie przestrzenie Survivor (Survivor0 + Survivor1), znane także jako "To" i "From"
-* przestrzenie Survivor mają ten sam rozmiar
-
-=== Mechanika ParallelGC
-
-* “GC roots” zostają rozdzielone między dostępne wątki, dzięki temu faza “mark”
-jest krótsza (pamiętajmy jednak o "stop the world")
 * ilość wątków GC można kontrolować parametrem `-XX:ParallelGCThreads=<N>`,
 * domyślnie dla maszyn o CPU<=8; N=CPU
 * dla pozostałych przypadków N=5/8 CPU lub N=5/16 CPU
-
-=== Mechanika ParallelGC
-
-* Każdy “żywy” obiekt jest natychmiast kopiowany do przestrzeni “To”, lub do przestrzeni “Old”
-** jeśli przetrwał odpowiednią ilość kolekcji w przestrzeni Young (TenuringThreshold)
-** lub gdy w „To” nie ma już miejsca dla obiektu (major GC)
-
-=== Mechanika ParallelGC
-
-* Każdy “żywy” obiekt jest natychmiast kopiowany do przestrzeni “To”, lub do przestrzeni “Old”
-** jeśli przetrwał odpowiednią ilość kolekcji w przestrzeni Young (TenuringThreshold)
-** lub gdy w „To” nie ma już miejsca dla obiektu (major GC)
-
-=== "object header"
-
-* nagłówek obiektu w JVM znajduje się przed polami obiektu
-** "hashCode" obiektu
-** wiek obiektu
-** flaga "mark" wykorzystywane przez GC
-** informacje wykorzystywane przez biased locking
-** oraz czy na jest "locked" (`monitorenter` i `monitorexit`)
 
 === !
 
 * więcej szczegółów, w pliku http://hg.openjdk.java.net/jdk8/jdk8/hotspot/file/87ee5ee27509/src/share/vm/oops/markOop.hpp[markOop.hpp]
 * oraz tutaj, http://www.slideshare.net/cnbailey/memory-efficient-java[Memory Efficient Java]
 
-=== Mechanika ParallelGC
-
-* Przestrzeń “To” staje się przestrzenią “From” i “From”->”To”
-* Czyli po każdym przebiegu tego odśmiecacza przestrzeń „To” jest pusta
-* Ponieważ „mark and copy” odbywa się wielowątkowo, każdy z wątków GC dostaje swój wycinek “To”
-
-=== !
-
-* Bo przecież alokacja nowych obiektów, odbywa się tylko w przestrzeni “Eden”, więc nie będzie nam przeszkadzała lekko defragmentowana przestrzeń “To”
-* defragmentację "To" można zmniejszyć poprzez mniejszą liczbę wątków GC lub poprzez zwiększenie generacji Tenured
-
-=== Ergonomia ParallelGC
-
-* maksymalny czas pauzy, `-XX:MaxGCPauseMillis=<N>`, maksymalny oczekiwany czas
-pauzy w milisekundach
-* przepustowość, `-XX:GCTimeRatio=<N>`, liczony jako współczynnik czasu
-spędzonego na odśmiecanie w stosunku do całego czasu działania aplikacji,
-(1/1+N), domyślna wartość to 99
-* narzut, `-Xmx`, czyli maksymalny rozmiar pamięci,
 
 === Ergonomia ParallelGC
 
@@ -505,106 +716,6 @@ rozmiar generacji jest pomniejszany, i wynosi on T/D
 * `-XX:+UseGCOverheadLimit`, kontroluje kiedy rzucany jest `OutOfMemoryError`,
 domyślnie gdy >98% czasu aplikacja spędza na GC, odzyskując >2% pamięci
 
-== ParallelOldGC
-
-* Jednak nie dajmy się zwieźć pozorom, `-XX:+UseParallelGC` i
-`-XX:+UseParallelOldGC` to dwie odmienne implementacje, ParallelOldGC ma do
-czynienia z o wiele większą przestrzenią generacji “Old”
-* Domyślnie na maszynach z N procesorów, wykorzystywanych jest N wątków
-* Jednak ilość wątków może być kontrolowana przez parametr -XX:ParallelGCThread=N
-* jest to algorytm typu mark+sweep+copy
-
-=== Mechanika ParallelOldGC
-
-* O wiele bardziej złożony algorytm, gdyż przestrzeń “Old” jest znacząco
-większa od przestrzeni „Young” a obiekty, które się tam znajdują wykazują się
-większym czasem życia
-* ParallelOldGC odbywa się w trzech fazach:
-** parallel marking
-** summary step
-** sweeping step
-
-=== parallel marking
-
-* Przestrzeń “Old” zostaje podzielona na regiony
-* “GC roots” podzielone pomiędzy w wątki GC
-* Za każdym razem gdy obiekt zostanie oznaczony jako “live” (“reacheable”),
-region w którym się znajdował, zostaje zaktualizowany o ilość “żywych bajtów”
-* Dzięki temu na koniec tej fazy wiadome jest ile w danym regionie znajduje się
-„żywych” danych
-
-=== summary step
-
-* Dla każdego regionu, jest wyznacza wartość “density” (stosunek ilość żywych
-  bajtów do całkowitej ilości bajtów)
-* W tym kroku wiemy także, że podczas poprzedniej kolekcji:
-** obiekty były kompaktowane do lewej
-** nowe obiekty które od tego czasu zostały przeniesione do “Old” znajdują się po prawej stronie
-** Więc im obiekt bardziej na lewo tym starszy, tym mniejsza szansa, że będzie usuwany z pamięci
-
-=== summary step
-
-* Powyższe informacje pozwalają na pewne optymalizacje:
-* zaczynając od lewej, szukany jest region o gęstości (“density”), z którego najwięcej zyskamy jeśli go posprzątamy,
-** wszystkie region na lewo nie są sprzątane, i nazywane są “dense prefix”
-* Dodatkowo podczas tej fazy już wiadomo obiekty z którego regiony zostaną
-przeniesione do danego regionu (z reguły te na prawo wypełniają te na lewo)
-
-=== sweeping step
-
-* Regiony które mogą być sprzątane jednocześnie są dzielone miedzy watki,
-* region które nie zapełniają innych regionów (patrz poprzedni krok) lub region które są puste,
-* Wątki najpierw usuwają „unreachable objects”
-* A potem przesuwają obiekty (compact)
-* Dzięki optymalizacji (nie skanujemy całego regionu „Old”), możemy odzyskać
-dużo pamięci, mniejszym kosztem, ponieważ na lewo są starsze obiekty
-
-== ConcMarkSweepGC
-
-* Poprzednie kolektory, są szybkie, jednak muszą zatrzymać działanie aplikacji
-(high throughput/high pause time)
-* ConcMarkSweepGC to "mostly concurrent" GC, celem tego algorytmu jest
-zmniejszenie czasu trwania pauzy,
-
-=== !
-
-* ConcMarkSweepGC składa się z 4 podstawowych kroków
-** initial mark
-** concurrent mark
-** remarking
-** concurrent sweep
-
-=== initial mark
-
-* Zatrzymuje watki aplikacji na krótka chwile, by wykorzystując jeden watek,
-zaznaczyć tylko obiekty które sa bezposrednio dostepne z “GC roots”
-
-=== concurrent mark
-
-* Podczas gdy aplikacja działa dalej, osobny wątek GC kontynuuje zaznaczanie obiektów,
-
-=== remarking
-
-* Ponieważ sytuacja w między czasie może się zmienić (aplikacja ciągle działa)
-CMS, znowu na chwile zatrzymuje aplikacje, by sprawdzić te obiekty które się z
-międzyczasie zmieniły
-
-=== concurrent sweep
-
-* Następuje sprzątanie, w wielu watkach, bez kompaktowania
-* Dlatego też alokacja pamięci odbywa się na trochę innych zasadach,
-wykorzystujący mechanizm tzw. "free list"
-* "free list" przechowuje listę wolnych obszarów pamięci
-
-=== Concurrent mode failure
-
-`174.445: [GC 174.446: [ParNew: 66408K->66408K(66416K), 0.0000618 secs]174.446: [CMS (concurrent mode failure): 161928K->162118K(175104K), 4.0975124 secs] 228336K->162118K(241520K)`
-
-* W przypadku pojawienia się tego komunikatu, CMS zostaje na czas tego
-uruchomienia „Full GC” zastąpione SerialGC
-* Concurrent Mode Failure jest wynikiem defragmentacji generacji „Old” i
-niemożliwością zaalokowania odpowiedniego ciągłego obszaru pamięci
-
 === Kilka pokręteł
 
 * `-XX:+CMSConcurrentMTEnabled` i `-XX:ConcGCThreads=<N>`, ilość wątków
@@ -621,154 +732,6 @@ dostępnej pamięci
 * `-XX:+CMSClassUnloadingEnabled`, usuwanie klas podczas faz CMS
 * `-XX:+CMSIncrementalMode`, wymusza regularne uruchamianie CMS,
 kosztem wątków aplikacji (deprecated)
-
-== ParNewGC
-
-* ParNewGC, jest modyfikacją ParallelOld, który umożliwia współbieżne
-działanie GC w obszarze New i Old
-
-== Wydajność GC
-
-* Analiza dostępności obiektów - „reachability analisys”, rozmiar "live set"
-* Kopiowanie obiektów pomiędzy przestrzeniami, compacting vs non-compacting
-vs copying
-* Aktualizacja referencji do obiektów które zostały przeniesione
-* Kompaktowanie pamięci
-
-== Garbage First, G1
-
-* G1 znany także jako „garbage first”, to nowy algorytm, który w wersji
-eksperymentalnej pojawił się już w Java 6, w pełni wspierany od wersji 7u4,
-planowany jako domyślny GC od wersji JDK 9,
-* `-XX:+UseG1GC`
-* Jest kolejna próba zminimalizowania pauz w działaniu aplikacji,
-przy jednoczesnym kompaktowaniu pamięci (przestrzeni „Old”)
-
-=== Organizacja pamięci w G1
-
-* Podobnie jak w przypadku poprzednich modeli pamięć jest podzielona na obszary,
-w których przechowywane są obiekty w rożnym wieku
-* W przeciwieństwie jednak do poprzedników, tych obszarów tworzonych przez G1
-mamy do dyspozycji około 2000, każdy z tych obszarów ma taki sam rozmiar,
-`-XX:G1HeapRegionSize=n` (pomiędzy 1Mb a 32 Mb)
-
-=== Regiony w G1
-
-* Implementacja G1 utrzymuje listę regionów, które są wolne, i w miarę
-zapotrzebowania przypisuje te regiony do generacji „Young” (Eden/Survivor) lub „Tenured” („Old”)
-* W tej implementacji przestrzenie nie są ciągłym obszarem pamięci
-
-=== !
-
-* Dzięki temu rozmiar Eden/Survivor/Old może być dostosowywany do
-zapotrzebowania aplikacji
-* Podobnie jak w poprzednich implementacjach, obiekty są promowane
-(ewakuowane w słowniku GC) do obszarów, które zawierają coraz starsze obiekty
-
-=== Alokacja pamięci
-
-* Alokacja podobnie jak w poprzednich algorytmach, odbywa się głównie w
-przestrzeni „Eden”,
-* Chyba, że obiekt jest większy niż połowa rozmiaru regionu, wtedy takie obiekty
-są alokowane w specjalnych przestrzeniach zwanych „humongous”
-
-=== !
-
-* Kiedy pojemność „Eden” zostanie osiągnięta, rozpoczyna się faza
-„young garbage collection”, nazywana także „evacuation pause”
-* Jest to faza „stop-the-world”, podczas której wykorzystwane jest wiele wątków,
-i obiekty kopiowane są do „to-space”, lub też w zależności od wieku obiektu
-(tenured threshold) do przestrzeni „old”
-
-=== "young GC" phases
-
-* External Root Scanning: The time spent by the parallel GC worker threads in scanning the external roots such as registers, thread stacks, etc that point into the Collection Set.
-* Update Remembered Sets (RSets): RSets aid G1 GC in tracking reference that point into a region. The time shown here is the amount of time the parallel worker threads spent in updating the RSets.
-* Processed Buffers: The count shows how many ‘Update Buffers’ were processed by the worker threads.
-
-=== "young GC" phases
-
-* Scan RSets: The time spent in Scanning the RSets for references into a region. This time will depend on the “coarseness” of the RSet data structures.
-* Object Copy: During every young collection, the GC copies all live data from the eden and ‘from-space’ survivor, either to the regions in the ‘to-space’ survivor or to the old generation regions. The amount of time it takes the worker threads to complete this task is listed here.
-
-=== "young GC" phases
-
-* Termination: After completing their particular work (e.g. object scan and copy), each worker thread enters its ‘termination protocol’. Prior to terminating, the worker thread looks for work from the other threads to steal and terminates when there is none. The time listed here indicates the time spent by the worker threads offering to terminate.
-* Parallel worker ‘Other’ time: Time spent by the worker threads that was not accounted in any of the parallel activities listed above.
-
-=== concurrent GC phases
-
-When the occupancy of the total heap crosses this threshold,
-G1 GC will trigger a multi-phased concurrent marking cycle.
-The command line option that sets the threshold is
-`–XX:InitiatingHeapOccupancyPercent` and it defaults to 45 percent of the total
-Java heap size.
-
-=== !
-
-The Initial Mark Phase – G1 GC marks the roots during the initial-mark phase. This is what the first line of output above is telling us. The initial-mark phase is piggy backed (done at the same time) on a normal (STW) young garbage collection. Hence, the output is similar to what you see during a young evacuation pause.
-
-=== !
-
-The Root Region Scanning Phase – During this phase, G1 GC scans survivor regions of the initial mark phase for references into the old generation and marks the referenced objects. This phase runs concurrently (not STW) with the application. It is important that this phase complete before the next young garbage collection happens.
-
-=== !
-
-The Concurrent Marking Phase – During this phase, G1 GC looks for reachable (live) objects across the entire Java heap. This phase happens concurrently with the application and a young garbage collection can interrupt the concurrent marking phase (shown above).
-
-=== !
-
-The Remark Phase – The remark phase helps the completion of marking. During this STW phase, G1 GC drains any remaining SATB buffers and traces any as-yet unvisited live objects. G1 GC also does reference processing during the remark phase.
-
-=== !
-
-The Cleanup Phase – This is the final phase of the multi-phase marking cycle. It is partly STW when G1 GC does live-ness accounting (to identify completely free regions and mixed garbage collection candidate regions) and when G1 GC scrubs the RSets. It is partly concurrent when G1 GC resets and returns the empty regions to the free list.
-
-=== initial mark
-
-This is a stop the world event. With G1, it is piggybacked on a normal young GC.
-Mark survivor regions (root regions) which may have references to objects in
-old generation.
-
-=== root region scanning
-
-Scan survivor regions for references into the old generation. This happens while
-the application continues to run. The phase must be completed before a young GC
-can occur.
-
-=== concurrent marking
-
-Find live objects over the entire heap. This happens while the application is
-running. This phase can be interrupted by young generation garbage collections.
-
-=== remark
-
-Completes the marking of live object in the heap. Uses an algorithm called
-snapshot-at-the-beginning (SATB) which is much faster than what was used in
-the CMS collector.
-
-=== cleanup
-
-* Performs accounting on live objects and completely free regions. (Stop the world)
-* Scrubs the Remembered Sets. (Stop the world)
-* Reset the empty regions and return them to the free list. (concurrent)
-
-=== copying
-
-These are the stop the world pauses to evacuate or copy live objects to new
-unused regions. This can be done with young generation regions which are logged
-as [GC pause (young)]. Or both young and old generation regions which are logged
-as [GC Pause (mixed)].
-
-http://www.oracle.com/technetwork/tutorials/tutorials-1876574.html[Getting Started with the G1 Garbage Collector]
-
-=== marking algorithm
-
-G1 GC uses a marking algorithm called Snapshot-At-The-Beginning (SATB) that takes a logical snapshot of the set of live objects in the heap at the ‘beginning’ of the marking cycle. This algorithm uses a pre-write barrier to record and mark the objects that are a part of the logical snapshot
-
-=== mixed collection
-
-Once G1 GC successfully completes the concurrent marking cycle, it has the information that it needs to start the old generation collection. Up until now, the collection of the old regions was not possible since G1 GC did not have any marking information associated with those regions. A collection that facilitates the compaction and evacuation of old generation is appropriately called a 'mixed' collection since G1 GC not only collects the eden and the survivor regions, but also (optionally) adds old regions to the mix. Let us now discuss some details that are important to understand a mixed collection.
 
 === !
 
@@ -836,208 +799,5 @@ To help explain the cause of evacuation failure, we should use a very useful
 option: `-XX:+PrintAdaptiveSizePolicy`.
 This option will provide many ergonomic details that are purposefully kept out
 of the `-XX:+PrintGCDetails` option.
-
-== Podsumowanie algorytmów
-
-* "Serial" to odśmiecacz typu „stop-the-world”, kopiujący kolekcjoner który
-wykorzystuje tylko jeden wątek
-* "ParNew" to odśmiecacz typu „stop-the-world”, kopiujący kolekcjoner, który
-wykorzystuje wiele wątków. Różni się od "Parallel Scavenge" pewnymi
-usprawnieniami które umożliwiają wykorzystanie go w parze z CMS
-
-=== Podsumowanie algorytmów
-
-* "Parallel Scavenge" to odśmiecacz typu „stop-the-world”, kopujący algorytm
-który wykorzystuje wiele wątków
-* "Serial Old" to odśmiecacz typu „stop-the-world”, „mark-sweep-compact” który
-wykorzystuje pojedynczy wątek
-* "ConcurrentMarkSweep" (CMS) to prawie „współbieżny” odśmiecacz,
-zapewniający krótkie pauzy .
-* "Parallel Old" to implementcja ParallelGC na potrzeby generacji „Old”
-
-=== Możliwe kombinacje algorytmów
-
-* UseSerialGC to "Serial" + "Serial Old"
-* UseParNewGC to "ParNew" + "Serial Old"
-* UseConcMarkSweepGC to"ParNew" + "CMS" + "Serial Old". "CMS" jest wykorzystywany przez większość czasu podczas kolekcji generacji „tenured”. "Serial Old" jest wykorzystywany w sytuacjach wystąpienia „concurrent mode failure„.
-
-=== !
-
-* UseParallelGC to "Parallel Scavenge" + "Serial Old"
-* UseParallelOldGC to "Parallel Scavenge" + "Parallel Old"
-
-=== PermGen/Metaspace
-
-* PermGen to wydzielony obszar z generacji „tenured” w którym JVM przechowuje:
-** „bytecode” metod czyli „method area”
-** „constant pool”
-** „interned strings” (jest to nieprawdą dla JDK7)
-** struktury wewnętrznie wykorzystywane przez JVM
-* Generacja „permament” (PermGen) jest odśmiecana za każdym razem gdy odśmiecana jest generacja „tenured”
-
-=== Co śmieci w Metaspace?
-
-* Jeśli twoja aplikacja lub biblioteka intensywnie używa,
-** java.lang.reflect.Proxy
-** net.sf.cglib.Enhancer
-** javassist.util.proxy.ProxyFactory
-** Apache commons proxy
-** AspectJ z „runtime weaving” (SpringFramework się też liczy)
-* To wiedz, że Metaspace wypełni się szybko
-
-=== Metryki GC (przepustowość)
-
-* Poniższe metryki opisują efektywność odśmiecania pamięci
-** Przepustowość (throughput) - procent czasu nie spędzanego przez aplikacje na odśmiecaniu, 100% oznacza brak odśmiecania, przyjęło się przyjmować 95-98% jak poprawną wartość
-** Narzut na odśmiecanie (GC overhead) - odwrotność przepustowości, czyli procent czasu spędzanego przez aplikację na odśmiecanie
-
-=== Metryki GC (pauza)
-
-** Czas pauzy (pause time) - czas podczas którego działanie aplikacji jest wstrzymane na potrzeby odśmiecania
-** Częstotliwość odśmiecania(frequency of collection) - jak często w czasie życia aplikacji następuje odśmiecanie
-
-=== Metryki GC (narzut)
-
-** Narzut pamięci (footprint) - rozmiar pamięci wykorzystywanej przez maszynę JVM
-** Promptness, czas pomiędzy momentem kiedy obiekt stał się „unreachable” a momentem kiedy pamięć przez niego zajmowana została zwolniona
-
-== Narzędzia i monitorowanie GC
-
-* Proste, jednak kompletnie niepraktyczne narzędzie to: `jmap -heap <vmid>`
-* Jest to jednak najszybszy sposób żeby sprawdzić z jakimi parametrami
-odśmiecania aktualnie działa uruchomiona maszyna wirtualna i jakie są aktualne
-rozmiary poszczególnych generacji i przestrzeni
-
-=== Logowanie zdarzeń GC
-
-* Poprzez parametry przekazywane do maszyny wirtualnej
-* `-XX:+PrintGC`
-
-=== Szczegóły GC
-
-* `-XX:+PrintGCDetails` i `-XX:+PrintGCTimeStamps`,
-** tzw. 'GC cause', czyli co wymusiło GC
-** nazwa kolektora (PSYoungGen, ParOldGen, Metaspace)
-** `prev_used->used(capacity)`, czyli informacja ile pamięci zostało odzyskane
-** czas działania kolektora
-
-=== Przykładowe logi
-
-----
-3437,843:
-  [GC (Allocation Failure)
-  [PSYoungGen: 155760K->7040K(161280K)] 211173K->62644K(297472K), 0,0096349 secs]
-  [Times: user=0,03 sys=0,00, real=0,01 secs]
-----
-
-==== Przykładowe logi
-
-----
-3437,843:
-[GC (Allocation Failure)
-[PSYoungGen: 6249K->0K(126976K)]
-[ParOldGen: 64978K->30783K(107520K)]
-71227K->30783K(234496K),
-[Metaspace: 34760K->34756K(1081344K)], 0,0852895 secs]
-[Times: user=0,25 sys=0,00, real=0,08 secs]
-----
-
-=== Wiek obiektów
-
-* flaga `-XX:+PrintTenuringDistribution`, wyświetla informacje o rozmiarach
-poszczególnych kategorii wiekowych, oraz ilości odśmiecań, które
-obiekty przetrwały zanim zostały wypromowane do generacji "Old”
-
-=== Przykładowe logi
-
-----
-575,138:
-[GC (Allocation Failure) 575,138: [ParNew
-Desired survivor size 2228224 bytes, new threshold 3 (max 6)
-- age   1:     494888 bytes,     494888 total
-- age   2:    1464944 bytes,    1959832 total
-- age   3:     285224 bytes,    2245056 total
-: 38865K->4024K(39296K), 0,0076277 secs]
-66888K->32676K(126720K), 0,0077602 secs]
-[Times: user=0,02 sys=0,00, real=0,01 secs]
-----
-
-=== Zapisywanie logów
-
-* `-Xloggc:<filename>`, zapisuje logi z odśmiecania w wskazanym pliku
-* `-XX:+UseGCLogFileRotation`, włącza rotację plików z logami GC
-* `-XX:NumberOfGClogFiles=<N>`, maksymalna ilość plików z logami GC
-* `-XX:GCLogFileSize=<N>`, maksymalny rozmiar pliku z logami GC
-
-=== jstat
-
-* Kolejnym narzędziem dostępnym z linii poleceń jest jstat,
-rozpowszechniany razem z Java SDK
-  jstat -option [-t] [-hlines] vmid [interval [count]]
-* Gdzie vmid, jest identyfikatorem procesu JVM,
-* jstat umożliwia podpięcie się do procesu JVM i zbieranie różnego typu statystyk,
-
-=== Dodatkowe narzędzia
-
-* Warto zapoznać się z powyższymi narzędziami jak i formatami w jakich
-udostępniane są statystki odśmiecania, jednak na co dzień warto korzystać z
-wizualnych
-* VisualVM
-** Wtyczka VisualGC, wymaga dodatkowej instalacji, pokazuje bieżące zachowanie GC
-* Java Mission Control i Flight Recorder
-
-=== Dodatkowe narzędzia
-
-* GCviewer
-** link:https://github.com/chewiebug/GCViewer[https://github.com/chewiebug/GCViewer]
-	, szwajcarski scyzoryk w temacie GC
-* Jhiccup
-** link:http://www.azulsystems.com/jHiccup[http://www.azulsystems.com/jHiccup]
-	, czyli mamy czkawkę, czy nie?
-* jClarity
-** link:http://www.jclarity.com/censum/
-* Plumbr
-** https://plumbr.eu/
-
-=== Dodatkowe narzędzia
-
-* Java Mission Control i FlightRecorder (obecnie dostępne wraz z Oracle JDK)
-* link:https://eclipse.org/mat/[Memory Analyzer Tool]
-
-== Trzy wymiary automatycznego zarządzania pamięcią
-
-* Spośród wielu metryk opisujących zachowanie GC, musisz wybrać jedną,
-pod którą będziesz starał się zoptymalizować parametry odśmiecania
-* Najczęściej będą to:
-** Rozmiar sterty
-** Przepustowość
-** Czas pauzy
-
-=== Grzechy główne manipulacji GC
-
-* Przedwczesna optymalizacja GC, nie rób tego jeśli naprawdę nie musisz
-* Brak wiary w ergonomię GC, być może `-XX:MaxGCPauseMillis=<nnn>`
-i `-XX:GCTimeRatio=<nnn>` to jedyne parametry które powinieneś znać
-* Wiara że optymalizacja GC przykryje złe nawyki w pisaniu kodu czy też
-brak pragmatyzmu w architekturze systemu
-
-=== Grzechy główne manipulacji GC
-
-* Brak systemowego/całościowego podejścia do testowania wydajności
-* stackoverflow.com i google.com to nie są miejsca gdzie znajdziesz parametry swojego JVM
-* Brak zrozumienia jak działają poszczególne algorytmy odśmiecania i interakcji pomiędzy JVM i systemem operacyjnym
-
-=== Grzechy główne manipulacji GC
-
-* Różne wymagania alokacji i odśmiecanie dla różnych architektur
-** Przetwarzanie wsadowe
-** Aplikacje stanowe i bezstanowe
-
-== Dodatkowe odnośniki
-
-* https://plumbr.eu/blog/category/garbage-collection[Garbage collectors at Plumbr]
-* http://www.dynatrace.com/en/javabook/how-garbage-collection-works.html[Garbage collectors at DynaTrace]
-* http://gchandbook.org[The Garbage Collection Handbook]
-* http://www.cs.kent.ac.uk/people/staff/rej/gcbib/[the Garbage Collection Bibliography]
 
 == q&a

@@ -6,6 +6,8 @@ performance,internals and tuning
 :source-highlighter: highlightjs
 :revealjs_history: true
 :revealjs_theme: white
+:revealjs_width: 1280
+:revealjs_height: 960
 :imagesdir: images
 :customcss: css/custom.css
 
