@@ -36,11 +36,10 @@ public class ParallelMapReduce implements MapReduce {
     }
 
     @Override
-    public <In, MK, MV, RK, RV> void run(
+    public <In, MK, MV, RV> void run(
             Input<In> input,
-            Mapper<In, MK, MV> mapper,
-            Reducer<MK, MV, RK, RV> reducer,
-            Output<RK, RV> output) {
+            MapReduceJob<In, MK, MV, RV> mapReduceJob,
+            Output<MK, RV> output) {
 
         Phaser rootPhaser = new Phaser() {
             @Override
@@ -59,7 +58,7 @@ public class ParallelMapReduce implements MapReduce {
 
             phaser.register();
 
-            executorService.submit(new MapperPhase<>(in, mapper, map, phaser));
+            executorService.submit(new MapperPhase<>(in, mapReduceJob.mapper(), map, phaser));
 
             tasksPerPhaser++;
             if (tasksPerPhaser >= phaserMaxTasks) {
@@ -73,7 +72,7 @@ public class ParallelMapReduce implements MapReduce {
         // reduce
         Set<MK> keys = map.keySet();
         for (MK key : keys) {
-            reducer.reduce(key, map.get(key), output);
+            output.emit(key,mapReduceJob.reducer().reduce(key, map.get(key)));
         }
 
     }

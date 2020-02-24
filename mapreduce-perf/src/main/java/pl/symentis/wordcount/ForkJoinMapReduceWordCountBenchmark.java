@@ -38,8 +38,7 @@ public class ForkJoinMapReduceWordCountBenchmark {
         HashMap<String, Long> map = new HashMap<String, Long>();
         mapReduce.run(
                 wordCount.input(ForkJoinMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
-                wordCount.mapper(),
-                wordCount.reducer(),
+                wordCount.mapReduceJob(),
                 map::put);
         return map;
     }

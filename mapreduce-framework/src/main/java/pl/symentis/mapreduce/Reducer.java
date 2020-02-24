@@ -1,7 +1,7 @@
 package pl.symentis.mapreduce;
 
-public interface Reducer<MapperKey, MapperValue, ReducerKey, ReducerValue> {
+public interface Reducer<MapperKey, MapperValue, ReducerValue> {
 
-    void reduce(MapperKey k, Iterable<MapperValue> input, Output<ReducerKey, ReducerValue> output);
+	ReducerValue reduce(MapperKey k, Iterable<MapperValue> input);
 
 }

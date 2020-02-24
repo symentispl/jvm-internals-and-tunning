@@ -20,16 +20,15 @@ public class ForkJoinMapReduce implements MapReduce {
     }
 
     @Override
-    public <In, MK, MV, RK, RV> void run(
+    public <In, MK, MV, RV> void run(
             Input<In> input,
-            Mapper<In, MK, MV> mapper,
-            Reducer<MK, MV, RK, RV> reducer,
-            Output<RK, RV> output) {
+            MapReduceJob<In, MK, MV, RV> mapReduceJob,
+            Output<MK, RV> output) {
 
-        Map<MK, List<MV>> map = pool.invoke(new InputTask<In, MK, MV>(input, mapper));
+        Map<MK, List<MV>> map = pool.invoke(new InputTask<In, MK, MV>(input, mapReduceJob.mapper()));
 
         for (Map.Entry<MK, List<MV>> entry : map.entrySet()) {
-            reducer.reduce(entry.getKey(), () -> entry.getValue().iterator(), output);
+            output.emit(entry.getKey(), mapReduceJob.reducer().reduce(entry.getKey(), () -> entry.getValue().iterator()));
         }
 
     }

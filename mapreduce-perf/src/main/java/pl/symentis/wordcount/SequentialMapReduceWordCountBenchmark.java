@@ -43,8 +43,8 @@ public class SequentialMapReduceWordCountBenchmark {
         HashMap<String, Long> map = new HashMap<String, Long>();
         mapReduce.run(
                 wordCount.input(SequentialMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
-                wordCount.mapper(),
-                wordCount.reducer(), map::put);
+                wordCount.mapReduceJob(),
+                map::put);
         return map;
     }
 
