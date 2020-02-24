@@ -46,8 +46,7 @@ public class ParallelMapReduceWordCountBenchmark {
         HashMap<String, Long> map = new HashMap<String, Long>();
         mapReduce.run(
                 wordCount.input(ParallelMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
-                wordCount.mapper(),
-                wordCount.reducer(),
+                wordCount.mapReduceJob(),
                 map::put);
         return map;
     }

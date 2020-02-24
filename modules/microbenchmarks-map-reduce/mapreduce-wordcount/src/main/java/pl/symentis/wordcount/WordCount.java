@@ -1,6 +1,7 @@
 package pl.symentis.wordcount;
 
 import pl.symentis.mapreduce.Input;
+import pl.symentis.mapreduce.MapReduceJob;
 import pl.symentis.mapreduce.Mapper;
 import pl.symentis.mapreduce.Output;
 import pl.symentis.mapreduce.Reducer;
@@ -59,19 +60,23 @@ public class WordCount {
         return new WordCountMapper(stopwords);
     }
 
-    public Reducer<String, Long, String, Long> reducer() {
+    public Reducer<String, Long, Long> reducer() {
         return new WordCountReducer();
     }
+    
+    public MapReduceJob<String, String, Long, Long> mapReduceJob(){
+    	return new MapReduceJob<String, String, Long, Long>(mapper(), reducer(), () -> 0L, (a,b) -> a+b);
+    }
 
-    static final class WordCountReducer implements Reducer<String, Long, String, Long> {
+    static final class WordCountReducer implements Reducer<String, Long, Long> {
 
         @Override
-        public void reduce(String k, Iterable<Long> input, Output<String, Long> output) {
+        public Long reduce(String k, Iterable<Long> input) {
             Long sum = 0L;
             for (Long l : input) {
                 sum += l;
             }
-            output.emit(k, sum);
+            return sum;
         }
 
     }

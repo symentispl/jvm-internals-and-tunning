@@ -23,8 +23,7 @@ public class ForkJoinMapReduceTest {
         Map<String, Long> smap = new HashMap<>();
         workflow.run(
                 wordCount.input(new File("src/test/resources/big.txt")),
-                wordCount.mapper(),
-                wordCount.reducer(),
+                wordCount.mapReduceJob(),
                 smap::put);
         workflow.shutdown();
 
@@ -32,8 +31,7 @@ public class ForkJoinMapReduceTest {
         Map<String, Long> fmap = new HashMap<>();
         workflow.run(
                 wordCount.input(new File("src/test/resources/big.txt")),
-                wordCount.mapper(),
-                wordCount.reducer(),
+                wordCount.mapReduceJob(),
                 fmap::put);
         workflow.shutdown();
 

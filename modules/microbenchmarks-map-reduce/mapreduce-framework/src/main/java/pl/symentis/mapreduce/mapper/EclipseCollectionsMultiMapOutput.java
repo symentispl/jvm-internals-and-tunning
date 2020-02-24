@@ -1,10 +1,11 @@
 package pl.symentis.mapreduce.mapper;
 
-import org.eclipse.collections.impl.multimap.list.FastListMultimap;
-import pl.symentis.mapreduce.MapperOutput;
-
-import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
+
+import org.eclipse.collections.impl.multimap.list.FastListMultimap;
+
+import pl.symentis.mapreduce.MapperOutput;
 
 public final class EclipseCollectionsMultiMapOutput<K, V> implements MapperOutput<K, V> {
 
@@ -21,7 +22,7 @@ public final class EclipseCollectionsMultiMapOutput<K, V> implements MapperOutpu
     }
 
     @Override
-    public Iterator<V> values(K k) {
-        return multimap.get(k).iterator();
+    public List<V> values(K k) {
+        return multimap.get(k).toList();
     }
 }

@@ -21,13 +21,13 @@ public class BatchingParallelJoinMapReduceTest {
 
         MapReduce workflow = new SequentialMapReduce.Builder().build();
         Map<String, Long> smap = new HashMap<>();
-        workflow.run(wordCount.input(new File("src/test/resources/big.txt")), wordCount.mapper(), wordCount.reducer(),
+        workflow.run(wordCount.input(new File("src/test/resources/big.txt")), wordCount.mapReduceJob(),
                 smap::put);
         workflow.shutdown();
 
         workflow = new BatchingParallelMapReduce.Builder().build();
         Map<String, Long> fmap = new HashMap<>();
-        workflow.run(wordCount.input(new File("src/test/resources/big.txt")), wordCount.mapper(), wordCount.reducer(),
+        workflow.run(wordCount.input(new File("src/test/resources/big.txt")), wordCount.mapReduceJob(),
                 fmap::put);
         workflow.shutdown();
 

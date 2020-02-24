@@ -26,8 +26,8 @@ public final class HashMapOutput<K, V> implements MapperOutput<K, V> {
     }
 
     @Override
-    public Iterator<V> values(K k) {
-        return map.get(k).iterator();
+    public List<V> values(K k) {
+        return map.get(k);
     }
 
     public Map<K, List<V>> asMap() {
