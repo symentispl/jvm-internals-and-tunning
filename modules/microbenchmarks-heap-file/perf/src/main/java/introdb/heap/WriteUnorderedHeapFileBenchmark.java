@@ -1,12 +1,13 @@
 package introdb.heap;
 
+import static java.nio.file.StandardOpenOption.READ;
+import static java.nio.file.StandardOpenOption.WRITE;
 import static java.util.stream.Collectors.toList;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
-import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.stream.IntStream;
 
@@ -36,25 +37,19 @@ public class WriteUnorderedHeapFileBenchmark {
 		buffer = new byte[bufferSize];
 		key = 0;
 
-		copies = IntStream.range(0, 1000)
-				.mapToObj(i -> {
-					try {
-						return new UnorderedHeapFile(
-								new FileChannelBlockFile(
-										FileChannel.open(
-												Files.createTempFile("heap.", "." + i), 
-												StandardOpenOption.WRITE, StandardOpenOption.READ), 
-										4 * 1024));
-					} catch (IOException e) {
-						throw new UncheckedIOException(e);
-					}
-				})
-				.collect(toList());
+		copies = IntStream.range(0, 1000).mapToObj(i -> {
+			try {
+				FileChannel fileChannel = FileChannel.open(Files.createTempFile("heap.", "." + i), WRITE, READ);
+				return new UnorderedHeapFile(new FileChannelBlockFile(fileChannel, 4 * 1024));
+			} catch (IOException e) {
+				throw new UncheckedIOException(e);
+			}
+		}).collect(toList());
 	}
 
 	@TearDown(Level.Iteration)
 	public void tearDown() throws Exception {
-		for(UnorderedHeapFile heapFile:copies) {
+		for (UnorderedHeapFile heapFile : copies) {
 			heapFile.closeForcibly();
 		}
 	}
@@ -62,8 +57,8 @@ public class WriteUnorderedHeapFileBenchmark {
 	@Benchmark
 	@OperationsPerInvocation(1000)
 	public void writeKey() throws Exception {
-		for(UnorderedHeapFile heapFile:copies) {
-			heapFile.put(new Entry(key++, buffer));			
+		for (UnorderedHeapFile heapFile : copies) {
+			heapFile.put(new Entry(key++, buffer));
 		}
 	}
 
