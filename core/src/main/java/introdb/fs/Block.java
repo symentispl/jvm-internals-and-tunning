@@ -13,15 +13,41 @@ public interface Block extends Iterable<PersistentRecord> {
 		return new ByteBufferBlock(blockNr, byteBuffer);
 	}
 
+	/**
+	 * Return byte array which represents block content
+	 * 
+	 * @return
+	 */
 	byte[] array();
 
+	/**
+	 * Current write position in block
+	 * 
+	 * @return
+	 */
 	int position();
 
+	/**
+	 * Number of remaining free bytes in block
+	 * 
+	 * @return
+	 */
 	int remaining();
 
-	void flush(BlockFile bf) throws IOException;
-
+	/**
+	 * Write record to a next free slot
+	 * 
+	 * @param record
+	 * @return
+	 */
 	Optional<PersistentRecord> write(TransientRecord record);
+
+	/**
+	 * Flush block to underlying storage
+	 * 
+	 * @throws IOException
+	 */
+	void flush(BlockFile blockFile) throws IOException;
 
 	RecordCursor cursor();
 
