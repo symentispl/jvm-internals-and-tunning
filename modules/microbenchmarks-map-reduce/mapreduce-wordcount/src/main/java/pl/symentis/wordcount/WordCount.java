@@ -1,5 +1,20 @@
 package pl.symentis.wordcount;
 
+import static java.lang.String.format;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOError;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.lang.reflect.InvocationTargetException;
+import java.util.NoSuchElementException;
+import java.util.StringTokenizer;
+import java.util.regex.Pattern;
+
 import pl.symentis.mapreduce.Input;
 import pl.symentis.mapreduce.MapReduceJob;
 import pl.symentis.mapreduce.Mapper;
@@ -7,13 +22,6 @@ import pl.symentis.mapreduce.Output;
 import pl.symentis.mapreduce.Reducer;
 import pl.symentis.wordcount.stopwords.ICUThreadLocalStopwords;
 import pl.symentis.wordcount.stopwords.Stopwords;
-
-import java.io.*;
-import java.lang.reflect.InvocationTargetException;
-import java.util.NoSuchElementException;
-import java.util.regex.Pattern;
-
-import static java.lang.String.format;
 
 public class WordCount {
 
@@ -67,6 +75,10 @@ public class WordCount {
     public MapReduceJob<String, String, Long, Long> mapReduceJob(){
     	return new MapReduceJob<String, String, Long, Long>(mapper(), reducer(), () -> 0L, (a,b) -> a+b);
     }
+    
+    public MapReduceJob<String, String, Long, Long> tokenizerMapReduceJob(){
+    	return new MapReduceJob<String, String, Long, Long>(new WordCountTokenizerMapper(stopwords), reducer(), () -> 0L, (a,b) -> a+b);
+    }
 
     static final class WordCountReducer implements Reducer<String, Long, Long> {
 
@@ -94,6 +106,26 @@ public class WordCount {
         @Override
         public void map(String in, Output<String, Long> output) {
             for (String str : PATTERN.split(in.toLowerCase())) {
+                if (!stopwords.contains(str)) {
+                    output.emit(str, 1L);
+                }
+            }
+        }
+    }
+
+    static final class WordCountTokenizerMapper implements Mapper<String, String, Long> {
+
+        private final Stopwords stopwords;
+
+        WordCountTokenizerMapper(Stopwords stopwords) {
+            this.stopwords = stopwords;
+        }
+
+        @Override
+        public void map(String in, Output<String, Long> output) {
+        	StringTokenizer stringTokenizer = new StringTokenizer(in.toLowerCase()," \t\n\r!'#%&'()*+,-./:;<=>?@[/]^_{|}~");
+            while(stringTokenizer.hasMoreTokens()) {
+            	String str = stringTokenizer.nextToken();
                 if (!stopwords.contains(str)) {
                     output.emit(str, 1L);
                 }

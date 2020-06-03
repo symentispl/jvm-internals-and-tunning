@@ -14,6 +14,7 @@ public class BatchingParallelMapReduce implements MapReduce {
         private int threadPoolMaxSize = Runtime.getRuntime().availableProcessors();
         private int phaserMaxTasks = 1000;
         private int batchSize = 10000;
+		private boolean forkJoin;
 
         public Builder withThreadPoolSize(int threadPoolMaxSize) {
             this.threadPoolMaxSize = threadPoolMaxSize;
@@ -29,9 +30,14 @@ public class BatchingParallelMapReduce implements MapReduce {
             this.batchSize = batchSize;
             return this;
         }
+        
+        public Builder withForkJoin(boolean forkJoin) {
+        	this.forkJoin = forkJoin;
+        	return this;
+        }
 
         public MapReduce build() {
-            return new BatchingParallelMapReduce(threadPoolMaxSize, phaserMaxTasks, batchSize);
+            return new BatchingParallelMapReduce(threadPoolMaxSize, phaserMaxTasks, batchSize, forkJoin);
         }
     }
 
@@ -39,8 +45,12 @@ public class BatchingParallelMapReduce implements MapReduce {
     private final int phaserMaxTasks;
     private final int batchSize;
 
-    public BatchingParallelMapReduce(int threadPoolMaxSize, int phaserMaxTasks, int batchSize) {
-        this.executorService = Executors.newFixedThreadPool(threadPoolMaxSize);
+    public BatchingParallelMapReduce(int threadPoolMaxSize, int phaserMaxTasks, int batchSize, boolean forkJoin ) {
+    	if(forkJoin) {
+            this.executorService  = ForkJoinPool.commonPool();
+    	} else {
+    		this.executorService = Executors.newFixedThreadPool(threadPoolMaxSize);    		
+    	}
         this.phaserMaxTasks = phaserMaxTasks;
         this.batchSize = batchSize;
     }

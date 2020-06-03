@@ -11,14 +11,15 @@
 				<exclude>modules/src/**</exclude>
 			</excludes>
 			<includes>
+				<include>HANDOUT.adoc</include>
 				<include>mvnw</include>
 				<include>mvnw.cmd</include>
-				<include>.mvn/</include>								
+				<include>.mvn/</include>
 				<include>pom.xml</include>
 				<include>src/main/assembly/*</include>
 				<include>modules/**/src/main/**</include>
 				<include>modules/**/src/test/**</include>
-				<include>modules/**/pom.xml</include>				
+				<include>modules/**/pom.xml</include>
 			</includes>
 		</fileSet>
 	</fileSets>

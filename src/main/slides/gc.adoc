@@ -692,46 +692,45 @@ z generacji jest pomniejszany
 * jeśli cel przepustowości nie jest osiągniety, rozmiary obydwu generacji są
 powiększane, proporcjonalnie do czasu odśmiecania w każdej z nich
 
-=== Kilka pokręteł
+=== few important switches
 
-* `-XX:NewRatio=<N>`, określa stosunek rozmiaru generacji "Old" do generacji
-"Young", `N=Old/Young`, domyślne wartości zależne są od platformy i wersji JDK
-* `-XX:MaxNewSize=<N>` oraz `-XX:NewSize=<N>`, określa rozmiar generacji Young
-w bajtach
-
-=== !
-
-* `-XX:SurvivorRatio=10`, określa stosunek rozmiaru przestrzeni Eden do
-przestrzeni Survivor
-* `-XX:TargetSurvivorRatio=5` oraz `-XX:MaxTenuringThreshold=15`, docelowy i
-maksymalny czas życia obiektu w obszarze Survivor
+* `-XX:NewRatio=<N>`, defines the ratio of the "Old" generation size to the generation
+"Young", `N = Old / Young`, the default values depend on the platform and JDK version
+* `-XX:MaxNewSize=<N>` and `-XX:NewSize=<N>`, defines the size of the Young generation
+in bytes
 
 === !
 
-* `-XX:YoungGenerationSizeIncrement<T>` oraz
-`-XX:TenuredGenerationSizeIncrement=<T>`, określają szybkość przyrostu rozmiaru
-generacji, domyślnie 20%
-* `-XX:AdaptiveSizeDecrementScaleFactor=<D>`, określa współczynnik o który
-rozmiar generacji jest pomniejszany, i wynosi on T/D
-* `-XX:+UseGCOverheadLimit`, kontroluje kiedy rzucany jest `OutOfMemoryError`,
-domyślnie gdy >98% czasu aplikacja spędza na GC, odzyskując >2% pamięci
-
-=== Kilka pokręteł
-
-* `-XX:+CMSConcurrentMTEnabled` i `-XX:ConcGCThreads=<N>`, ilość wątków
-wykorzystywanych przez GC podczas faz współbieżnych
-* `-XX:PrintAdaptiveSizePolicy`, wyświetla informacje o zmianach obszarów
-* `-XX:+AdaptiveSizePolicy`, włącza politykę dynamicznej zmiany rozmiaru obszarów
+* `-XX:SurvivorRatio=10`, determines the ratio of the Eden space size to
+Survivor space
+* `-XX:TargetSurvivorRatio=5` and `-XX:MaxTenuringThreshold=15`, target and
+maximum lifetime of the object in the Survivor area
 
 === !
 
-* `-XX+UseCMSInitiatingOccupancyOnly` oraz `-XX:CMSInitiatingOccupancyFraction`,
-procentowy rozmiary obszaru Old, wymuszający odśmiecanie
-* w przeciwieństwie do "throughput collectors", który wyzwalana są gdy jest brak
-dostępnej pamięci
-* `-XX:+CMSClassUnloadingEnabled`, usuwanie klas podczas faz CMS
-* `-XX:+CMSIncrementalMode`, wymusza regularne uruchamianie CMS,
-kosztem wątków aplikacji (deprecated)
+* `-XX:YoungGenerationSizeIncrement<T>` and
+`-XX:TenuredGenerationSizeIncrement=<T>`, determine the size increase rate
+generation, default 20%
+* `-XX:AdaptiveSizeDecrementScaleFactor=<D>`, determines the factor by which
+the generation size is reduced and it is T / D
+* `-XX:+UseGCOverheadLimit`, controls when `OutOfMemoryError` is thrown,
+by default, when> 98% of the time the application spends on GC, recovering> 2% of memory
+
+=== more switches
+
+* `-XX:+CMSConcurrentMTEnabled` and `-XX:ConcGCThreads=<N>`, number of threads
+used by GC during concurrent phases
+* `-XX:PrintAdaptiveSizePolicy`,displays information about area changes
+* `-XX:+AdaptiveSizePolicy`, enables the policy of dynamic area resizing
+
+=== !
+
+* `-XX+UseCMSInitiatingOccupancyOnly` and `-XX:CMSInitiatingOccupancyFraction`,
+Percentage of Old, forcing garbage collection in contrast to "throughput collectors", which are triggered when missing
+available memory
+* `-XX:+CMSClassUnloadingEnabled`, deleting classes during CMS phases
+* `-XX:+CMSIncrementalMode`, forces regular CMS startup,
+at the expense of application threads (deprecated)
 
 === !
 

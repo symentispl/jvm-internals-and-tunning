@@ -21,3 +21,16 @@ mvn archetype:generate \
 ----
 java -jar perf/target/benchmarks.jar -prof jmh.extras.Async:flameGraphOpts=--minwidth,2
 ----
+
+
+# run benchmarks with JFR profiler
+
+----
+java -jar perf/target/benchmarks.jar -prof -prof jmh.extras.JFR
+----
+
+# run benchmarks with perfasm
+
+----
+java -jar perf/target/benchmarks.jar -prof -prof perfasm
+----

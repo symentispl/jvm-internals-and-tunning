@@ -22,10 +22,18 @@
       - git
       - ca-certificates
       - perl-modules
+    become: yes
+  - name: install virtualbox extensions
+    apt:
+      name: "{{ item }}"
+      update_cache: yes
+    loop:
       # we need to mount and access shared folders
       - virtualbox-guest-utils
       - virtualbox-guest-dkms
     become: yes
+    tags:
+      - vbox
   - name: setup user
     user:
       name: ubuntu
@@ -34,6 +42,8 @@
         # we need to mount and access shared folders
         - vboxsf
     become: yes
+    tags:
+      - vbox
   - name: set perf_event_paranoid parameter
     sysctl:
       name: kernel.perf_event_paranoid

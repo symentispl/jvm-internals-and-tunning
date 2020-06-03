@@ -10,14 +10,7 @@ public final class HashMapOutput<K, V> implements MapperOutput<K, V> {
 
     @Override
     public void emit(K k, V v) {
-        map.compute(k, (key, oldValue) -> {
-            List<V> newValue = oldValue;
-            if (newValue == null) {
-                newValue = new ArrayList<>();
-            }
-            newValue.add(v);
-            return newValue;
-        });
+        map.computeIfAbsent(k, key -> new ArrayList<V>()).add(v);
     }
 
     @Override

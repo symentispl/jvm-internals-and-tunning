@@ -22,8 +22,12 @@ public class BatchingParallelMapReduceWordCountBenchmark {
     @Param({"10000"})
     public int batchSize;
 
-    private WordCount wordCount;
+    @Param({"false"})
+	public boolean forkJoin;
+
+	private WordCount wordCount;
     private MapReduce mapReduce;
+
 
     @SuppressWarnings("unchecked")
     @Setup(Level.Trial)
@@ -37,6 +41,7 @@ public class BatchingParallelMapReduceWordCountBenchmark {
                 .withPhaserMaxTasks(phaserMaxTasks)
                 .withThreadPoolSize(threadPoolMaxSize)
                 .withBatchSize(batchSize)
+                .withForkJoin(forkJoin)
                 .build();
     }
 
@@ -55,4 +60,13 @@ public class BatchingParallelMapReduceWordCountBenchmark {
         return map;
     }
 
+    @Benchmark
+    public Object countWordsWithTokenier() throws Exception {
+        HashMap<String, Long> map = new HashMap<String, Long>();
+        mapReduce.run(
+                wordCount.input(BatchingParallelMapReduceWordCountBenchmark.class.getResourceAsStream("/big.txt")),
+                wordCount.tokenizerMapReduceJob(),
+                map::put);
+        return map;
+    }
 }
