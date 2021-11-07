@@ -107,8 +107,9 @@ image::bbb.jpg[background, size=cover]
 enabled by default since Java 8, +
 uses both compilers for better JVM start up time
 
-becaused JVM suffered from so called _warmups_, +
-it didn't solve the problem, just made it less annoying
+because JVM suffered from so-called _warmups_, +
+it didn't solve the problem, +
+it just made it less annoying
 
 [role=highlight_title]
 == any questions?
@@ -122,14 +123,16 @@ when code is compiled?
 [%notitle]
 === print compilation fibonacci
 
-*-XX:+PrintCompilation Fibonacci*
+*-Xlog:jit+compilation=debug Fibonacci*
 
- 63   16       3   Fibonacci::fibonacci (22 bytes)
- 63   17       4   Fibonacci::fibonacci (22 bytes)
- 64   16       3   Fibonacci::fibonacci (22 bytes) made not entrant
- 145  24   !   3   java.io.BufferedReader::readLine (304 bytes)
- 158  36     n 0   sun.misc.Unsafe::getObjectVolatile (native)
- 160  38  s    3   java.io.BufferedInputStream::read (49 bytes)
+[source]
+--
+[0,080s][debug][jit,compilation]   36   !   3       java.util.concurrent.ConcurrentHashMap::putVal (432 bytes)
+[0,080s][debug][jit,compilation]   40     n 0       jdk.internal.misc.Unsafe::compareAndSetLong (native)   
+[0,081s][debug][jit,compilation]   42     n 0       jdk.internal.misc.Unsafe::compareAndSetObject (native)   
+[0,084s][debug][jit,compilation]   37       3       java.util.concurrent.ConcurrentHashMap::addCount (289 bytes)
+[0,086s][debug][jit,compilation]   39       3       java.util.concurrent.ConcurrentHashMap::spread (10 bytes)
+--
 
 === compilation attributes
 
@@ -145,7 +148,7 @@ when code is compiled?
 * 1: C1 with full optimization (no profiling)
 * 2: C1 with invocation and backedge counters
 * 3: C1 with full profiling (level 2 and `MethodData`)
-* 4: C2
+* 4: C2 Godspeed You!
 
 === profiling?
 
@@ -157,7 +160,12 @@ use `MethodCounter` and `MethodData` +
 to record invocations and other profiler data +
 (backedges, call sites profile, taken branches)
 
-=== which leads to next question
+
+=== 
+
+src/hotspot/share/oops/methodData.hpp
+
+=== which leads to a next question
 
 == question number two
 
@@ -165,12 +173,29 @@ what code gets compiled?
 
 === a hot code
 
-a code which has reached invocation threasholds
+a code which has reached invocation thresholds
 
 2000 invocations for C1 +
 10000 invocations for C2
 
 (and trivial methods)
+
+=== compiler flags
+
+* `-XX:+TieredCompilation` 
+* `-XX:+TieredStopAtLevel=`, Stop at given compilation level
+* `-XX:Tier4InvocationThreshold=`, `-XX:Tier3MinInvocationThreshold=` minimum invocation of methods at which compiler is invoked
+* `Tier3BackEdgeThreshold`,`Tier4BackEdgeThreshold`, Back edge threshold at which tier OSR compilation is invoked
+
+== compiler policy
+
+https://stackoverflow.com/questions/35601841/how-does-the-jvm-decided-to-jit-compile-a-method-categorize-a-method-as-hot
+
+== compiler workers
+
+HotSpot runs set of threads which compile your code in a background
+
+== code cache
 
 == question number three
 
@@ -227,12 +252,14 @@ public void nullCheckFolding() {
 }
 ----
 
+=== !
+
+don't mix it with null check elimination (in next chapter)
+
 [%notitle]
 === null check folding flags
 
--XX:+UnlockDiagnosticVMOptions +
--XX:+PrintCompilation +
--XX:+PrintInlining
+-Xlog:jit+inlining=debug
 
 [%notitle]
 === after inline
@@ -280,9 +307,10 @@ HotSpot DISassembler aka hsdis and compiler flags
 === null check folding assembly flags
 
   -XX:+UnlockDiagnosticVMOptions +
-  -XX:+PrintCompilation +
-  -XX:+PrintInlining +
+  -Xlog:jit+inlining=debug
   -XX:CompileCommand="print,*NullCheckFolding.nullCheckFolding"
+
+=== PrintAssembly and CompileCommand
 
 [%notitle]
 === disassembled null check folding
@@ -300,6 +328,8 @@ test   %eax,0x16b74929(%rip)        # 0x00007f6cd3c86000
 retq
 ----
 
+=== links to how to read assembly, function calling conventions and assembly 101
+
 // TODO describe function-calling conventions http://unixwiz.net/techtips/win32-callconv-asm.html
 
 [role="highlight_title"]
@@ -310,11 +340,13 @@ image::tumblr_nu2sk1SnbJ1snwccbo2_500.gif[background]
 [%notitle]
 === JIT is speculating explained
 
-JIT not only compiles hot methods +
+JIT doesn not only compiles hot methods +
 but also optimizes `hot paths`, +
 so it speculates which part of your code is actually executed
 
 (so, compilations don't dominate your application time)
+
+=== uncommon traps
 
 [%notitle]
 === uncommong trap - branch prediction
@@ -393,6 +425,10 @@ for (int i = 0; i < 250; ++i) {
 
 image::shall-not-pass.gif[background]
 
+=== null check elimination
+
+https://jpbempel.github.io/2013/09/03/null-check-elimination.html
+
 === constant folding and propagation
 
 [%notitle]
@@ -429,12 +465,14 @@ public static int pointerCompare(Object obj) {
   programming language whose implementation is handled specially
   by the compiler
 
+=== intrinsics vs native vs compiler
+
 [%notitle]
 === intrinsics in JVM
 
 in a context of JVM it means compiler generates specialized assembler
 instructions, +
-like atomic or vectorized (AVX2) operations
+like vectorized (AVX2) operations
 
 [%notitle]
 === system arraycopy
@@ -471,6 +509,25 @@ public static int lockEllision(int j) {
     return j;
 }
 ----
+
+[%notitle]
+=== lock elission example
+
+[source,java]
+----
+public Object lock = new Object();
+
+public static int lockEllision(int j) {
+    synchronized (lock) {
+       j++;
+      }
+    return j;
+}
+----
+
+== autovectorization
+
+== throwing exceptions
 
 [%notitle]
 === smoke and mirrors
