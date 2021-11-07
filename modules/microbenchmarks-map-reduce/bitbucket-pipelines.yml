@@ -1,9 +1,0 @@
-image: openjdk:11.0.4-slim
-
-pipelines:
-  default:
-    - step:
-        caches:
-          - maven
-        script: # Modify the commands below to build your repository.
-          - ./mvnw -B verify
