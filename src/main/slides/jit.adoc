@@ -161,9 +161,10 @@ to record invocations and other profiler data +
 (backedges, call sites profile, taken branches)
 
 
-=== 
+=== !
 
-src/hotspot/share/oops/methodData.hpp
+https://github.com/openjdk/jdk11/blob/master/src/hotspot/share/oops/methodData.hpp[src/hotspot/share/oops/methodData.hpp]
+
 
 === which leads to a next question
 
@@ -182,16 +183,20 @@ a code which has reached invocation thresholds
 
 === compiler flags
 
-* `-XX:+TieredCompilation` 
-* `-XX:+TieredStopAtLevel=`, Stop at given compilation level
-* `-XX:Tier4InvocationThreshold=`, `-XX:Tier3MinInvocationThreshold=` minimum invocation of methods at which compiler is invoked
-* `Tier3BackEdgeThreshold`,`Tier4BackEdgeThreshold`, Back edge threshold at which tier OSR compilation is invoked
+`-XX:+TieredCompilation`:: Enables tiered compilation
+`-XX:+TieredStopAtLevel=`:: Stop at given compilation level
+`-XX:Tier4InvocationThreshold=`,`-XX:Tier3MinInvocationThreshold=`:: minimum invocation of methods at which compiler is invoked
+`Tier3BackEdgeThreshold`,`Tier4BackEdgeThreshold`:: Back edge threshold at which tier OSR compilation is invoked
 
 == compiler policy
 
-https://stackoverflow.com/questions/35601841/how-does-the-jvm-decided-to-jit-compile-a-method-categorize-a-method-as-hot
+of course it is all more complex
 
-== compiler workers
+https://stackoverflow.com/questions/35601841/how-does-the-jvm-decided-to-jit-compile-a-method-categorize-a-method-as-hot[How does the JVM decided to JIT-compile a method (categorize a method as "hot")?]
+
+https://github.com/openjdk/jdk11/blob/master/src/hotspot/share/runtime/simpleThresholdPolicy.hpp[src/hotspot/share/runtime/simpleThresholdPolicy.hpp]
+
+== compiler queues and workers
 
 HotSpot runs set of threads which compile your code in a background
 
@@ -340,7 +345,7 @@ image::tumblr_nu2sk1SnbJ1snwccbo2_500.gif[background]
 [%notitle]
 === JIT is speculating explained
 
-JIT doesn not only compiles hot methods +
+JIT does not only compiles hot methods +
 but also optimizes `hot paths`, +
 so it speculates which part of your code is actually executed
 
