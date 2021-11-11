@@ -1,1 +1,1 @@
-rootProject.name = "slides-bootstrap"
+rootProject.name = "jvm-internals-and-tunning"

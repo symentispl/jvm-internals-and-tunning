@@ -3,7 +3,8 @@
 From previous section, we know what Java bytecode is interpreted
 (actually interpreter is generated from template, but it isn't the point)
 
-Interpreted languages are know for being slow (like Python, Ruby, Lua. PHP).
+Interpreted languages are know for being slow +
+(like Python, Ruby, Lua. PHP).
 
 What makes Java fast?
 
@@ -11,11 +12,11 @@ What makes Java fast?
 
 Just In Time compiler, +
 is a technique of code compilation during runtime, +
-as oposed to Ahead Of Time compilation +
+as opposed to Ahead Of Time compilation +
 like C or C++, or Go or Rust
 
 [%notille]
-== smalltalk and lisp
+== Smalltalk and lisp
 
 first time used in LISP and than later on expanded during development of
 Smalltalk +
@@ -91,16 +92,28 @@ image::bbb.jpg[background, size=cover]
 === C1
 
 * it's a fast compiler
-* trivial methods, up to 6 bytes (`MaxTrivialSize`), are inlined by default
-* and up 35 bytes (in bytecode) (`MaxInlineSize`) for not _hot code_
 * uses linear register allocation
+* settings can be found in https://github.com/openjdk/jdk11/blob/master/src/hotspot/share/c1/c1_globals.hpp[src/hotspot/share/c1/c1_globals.hpp]
+
+=== C1 inline settings
+
+`C1MaxTrivialSize=6`:: The maximum bytecode size of a trivial method to be inlined by C1 (level 1)
+`C1MaxInlineSize=35`:: The maximum bytecode size of a method to be inlined by C1 (level 3)
+`C1MaxInlineLevel=9`:: The maximum number of nested calls that are inlined by C1
 
 === C2
 
 * is slow, but generates faster code (compared to C1)
-* by default limited by bytecode size of 325 (`FreqInlineSize`)
 * uses graph coloring algorithm for register allocation
 * based on templates, called Architecture Desciption Language
+* settings can be found in https://github.com/openjdk/jdk11/blob/master/src/hotspot/share/opto/c2_globals.hpp[src/hotspot/share/opto/c2_globals.hpp]
+
+=== C2 settings
+
+`MaxInlineLevel=15`:: maximum number of nested calls that are inlined by high tier compiler
+`MaxInlineSize=35`:: The maximum bytecode size of a method to be inlined by high tier compiler (WARNING!!!)
+`FreqInlineSize=325`:: The maximum bytecode size of a frequent method to be inlined
+
 
 === tiered compliation
 
@@ -190,17 +203,48 @@ a code which has reached invocation thresholds
 
 == compiler policy
 
-of course it is all more complex
+of course, it is all more complex
 
 https://stackoverflow.com/questions/35601841/how-does-the-jvm-decided-to-jit-compile-a-method-categorize-a-method-as-hot[How does the JVM decided to JIT-compile a method (categorize a method as "hot")?]
 
+or 
+
 https://github.com/openjdk/jdk11/blob/master/src/hotspot/share/runtime/simpleThresholdPolicy.hpp[src/hotspot/share/runtime/simpleThresholdPolicy.hpp]
 
-== compiler queues and workers
+=== compiler queues and workers
 
-HotSpot runs set of threads which compile your code in a background
+HotSpot runs set of threads that compile your code in a background +
+(this setting can be adjusted with `-XX:-BackgroundCompilation`)
+
+Compilation occurs asynchronously for methods that are placed on the compilation queue.
+
+The queue is not strictly ordered; hot methods are compiled before other methods in the queue. This is another reason compilation IDs can appear out of order in the compilation log.
+
+=== !
+
+Number of total compiler threads can be controled with `-XX:CICompilerCount=N` (minimum value is 2) +
+
+Default for 8 cores is 1 C1 thread and 2 C2 threads.
 
 == code cache
+
+Compiled code is hold in a special memory region called `code cache`, which has a fixed size, once it has filled up, JVM will not be able to compile any additional code.
+
+=== !
+
+InitialCodeCacheSize:: sets initial size of code cache
+ReservedCodeCacheSize:: sets maximum size of code cache
+SegmentedCodeCache:: code cache is divided into segments (holding different types of compiled code)
+
+=== !
+
+In Java 11, the code cache is segmented into three parts:
+
+* Nonmethod code
+* Profiled code
+* Nonprofiled code
+
+This was introduced in Java 9, https://openjdk.java.net/jeps/197[JEP 197: Segmented Code Cache]
 
 == question number three
 
@@ -236,7 +280,7 @@ image::messy-desk_2637008b.jpg[background, size=cover]
 *&* +
 *register allocation*
 
-[role="highlight_title]
+[role="highlight_title"]
 == inlining: expanding optimizations horizon
 
 image::horizon-013.jpg[background]
@@ -259,12 +303,15 @@ public void nullCheckFolding() {
 
 === !
 
-don't mix it with null check elimination (in next chapter)
+don't mix it with null check elimination +
+(in next slides)
 
 [%notitle]
 === null check folding flags
 
--Xlog:jit+inlining=debug
+to trace inlining add this command line switch,
+
+`-Xlog:jit+inlining=debug`
 
 [%notitle]
 === after inline
@@ -317,6 +364,15 @@ HotSpot DISassembler aka hsdis and compiler flags
 
 === PrintAssembly and CompileCommand
 
+Both flags enable tracing (and some control) of method compilation +
+and require `-XX:+UnlockDiagnosticVMOptions`.
+
+=== !
+
+`java -XX:CompileCommand=help` will print all possible options. 
+
+and `-XX:PrintAssemblyOptions=intel` will output assembly in Intel syntax, which I find easier to read, 
+
 [%notitle]
 === disassembled null check folding
 
@@ -333,9 +389,16 @@ test   %eax,0x16b74929(%rip)        # 0x00007f6cd3c86000
 retq
 ----
 
-=== links to how to read assembly, function calling conventions and assembly 101
+=== don't be a afraid of the dark
 
-// TODO describe function-calling conventions http://unixwiz.net/techtips/win32-callconv-asm.html
+https://en.wikibooks.org/wiki/X86_Disassembly/Calling_Conventions[x86 Disassembly/Calling Conventions]
+
+https://en.wikibooks.org/wiki/X86_Assembly/X86_Architecture#Addressing_modes[x86 Assembly/X86 Architecture/Addressing modes]
+
+https://www.cs.princeton.edu/courses/archive/spr08/cos217/reading/ProgrammingGroundUp-1-0-lettersize.pdf[Programming from the Ground Up]
+
+https://pacman128.github.io/static/pcasm-book.pdf[PC Assembly Language]
+
 
 [role="highlight_title"]
 == JIT is speculating
@@ -352,6 +415,21 @@ so it speculates which part of your code is actually executed
 (so, compilations don't dominate your application time)
 
 === uncommon traps
+
+if JIT is speculating, what happens when it fails?
+
+code takes branch that was not optimized?
+
+type profile changes?
+
+=== !
+
+we fail into an uncommon trap
+
+From HotSpot code (https://github.com/openjdk/jdk11/blob/37115c8ea4aff13a8148ee2b8832b20888a5d880/src/hotspot/share/runtime/deoptimization.hpp#L276[src/hotspot/share/runtime/deoptimization.hpp])
+
+`Performs an uncommon trap for compiled code.
+The top most compiler frame is converted into interpreter frames`
 
 [%notitle]
 === uncommong trap - branch prediction
@@ -579,37 +657,20 @@ there is a limit on the size of compiled/native method +
 and there is a limit on inline level
 
 so choose your small and private methods wisely +
-choose _hot path_ in your application code
+understand _hot path_ in your application code
 
 and watch it with JITWatch
 
 === what is JITWatch
+
+https://github.com/AdoptOpenJDK/jitwatch[jitwatch], +
+is a log analyser and visualiser for HotSpot JIT compiler
 
 === more warnings
 
 * deep call stacks are killers for inlining, I am looking at you Spring, JEE and RxJava too
 * deep inheritance trees (aka `megamorphs`)
 * unpredictable branches are bad for ya! "let's kill the if"
-
-== it's not all so beatiful
-
-=== frame mangling
-
-each time we compile method (especially OSR) we need to do frame mangling
-
-* Java frame
-** interpreted frame
-** compiled frame
-* external frame
-** entry frame
-
-=== compiler code complexity
-
-=== new hope
-
-* graalVM and trufle
-* substrateVM aka JVM on Java
-
-== thanks
+* using exceptions for control flow
 
 == Q&A
