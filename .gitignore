@@ -10,3 +10,6 @@ build
 .gradle
 .idea
 .vscode
+infrastructure/vbox/jvm-workshops/
+infrastructure/vbox/packer_cache/
+.factorypath

@@ -2,6 +2,15 @@
 - hosts: all
   user: ubuntu
   strategy: free
+  roles:
+    - role: Comcast.sdkman
+      sdkman_user: ubuntu
+      sdkman_group: ubuntu
+      sdkman_auto_answer: true
+      sdkman_update: true
+      sdkman_install_packages:
+        - { candidate: java, version: 11.0.13-tem }
+      sdkman_offline_mode: false
   tasks:
   - name: install packages
     apt:
@@ -58,34 +67,24 @@
       reload: yes
       state: present
     become: yes
-  - name: install SDKMAN
-    shell: curl -s "https://get.sdkman.io" | bash
-    args:
-      creates: "/home/ubuntu/.sdkman"
-  - name: install JDK
-    shell: ". /home/ubuntu/.sdkman/bin/sdkman-init.sh && sdk update && sdk install java 11.0.6.hs-adpt"
-    args:
-      creates: "/home/ubuntu/.sdkman/candidates/java/11.0.6.hs-adpt/"
-      executable: /bin/bash
+  # - name: JDK home
+  #   shell: "sdk home java 11.0.13-tem" 
+  #   register: jdk_home
+  #   become: yes
+  #   become_user: ubuntu
+  #   become_flags: -i
   - name: create async profiler directory
     file:
       path: "/home/ubuntu/tools/async-profiler"
       state: directory
   - name: install async profiler
     unarchive:
-      src: https://github.com/jvm-profiling-tools/async-profiler/releases/download/v1.6/async-profiler-1.6-linux-x64.tar.gz
+      src: https://github.com/jvm-profiling-tools/async-profiler/releases/download/v2.5/async-profiler-2.5-linux-x64.tar.gz
       dest: "/home/ubuntu/tools/async-profiler"
       remote_src: yes
       creates: "/home/ubuntu/tools/async-profiler/profiler.sh"
-  - name: create flamegraphs directory
-    file:
-      path: "/home/ubuntu/tools/flamegraphs"
-      state: directory
-  - name: install flamegraphs
-    git:
-      repo: https://github.com/brendangregg/FlameGraph.git
-      dest: "/home/ubuntu/tools/flamegraphs"
   - name: install hsdis
     copy:
         src: hsdis-amd64.so
-        dest: /home/ubuntu/.sdkman/candidates/java/11.0.6.hs-adpt/lib/server/hsdis-amd64.so
+        dest: "/home/ubuntu/.sdkman/candidates/java/11.0.13-tem/lib/server/hsdis-amd64.so"
+        mode: "u=rx"

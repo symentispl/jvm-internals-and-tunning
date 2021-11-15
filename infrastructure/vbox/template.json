@@ -13,6 +13,7 @@
     "headless" : "{{ user `headless` }}",
     "format" : "ova",
     "output_directory" : "jvm-workshops",
+    "import_flags": ["--vsys","0","--eula","accept"],
     "vboxmanage": [
       ["modifyvm", "{{.Name}}", "--memory", "4096"],
       ["modifyvm", "{{.Name}}", "--cpus", "4"],
@@ -22,7 +23,6 @@
       ["modifyvm", "{{.Name}}", "--boot2", "none"],
       ["modifyvm", "{{.Name}}", "--boot3", "none"],
       ["modifyvm", "{{.Name}}", "--boot4", "none"],
-      ["storagectl", "{{.Name}}", "--name","Floppy", "--remove"],
       ["storageattach","{{.Name}}", "--storagectl",
        "IDE","--port","0","--device","0","--type","dvddrive",
        "--medium","{{user `cloud_init_data_iso`}}"]
