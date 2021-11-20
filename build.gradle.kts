@@ -40,4 +40,4 @@ tasks.asciidoctorRevealJs {
 
 tasks.liveReload {
     setDocRoot(tasks.asciidoctorRevealJs.get().outputDir.absolutePath)
-}
+}1
