@@ -1,9 +1,9 @@
-image: symentis/adoptopenjdk11-build-essential
+image: eclipse-temurin:11
 
 pipelines:
   default:
     - step:
         caches:
-          - maven
+          - gradle
         script: # Modify the commands below to build your repository.
-          - ./mvnw -B verify # -B batch mode makes Maven less verbose
+          - ./gradlew buildModules # -B batch mode makes Maven less verbose

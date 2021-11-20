@@ -31,8 +31,8 @@ tasks.asciidoctorRevealJs {
             include("**")
         }
     }
-    asciidoctorj{
-        modules{
+    asciidoctorj {
+        modules {
             diagram.setVersion("2.2.1")
         }
     }
@@ -40,4 +40,18 @@ tasks.asciidoctorRevealJs {
 
 tasks.liveReload {
     setDocRoot(tasks.asciidoctorRevealJs.get().outputDir.absolutePath)
-}1
+}
+
+tasks.register<Exec>("concurrencyPrimitives") {
+    workingDir("modules/concurrency-primitives")
+    commandLine = listOf("./mvnw", "-B", "verify")
+}
+
+tasks.register<Exec>("voyeursInJvmLand") {
+    workingDir("modules/voyeurs-in-jvm-land")
+    commandLine = listOf("./mvnw", "-B", "verify")
+}
+
+tasks.register("buildModules") {
+    dependsOn("concurrencyPrimitives", "voyeursInJvmLand")
+}
