@@ -50,36 +50,24 @@ digraph {
 
 There are three major types of reference tracing garbage collectors
 
-* *mark & sweep*, which contain to main phases, marking phase and sweep phase,
-downside is that it leaves heap fragmented, it requires to maintain free list
+* *mark & sweep*, which contain two main phases, marking phase and sweep phase, downside is that it leaves heap fragmented, it requires to maintain free list
 * *mark, sweep & copy*, it adds additional phase during which we copy
-objects to new region, to avoid defragmentation, which requires copying object
-and updating references to it
-* *mark, sweep & compat*, it compacts heap, when it is not able to allocate
-continuous memory region for new object
+objects to new region, to avoid defragmentation, which requires copying object and updating references to it
+* *mark, sweep & compact*, it compacts heap, when it is not able to allocate continuous memory region for new object
 
 === Stop the world
 
-Reference tracing collectors require "stop the world" pause, which means
-we stop all threads which mutate application heap.
+Reference tracing collectors require "stop the world" pause, which means we stop all threads which mutate application heap (aka mutator threads)
 
 === Generational garbage collection
 
 [quote,,memorymanagement.org]
-	Generational garbage collection is tracing garbage collection that makes
-	use of the generational hypothesis. Objects are gathered together in
-	generations. New objects are allocated in the youngest or nursery
-	generation, and promoted to older generations if they survive. Objects
-	in older generations are condemned less frequently, saving CPU time.
+	Generational garbage collection is tracing garbage collection that makes use of the generational hypothesis. Objects are gathered together in generations. New objects are allocated in the youngest or nursery generation, and promoted to older generations if they survive. Objects in older generations are condemned less frequently, saving CPU time.
 
 === !
 
 [quote,,memorymanagement.org]
-	It is typically rare for an object to refer to a younger object. Hence,
-	objects in one generation typically have few references to objects in
-	younger generations. This means that the scanning of old generations in
-	the course of collecting younger generations can be done more efficiently
-	by means of remembered sets.
+	It is typically rare for an object to refer to a younger object. Hence, objects in one generation typically have few references to objects in younger generations. This means that the scanning of old generations in the course of collecting younger generations can be done more efficiently by means of remembered sets.
 
 === !
 
@@ -102,7 +90,7 @@ This is where things get hairy
 
 * Old collectors
 ** ParallelOld GC
-** ConcurrentMarkSweep GC
+** ConcurrentMarkSweep GC (deprecated)
 * Footprint vs throughput vs pause
 * next generation collectors
 ** G1 GC
@@ -125,58 +113,34 @@ Thread1    Thread2    Thread3    Thread4
 
 [quote,Brian Goetz,GC in the HotSpot JVM]
 	Tracing garbage collectors, such as copying, mark-sweep, and mark-compact,
-	all start scanning from the root set, traversing references between objects,
-	until all live objects have been visited. A generational tracing collector
-	starts from the root set, but does not traverse references that lead to
-	objects in the older generation, which reduces the size of the object
-	graph to be traced. But this creates a problem -- what if an object in the
-	older generation references a younger object, which is not reachable through
-	any other chain of references from a root?
+	all start scanning from the root set, traversing references between objects, until all live objects have been visited. A generational tracing collector starts from the root set, but does not traverse references that lead to objects in the older generation, which reduces the size of the object
+	graph to be traced. But this creates a problem -- what if an object in the older generation references a younger object, which is not reachable through any other chain of references from a root?
 
 === !
 
 [quote,Brian Goetz,GC in the HotSpot JVM]
-	Whether an old-to-young reference is created by promotion or a pointer
-	modification, the garbage collector needs to have a comprehensive set
-	of old-to-young references when it wants to perform a minor collection.
-	One way to do this would be to trace the old generation, but this clearly
-	has significant overhead. Somewhat better would be to linearly scan the
-	old generation looking for references to young objects. This approach is
-	faster than tracing and has better locality, but is still considerable work.
+	Whether an old-to-young reference is created by promotion or a pointer modification, the garbage collector needs to have a comprehensive set of old-to-young references when it wants to perform a minor collection.
+	One way to do this would be to trace the old generation, but this clearly has significant overhead. Somewhat better would be to linearly scan the old generation looking for references to young objects. This approach is faster than tracing and has better locality, but is still considerable work.
 
 === !
 
 [quote,Brian Goetz,GC in the HotSpot JVM]
- JDKs use an optimized variant of an algorithm called card marking to identify
- modifications to pointers held in fields of old-generation objects. In this
- approach, the heap is divided into a set of cards, each of which is usually
- smaller than a memory page. The JVM maintains a card map, with one bit
- (or byte, in some implementations) corresponding to each card in the heap.
+ JDKs use an optimized variant of an algorithm called card marking to identify modifications to pointers held in fields of old-generation objects. In this approach, the heap is divided into a set of cards, each of which is usually smaller than a memory page. The JVM maintains a card map, with one bit (or byte, in some implementations) corresponding to each card in the heap.
  Each time a pointer field in an object in the heap is modified, the
  corresponding bit in the card map for that card is set.
 
-
 === !
 
 [quote,Brian Goetz,GC in the HotSpot JVM]
- At garbage collection time, the mark bits associated with cards in the old
- generation are examined, and dirty cards are scanned for objects containing
- references into the younger generation. Then the mark bits are cleared.
- There are several costs to card marking – additional space for the card
- map, additional work to be done on each pointer store, and additional
- work to be done at garbage collection time. Card marking algorithms can
- add as little as two or three machine instructions per non-initializing
- heap pointer store, and entails scanning any objects on dirty cards at
- minor collection time.
+ At garbage collection time, the mark bits associated with cards in the old generation are examined, and dirty cards are scanned for objects containing references into the younger generation. Then the mark bits are cleared.
+ There are several costs to card marking – additional space for the card map, additional work to be done on each pointer store, and additional work to be done at garbage collection time. Card marking algorithms can add as little as two or three machine instructions per non-initializing heap pointer store, and entails scanning any objects on dirty cards at minor collection time.
 
 
 === Read/write barriers
 
 [quote,Alexey Ragozin,Understanding GC pauses in JVM, HotSpot's minor GC]
-	Principle of dirty card write-barrier is very simple. Each time when program
-	modifies reference in memory, it should mark modified memory page as dirty.
-	There is a special card table in JVM and each 512 byte page of memory has
-	associated byte in card table.
+	Principle of dirty card write-barrier is very simple. Each time when program modifies reference in memory, it should mark modified memory page as dirty.
+	There is a special card table in JVM and each 512 byte page of memory has associated byte in card table.
 
 === !
 
@@ -184,13 +148,7 @@ Thread1    Thread2    Thread3    Thread4
 	So setting a reference throws in the overhead of a few instructions,
 	which boil down to:
 	 CARD_TABLE [this address >> 9] = 0;
-	This is significant overhead when compared to primitive fields, but is
-	considered necessary tax for memory management. The tradeoff here is
-	between the benefit of card marking (limiting the scope of required
-	old generation scanning on young generation collection) vs.
-	the fixed operation overhead for all reference writes. The associated write
-	to memory for card marking can sometimes cause performance issues for
-	highly concurrent code. This is why in OpenJDK7 we have a new option called
+	This is significant overhead when compared to primitive fields, but is considered necessary tax for memory management. The tradeoff here is between the benefit of card marking (limiting the scope of required old generation scanning on young generation collection) vs. the fixed operation overhead for all reference writes. The associated write to memory for card marking can sometimes cause performance issues for highly concurrent code. This is why in OpenJDK7 we have a new option called
 	UseCondCardMark.
 
 === Conditional card marking
@@ -212,9 +170,7 @@ At a safepoint the mutator thread is at a known and well defined point in it's i
 [quote,Nitsan Wakart,Safepoints: Meaning, Side Effects and Overheads ]
 	A JVM will therefore need means of bringing threads to safepoints
 	(and keeping them there) so that all sorts of runtime magic can happen.
-	Here's a partial list of activities which JVMs run only once all mutator
-	threads are at a safepoint and cannot leave it until released
-	(at a global safepoint), these are sometime called safepoint operations:
+	Here's a partial list of activities which JVMs run only once all mutator threads are at a safepoint and cannot leave it until released (at a global safepoint), these are sometime called safepoint operations:
 
 === !
 
@@ -230,8 +186,7 @@ At a safepoint the mutator thread is at a known and well defined point in it's i
 === Safepoint polling
 
 [quote,Nitsan Wakart,Safepoints: Meaning, Side Effects and Overheads ]
-	So having threads at a safepoint allows the JVM to get on with it's managed
-	runtime magic show, great! When is this groovy state happening?
+	So having threads at a safepoint allows the JVM to get on with it's managed runtime magic show, great! When is this groovy state happening?
 
 
 === !
@@ -264,25 +219,16 @@ So how can the JVM bring all threads into a safepoint state? The problem is susp
 === Time to Safepoint
 
 [quote,Nitsan Wakart,Safepoints: Meaning, Side Effects and Overheads ]
-	Each thread enters a safepoint when it hits a safepoint poll. But arriving at
-	a safepoint poll requires executing an unknown number of instructions.
+	Each thread enters a safepoint when it hits a safepoint poll. But arriving at a safepoint poll requires executing an unknown number of instructions.
 	We can see J1 hits a safepoint poll straight away and is suspended.
-	J2 and J3 are contending on the availability of CPU time. J3 grabs some CPU
-	time pushing J2 into the run queue, but J2  is not in a safepoint.
-	J3 arrives at a safepoint and suspends, freeing up the core for J2 to make
-	enough progress to get to a safepoint poll.
+	J2 and J3 are contending on the availability of CPU time. J3 grabs some CPU time pushing J2 into the run queue, but J2  is not in a safepoint.
+	J3 arrives at a safepoint and suspends, freeing up the core for J2 to make enough progress to get to a safepoint poll.
 
 
 === Time to Safepoint
 
 [quote,Nitsan Wakart,Safepoints: Meaning, Side Effects and Overheads ]
-	J4 and J5 are already at a safepoint while executing JNI code, they are
-	not affected. Note that J5 is trying to leave JNI halfway through the
-	safepoint and is suspended before resuming Java code. Importantly we
-	observe that the time to safepoint varies from thread to thread and
-	some threads are paused for longer than others, Java threads which take
-	a long time to get to a safepoint can
-	delay many other threads.
+	J4 and J5 are already at a safepoint while executing JNI code, they are not affected. Note that J5 is trying to leave JNI halfway through the safepoint and is suspended before resuming Java code. Importantly we observe that the time to safepoint varies from thread to thread and some threads are paused for longer than others, Java threads which take a long time to get to a safepoint can delay many other threads.
 
 === Diagnostics
 
@@ -342,19 +288,6 @@ https://richardstartin.github.io/posts/garbage-collector-code-artifacts-card-mar
 	command line parameter `-XX:ParallelGCThreads=NNN`. The default value is
 	equal to the number of cores in your machine.
 
-=== ConcurrentMarkSweep GC
-
-[quote,,]
-	Following up on the parallel collector is the CMS collector
-	(“concurrent-mark-sweep”). This algorithm uses multiple threads (“concurrent”)
-	to scan through the heap (“mark”) for unused objects that can be recycled
-	(“sweep”). This algorithm will enter “stop the world” (STW) mode in
-	two cases: when initializing the initial marking of roots
-	(objects in the old generation that are reachable from thread entry points or
-	static variables) and when the application has changed the state of the
-	heap while the algorithm was running concurrently, forcing it to go back and
- 	do some final touches to make sure it has the right objects marked.
-
 === Footprint vs throughput vs pause
 
 Three main GC properties
@@ -373,8 +306,7 @@ Three main GC properties
 === Problems with old collectors
 
 * generation sizing (people were spending too much time on this)
-* even with adaptive sizing policy, which still poorly responded to memory
-application pressure changes
+* even with adaptive sizing policy, which still poorly responded to memory application pressure changes
 * due to whole-heap GC, long pauses on large heaps
 
 === G1 GC
