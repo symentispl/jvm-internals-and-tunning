@@ -3,6 +3,8 @@ package pl.symentis.jvm.microbenchmarks.inlining;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.CompilerControl;
 import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Warmup;
 
 /**
  * We can use HotSpot-specific functionality to tell the compiler what do we want to do with particular methods. To demonstrate the effects, we end up with 3
@@ -20,7 +22,9 @@ import org.openjdk.jmh.annotations.Fork;
  * <p>
  * methods, but this expresses the intent more clearly.
  */
-@Fork(1)
+@Fork(value=1)
+@Measurement(iterations = 1)
+@Warmup(iterations = 1)
 public class Inlining
 {
 
@@ -30,7 +34,6 @@ public class Inlining
     }
 
     @CompilerControl( CompilerControl.Mode.DONT_INLINE )
-
     public void target_dontInline()
     {
         // this method was intentionally left blank

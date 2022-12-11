@@ -32,26 +32,35 @@
 package pl.symentis.jvm.microbenchmarks.loops;
 
 import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.Iterator;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static java.util.stream.Collectors.toList;
+
 @State( Scope.Benchmark )
+@Fork( value = 1 )
+@Measurement( iterations = 1 )
+@Warmup( iterations = 1 )
 public class Loops
 {
-
+    @Param( {"10", "1000000"} )
+    private int size;
     private List<Integer> ints;
 
     @Setup
     public void setUp()
     {
-        ints = IntStream.of( new int[1024] ).mapToObj( Integer::new ).collect( Collectors.toList() );
+        ints = IntStream.of( new int[size] ).mapToObj( Integer::new ).collect( toList() );
     }
 
     @Benchmark
@@ -59,6 +68,7 @@ public class Loops
     {
         for ( int i = 0; i < ints.size(); i++ )
         {
+            Blackhole.consumeCPU( 500 );
             bh.consume( ints.get( i ) );
         }
     }
@@ -68,6 +78,7 @@ public class Loops
     {
         for ( Integer i : ints )
         {
+            Blackhole.consumeCPU( 500 );
             bh.consume( i );
         }
     }
@@ -78,6 +89,7 @@ public class Loops
         Iterator<Integer> iterator = ints.iterator();
         while ( iterator.hasNext() )
         {
+            Blackhole.consumeCPU( 500 );
             bh.consume( iterator.next() );
         }
     }
@@ -85,6 +97,20 @@ public class Loops
     @Benchmark
     public void stream( Blackhole bh )
     {
-        ints.stream().forEach( bh::consume );
+        ints.stream().forEach( i ->
+                               {
+                                   Blackhole.consumeCPU( 500 );
+                                   bh.consume( i );
+                               } );
+    }
+
+    @Benchmark
+    public void parallelStream( Blackhole bh )
+    {
+        ints.stream().parallel().forEach( i ->
+                                          {
+                                              Blackhole.consumeCPU( 500 );
+                                              bh.consume( i );
+                                          } );
     }
 }

@@ -33,7 +33,12 @@ package pl.symentis.jvm.microbenchmarks.exceptions;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Warmup;
 
+@Fork(value=1)
+@Measurement(iterations = 1)
+@Warmup(iterations = 1)
 public class Exceptions
 {
 
