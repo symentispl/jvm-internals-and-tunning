@@ -13,6 +13,16 @@ repositories {
     the<RepositoryHandlerExtension>().gems()
 }
 
+buildscript {
+    configurations["classpath"].resolutionStrategy.eachDependency {
+        if (requested.group == "com.burgstaller" && requested.name == "okhttp-digest" && requested.version == "1.10") {
+            useTarget("io.github.rburgst:${requested.name}:1.21")
+            because("Dependency has moved")
+        }
+    }
+}
+
+
 dependencies {
     dependencies {
         asciidoctorGems("rubygems:asciidoctor-revealjs:4.1.0")

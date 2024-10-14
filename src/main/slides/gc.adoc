@@ -466,6 +466,10 @@ card marking in G1 uses write barrier (armed before concurrent marking starts)
 updates stored in buffer associated with region, which after concurrent mark
 phase update cards
 
+=== !
+
+[]
+
 === Useful links
 
 https://en.wikipedia.org/wiki/Garbage-first_collector[Garbage First Collector] +

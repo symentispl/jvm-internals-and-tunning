@@ -26,7 +26,8 @@ performance,internals and tuning
 <<is_java_fast_yet,Is Java fast yet?>> +
 <<garbage_collection,Garbage collection>> +
 <<java_io,Java I/O>> +
-<<voyeurs_in_the_jvm_land,Voyeurs in the JVM land>>
+<<voyeurs_in_the_jvm_land,Voyeurs in the JVM land>> +
+<<virtual_threads,Virtual threads>>
 
 include::bytecode.adoc[]
 include::jit.adoc[]
@@ -34,3 +35,5 @@ include::is-java-fast-yet.adoc[]
 include::gc.adoc[]
 include::io.adoc[]
 include::observability.adoc[]
+include::virtualthreads.adoc[]
+

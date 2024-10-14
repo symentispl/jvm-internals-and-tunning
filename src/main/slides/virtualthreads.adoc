@@ -1,0 +1,161 @@
+== Virtual threads
+
+Virtual threads add support for lightweight threads and M:N threads scheduling to Java platform under https://openjdk.org/jeps/444[JEP 444: Virtual Threads]
+
+=== Goals
+
+Introduce virtual threads to the Java Platform. Virtual threads are lightweight threads that dramatically reduce the effort of writing, maintaining, and observing high-throughput concurrent applications.
+
+* Enable server applications written in the simple thread-per-request style to scale with near-optimal hardware utilization.
+* Enable existing code that uses the java.lang.Thread API to adopt virtual threads with minimal change.
+* Enable easy troubleshooting, debugging, and profiling of virtual threads with existing JDK tools.
+
+=== Key concepts
+
+A virtual thread is an instance of java.lang.Thread that runs Java code on an underlying OS thread but does not capture the OS thread for the code's entire lifetime. This means that many virtual threads can run their Java code on the same OS thread, effectively sharing it. 
+
+While a platform thread monopolizes a precious OS thread, a virtual thread does not. The number of virtual threads can be much larger than the number of OS threads.
+
+=== Virtual threads
+
+Virtual threads are a lightweight implementation of threads that is provided by the JDK rather than the OS. They are a form of user-mode threads, which have been successful in other multithreaded languages (e.g., goroutines in Go and processes in Erlang). 
+
+User-mode threads even featured as so-called "green threads" in early versions of Java, when OS threads were not yet mature and widespread. 
+
+=== Platform threads
+
+However, Java's green threads all shared one OS thread (M:1 scheduling) and were eventually outperformed by platform threads, implemented as wrappers for OS threads (1:1 scheduling). Virtual threads employ M:N scheduling, where a large number (M) of virtual threads is scheduled to run on a smaller number (N) of OS threads.
+
+=== Mounting virtual threads
+
+To run code in a virtual thread, the JDK's virtual thread scheduler assigns the virtual thread for execution on a platform thread by mounting the virtual thread on a platform thread. This makes the platform thread become the carrier of the virtual thread. Later, after running some code, the virtual thread can unmount from its carrier. At that point the platform thread is free so the scheduler can mount a different virtual thread on it, thereby making it a carrier again.
+
+=== Unmounting virtual threads
+
+Typically, a virtual thread will unmount when it blocks on I/O or some other blocking operation in the JDK, such as BlockingQueue.take(). When the blocking operation is ready to complete (e.g., bytes have been received on a socket), it submits the virtual thread back to the scheduler, which will mount the virtual thread on a carrier to resume execution.
+
+The mounting and unmounting of virtual threads happens frequently and transparently, and without blocking any OS threads.
+
+=== Pinning virtual threads
+
+The vast majority of blocking operations in the JDK will unmount the virtual thread, freeing its carrier and the underlying OS thread to take on new work. However, some blocking operations in the JDK do not unmount the virtual thread, and thus block both its carrier and the underlying OS thread.
+
+=== !
+
+There are two scenarios in which a virtual thread cannot be unmounted during blocking operations because it is pinned to its carrier:
+
+* When it executes code inside a synchronized block or method, or
+* When it executes a native method or a foreign function.
+
+=== !
+
+The implementations of these blocking operations compensate for the capture of the OS thread by temporarily expanding the parallelism of the scheduler. Consequently, the number of platform threads in the scheduler's ForkJoinPool may temporarily exceed the number of available processors. 
+
+=== Memory usage implications
+
+The stacks of virtual threads are stored in Java's garbage-collected heap as stack chunk objects. The stacks grow and shrink as the application runs, both to be memory-efficient and to accommodate stacks of depth up to the JVM's configured platform thread stack size. This efficiency is what enables a large number of virtual threads and thus the continued viability of the thread-per-request style in server applications.
+
+=== Limitations in JDK 21
+
+=== Thread-local variables
+
+Virtual threads support thread-local variables (ThreadLocal) and inheritable thread-local variables (InheritableThreadLocal), just like platform threads, so they can run existing code that uses thread locals. However, because virtual threads can be very numerous, use thread locals only after careful consideration. In particular, do not use thread locals to pool costly resources among multiple tasks sharing the same thread in a thread pool.
+
+=== !
+
+Scoped values (https://openjdk.org/jeps/429[JEP 429], still incubating feature) may prove to be a better alternative to thread locals for some use cases.
+
+=== java.util.concurrent
+
+The primitive API to support locking, java.util.concurrent.LockSupport, now supports virtual threads: Parking a virtual thread releases the underlying platform thread to do other work, and unparking a virtual thread schedules it to continue. This change to LockSupport enables all APIs that use it (Locks, Semaphores, blocking queues, etc.) to park gracefully when invoked in virtual threads.
+
+=== Executors
+
+Additionally, Executors.newThreadPerTaskExecutor(ThreadFactory) and Executors.newVirtualThreadPerTaskExecutor() create an ExecutorService that creates a new thread for each task. These methods enable migration and interoperability with existing code that uses thread pools and ExecutorService.
+
+=== Networking
+
+The implementations of the networking APIs in the java.net and java.nio.channels packages now work with virtual threads: An operation on a virtual thread that blocks, e.g., to establish a network connection or read from a socket, releases the underlying platform thread to do other work.
+
+=== !
+
+To allow for interruption and cancellation, the blocking I/O methods defined by java.net.Socket, ServerSocket, and DatagramSocket are now specified to be interruptible when invoked in a virtual thread: Interrupting a virtual thread blocked on a socket will unpark the thread and close the socket. Blocking I/O operations on these types of sockets when obtained from an InterruptibleChannel have always been interruptible, so this change aligns the behavior of these APIs when created with their constructors with their behavior when obtained from a channel.
+
+=== java.io
+
+To prevent pinning, the implementations now work as follows:
+
+* BufferedInputStream, BufferedOutputStream, BufferedReader, BufferedWriter, PrintStream, and PrintWriter now use an explicit lock rather than a monitor when used directly. These classes synchronize as before when they are sub-classed.
+* The stream decoders and encoders used by InputStreamReader and OutputStreamWriter now use the same lock as the enclosing InputStreamReader or OutputStreamWriter.
+
+Going further and eliminating all this often-needless locking is beyond the scope of this JEP.
+
+=== it is only implementation detail
+
+=== !
+
+In virtual threads, the word "continuation" will mean a delimited continuation, also sometimes called a "coroutine". It can be thought of as sequential code that may suspend or yield execution at some point by itself and can be resumed by a caller.
+
+This is reprecented in JDK by jdk.internal.vm.Continuation object.
+
+NOTICE: Notice that continuations aren't exposed as a public API because it is a low-level primitive. They should only be used by library authors to build higher-level APIs such as virtual threads, the builder API to run virtual threads, etc.
+
+=== structured concurrency (preview)
+
+https://openjdk.org/jeps/453[JEP 453: Structured Concurrency (Preview)] simplifies concurrent programming by introducing an API for structured concurrency. Structured concurrency treats groups of related tasks running in different threads as a single unit of work, thereby streamlining error handling and cancellation, improving reliability, and enhancing observability.
+
+=== !
+
+Structured concurrency is an approach to concurrent programming that preserves the natural relationship between tasks and subtasks, which leads to more readable, maintainable, and reliable concurrent code. The term "structured concurrency" was coined by Martin Sústrik and popularized by Nathaniel J. Smith. Ideas from other languages, such as Erlang's hierarchical supervisors, inform the design of error handling in structured concurrency.
+
+=== !
+
+Structured concurrency derives from the simple principle that
+
+[quote]
+    If a task splits into concurrent subtasks then they all return to the same place, namely the task's code block.
+
+=== !
+
+In structured concurrency, subtasks work on behalf of a task. The task awaits the subtasks' results and monitors them for failures. As with structured programming techniques for code in a single thread, the power of structured concurrency for multiple threads comes from two ideas: 
+
+* well-defined entry and exit points for the flow of execution through a block of code,
+* a strict nesting of the lifetimes of operations in a way that mirrors their syntactic nesting in the code.
+
+=== !
+
+Because the entry and exit points of a block of code are well defined, the lifetime of a concurrent subtask is confined to the syntactic block of its parent task. 
+
+=== !
+
+Structured concurrency is a great match for virtual threads, which are lightweight threads implemented by the JDK. Many virtual threads share the same operating-system thread, allowing for very large numbers of virtual threads. In addition to being plentiful, virtual threads are cheap enough to represent any concurrent unit of behavior, even behavior that involves I/O. This means that a server application can use structured concurrency to process thousands or millions of incoming requests at once: It can dedicate a new virtual thread to the task of handling each request, and when a task fans out by submitting subtasks for concurrent execution then it can dedicate a new virtual thread to each subtask. Behind the scenes, the task-subtask relationship is reified into a tree by arranging for each virtual thread to carry a reference to its unique parent, similar to how a frame in the call stack refers to its unique caller.
+
+=== !
+
+[code,java]
+----
+Response handle() throws ExecutionException, InterruptedException {
+    try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+        Supplier<String>  user  = scope.fork(() -> findUser());
+        Supplier<Integer> order = scope.fork(() -> fetchOrder());
+
+        scope.join()            // Join both subtasks
+             .throwIfFailed();  // ... and propagate errors
+
+        // Here, both subtasks have succeeded, so compose their results
+        return new Response(user.get(), order.get());
+    }
+}
+----
+
+=== structured concurrency properties
+
+Error handling with short-circuiting:: If either the findUser() or fetchOrder() subtasks fail, the other is cancelled if it has not yet completed. (This is managed by the shutdown policy implemented by ShutdownOnFailure; other policies are possible).
+
+Cancellation propagation:: If the thread running handle() is interrupted before or during the call to join(), both subtasks are cancelled automatically when the thread exits the scope.
+
+=== structured concurrency properties
+
+Clarity:: The above code has a clear structure: Set up the subtasks, wait for them to either complete or be cancelled, and then decide whether to succeed (and process the results of the child tasks, which are already finished) or fail (and the subtasks are already finished, so there is nothing more to clean up).
+
+Observability:: A thread dump, as described below, clearly displays the task hierarchy, with the threads running findUser() and fetchOrder() shown as children of the scope.
