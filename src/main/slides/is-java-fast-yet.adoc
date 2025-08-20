@@ -333,14 +333,12 @@ java -jar benchmark.jar -lprof
 java -jar benchmark.jar -prof hs_gc
 ----
 
-=== !
+=== useful builtin profilers
 
-safepoint +
-perfasm
-
-
-jmh.extras.JFR +
-jmh.extras.Async
+* safepoint
+* perfasm
+* jfr
+* async
 
 == reporters
 
@@ -354,7 +352,7 @@ java -jar benchmark.jar -rf csv -rff results.csv
 
 == tips and tricks
 
-on laptops governors can trick you, +
+CPU governors can trick you, +
 it's easy to control them on Linux with `cpufreq-set`
 
 == flamegraphs
@@ -368,31 +366,18 @@ it's easy to control them on Linux with `cpufreq-set`
 == flame graphs with JMH
 
   sudo sysctl kernel.perf_event_paranoid=-1
+  sysctl kernel.kptr_restrict=0
   export ASYNC_PROFILER_DIR=/home/jarek/tools/async-profiler
-  export FLAMEGRAPH_DIR=/home/jarek/tools/FlameGraph
-
-  java -jar perf/target/benchmarks.jar \
+  
+  LD_LIBRARY_PATH=/home/jarek/tools/async-profiler/lib/ java -jar perf/target/benchmarks.jar \
   "introdb.heap.ReadUnorderedHeapFileBenchmark.readKey"  -f 1 \
-  -prof jmh.extras.Async:flameGraphOpts="--minwidth,2;verbose=true" \
+  -prof "async:output=flamegraph" \
   -p bufferSize=512
 
-  $FLAMEGRAPH_DIR/flamegraph.pl \
-  introdb.heap.ReadUnorderedHeapFileBenchmark.readKey-Throughput-key-\
-  106211185005499297763/collapsed-cpu.txt \
-   > ReadUnorderedHeapFileBenchmark.readKey.svg
 
 === !
 
 image::introdb.heap.ReadUnorderedHeapFileBenchmark.readKey.svg[background, size=contain]
-
-== NOTE
-
-you can also generate flamegraphs using +
-JFR (Java Flight Recorder) recordings +
-using https://github.com/chrishantha/jfr-flame-graph[], +
-but it can be tricky to get it working with JDK 11 +
-(actually, it doesn't work +
-as there were changes in JFR parser)
 
 === what about macro?
 
@@ -400,6 +385,7 @@ as there were changes in JFR parser)
 
 * JMeter
 * Gatling
+* k6s
 
 === why my code is slow?
 

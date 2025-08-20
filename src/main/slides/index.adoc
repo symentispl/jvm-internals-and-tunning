@@ -21,17 +21,17 @@ performance,internals and tuning
 
 == agenda
 
+<<is_java_fast_yet,Is Java fast yet?>> +
 <<mutants_xenomorphs_and_bytecode,Mutants, xenomorphs and bytecode>> +
 <<jit_me_baby_one_more_time, JIT me baby one more time>> +
-<<is_java_fast_yet,Is Java fast yet?>> +
 <<garbage_collection,Garbage collection>> +
 <<java_io,Java I/O>> +
 <<voyeurs_in_the_jvm_land,Voyeurs in the JVM land>> +
 <<virtual_threads,Virtual threads>>
 
+include::is-java-fast-yet.adoc[]
 include::bytecode.adoc[]
 include::jit.adoc[]
-include::is-java-fast-yet.adoc[]
 include::gc.adoc[]
 include::io.adoc[]
 include::observability.adoc[]
