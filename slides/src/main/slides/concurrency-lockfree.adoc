@@ -1,0 +1,81 @@
+=== Progress guarantees
+
+[cols="1,3",options="header"]
+|===
+|Class |Guarantee
+|*blocking* |a stalled thread (holding a lock) can stop everybody
+|*lock-free* |some thread always makes progress, even if others stall
+|*wait-free* |every thread finishes in a bounded number of steps
+|===
+
+* lock-free is not "faster", it is *no thread can block the others*
+* no lock to be held when a thread is descheduled or hits a GC safepoint
+
+=== CAS loop: lock-free stack
+
+[source,java]
+----
+AtomicReference<Node> head = new AtomicReference<>();
+
+void push(T v) {
+  Node n = new Node(v);
+  do { n.next = head.get(); }
+  while (!head.compareAndSet(n.next, n));      // retry if somebody pushed in between
+}
+
+T pop() {
+  Node h;
+  do { h = head.get(); if (h == null) return null; }
+  while (!head.compareAndSet(h, h.next));
+  return h.value;
+}
+----
+
+* the critical section is shrunk to *one atomic instruction*
+* losers retry instead of waiting
+
+=== ABA problem
+
+[ditaa]
+----
+T1: reads head = A (next = B), then is descheduled
+T2: pop A, pop B, push A back      head = A (next = null)
+T1: CAS(head, A, B) succeeds!      head = B, which is already removed
+----
+
+* the CAS only compares values, `A` looks unchanged
+* in Java the GC prevents reuse of memory that is still referenced, so ABA is rarer than in C
+* but it still happens with pooled / reused objects and values
+* fix: add a version stamp (`AtomicStampedReference`), or never reuse nodes
+
+=== Spinning
+
+* instead of parking, a thread loops until a condition becomes true
+* good when the wait is shorter than the cost of parking and waking (tens of μs)
+* `Thread.onSpinWait()` emits `PAUSE` (x86): saves power, helps the sibling hyper-thread, avoids memory-order mis-speculation on loop exit
+* common strategy: spin -> `yield()` -> `park()` (back-off)
+* burning CPU while the lock holder is descheduled is the danger
+
+=== Queues are everywhere
+
+[ditaa]
+----
+producer(s) --> [ ring buffer: slot slot slot slot slot ] --> consumer(s)
+                    head/tail counters, padded to avoid false sharing
+----
+
+* SPSC / MPSC queues use plain stores + `release` / `acquire` instead of CAS where only one side writes an index
+* fixed size array: no allocation, cache friendly
+* libraries: *JCTools*, *LMAX Disruptor*, `ArrayBlockingQueue`, `ConcurrentLinkedQueue`
+
+=== Other concurrency models
+
+[cols="2,3",options="header"]
+|===
+|Model |Idea
+|data flow (`CompletableFuture`) |compose async steps, no thread blocked while waiting
+|actors (Erlang, Akka, Pony) |isolated state, communication by messages only
+|CSP (Go channels) |processes communicate over typed channels
+|STM (Clojure) |memory changes in transactions, retried on conflict
+|*virtual threads* + structured concurrency |plain blocking code, cheap threads (see next section); structured concurrency is in preview (JEP 505, 5th) in Java 25
+|===

@@ -1,0 +1,121 @@
+=== Allocation: bump the pointer
+
+[ditaa]
+----
+Eden
++---------+---------+---------+-----------------------+
+| Obj A   | Obj B   | Obj C   |  free                 |
++---------+---------+---------+-----------------------+
+                              ^
+                              top (bump by object size)
+----
+
+* contiguous free space (after copy/compact) => allocation is `top += size`
+* if `top + size > end` => trigger a young collection
+
+=== TLAB: thread-local allocation buffers
+
+[ditaa]
+----
+Eden
++----------+----------+----------+----------+------------+
+| TLAB T1  | TLAB T2  | TLAB T3  | TLAB T4  |   free     |
++----------+----------+----------+----------+------------+
+  Thread1    Thread2    Thread3    Thread4
+----
+
+* each thread gets a private chunk of Eden (taken with one CAS)
+* allocating inside a TLAB needs *no synchronisation*
+* TLAB full => grab a new one; huge object => allocate directly in the shared heap
+
+=== Object header
+
+[ditaa]
+----
++------------------------------+------------------+
+| mark word (8 B)              | klass ptr (4 B)  |   12 B header (compressed class ptr)
+| hash | age | lock | GC bits  | -> class metadata|
++------------------------------+------------------+
+| fields ...                                      |
++-------------------------------------------------+
+----
+
+* *mark word*: identity hash, GC *age*, lock state, GC marks / forwarding pointer
+* *klass pointer*: the class of the object (tells GC the object layout)
+* *compressed oops*: 32-bit references (shifted by 3) for heaps < 32 GB
+* JDK 25: *compact object headers* (`-XX:+UseCompactObjectHeaders`, JEP 519) merge both into 8 B, up to ~20% less heap in benchmarks, opt-in
+
+=== How does GC find references?
+
+[ditaa]
+----
+Heap object                       Thread stack frame
++-------+-------+-------+        +-----------------+
+| hdr   | int   | ref   |        | local0 (int)    |
++-------+-------+-------+        | local1 (ref) <--+-- *oop map* says
+        oop map of class:        | operand (ref)   |   slots 1, 2 are refs
+        "field 2 is a ref"       +-----------------+
+----
+
+* GC must tell references from plain numbers precisely
+* *OopMap*: per class (object layout) and per safepoint in compiled code (stack frame layout)
+* this is why threads must be at a known state: a *safepoint*
+
+=== Safepoint
+
+[quote,Nitsan Wakart]
+A safepoint is a range of execution where the state of the executing thread is well described.
+
+* all stack references are at known locations (oop map exists)
+* a thread at a safepoint can be inspected and its objects moved
+* *global safepoint*: all threads stopped, JVM runs a VM operation (STW GC phase, class redefinition, heap dump, deoptimisation, ...)
+
+=== Who is at a safepoint?
+
+[cols="2,1",options="header"]
+|===
+|Thread state |At safepoint?
+|blocked on lock, waiting, parked, sleeping, blocking I/O |yes
+|executing JNI / native code |yes (can't touch the heap without leaving)
+|running interpreted or compiled Java code |*no*, must reach a poll
+|===
+
+The JVM cannot force a thread to stop, threads stop *themselves* when they see the poll armed
+
+=== Safepoint polling
+
+[ditaa]
+----
+JVM arms the poll          thread hits poll           thread parks
++----------------+         +-----------------+        +---------+
+| poll page      |  --->   | test [poll_page]|  --->  |  wait   |
+| made unreadable|         | -> trap/branch  |        |         |
++----------------+         +-----------------+        +---------+
+----
+
+* poll = a read of a special memory page (JIT compiled code), armed by protecting that page
+* polls on *loop back-edges* of non-counted loops and on method returns
+* interpreter checks between bytecodes
+
+=== Time to safepoint
+
+[ditaa]
+----
+JVM requests safepoint
+ |
+ J1 |=====|~stopped~~~~~~~~~~~~~~~~~~~~~~~~~~~|
+ J2 |=============================|~stopped~~~~|   long loop without poll
+ J3 |===========|~stopped~~~~~~~~~~~~~~~~~~~~~|
+ J4 (in JNI)  already stopped
+ |<---- time to safepoint ---->|<---- GC work ---->|
+----
+
+* every thread waits for the slowest one
+* one thread in a long counted loop delays *all* of them
+
+=== Handshakes
+
+* concurrent collectors avoid global stops for most work
+* *thread-local handshake*: run a small operation on one thread (or each thread, one by one) without stopping the others
+* used e.g. to scan a thread's stack roots while others keep running
+* what remains STW are short phases, mostly root scanning and phase switches

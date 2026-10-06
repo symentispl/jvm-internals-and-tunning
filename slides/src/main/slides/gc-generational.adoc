@@ -1,0 +1,113 @@
+=== Generational hypothesis
+
+[ditaa]
+----
+ objects
+ surviving
+   ^
+   |#
+   |#
+   |##
+   |####
+   |###########____________________
+   +------------------------------------> age (bytes allocated since birth)
+     most die young          few live long
+----
+
+* *weak generational hypothesis*: most objects die young
+* so collect the young part often (cheap, little live data) and the old part rarely
+
+=== Heap generations
+
+[ditaa]
+----
++--------------------------------------+  +------------------------+
+|              Young                   |  |          Old           |
+| +----------------+----------+------+ |  |   (tenured)            |
+| |      Eden      |    S0    |  S1  | |  |                        |
+| +----------------+----------+------+ |  |                        |
++--------------------------------------+  +------------------------+
+              Java heap
+
++--------------------+  +--------------------+
+|     Metaspace      |  |     Code cache     |      outside the heap
+| (class metadata)   |  | (JIT compiled code)|      (native memory)
++--------------------+  +--------------------+
+----
+
+* *Eden* - where new objects are allocated
+* *Survivor* (S0/S1) - young objects that survived at least one collection
+* *Old* - objects that survived long enough
+
+=== Young collection
+
+[ditaa]
+----
+1. Eden full           2. copy live objects       3. swap roles
++------+----+----+     +------+----+----+         +------+----+----+
+| Eden | S0 | S1 |     | Eden | S0 | S1 |         | Eden | S0 | S1 |
+|ABxCx |    |    | ->  | free |    | AC | ->      | free | AC |    |
++------+----+----+     +------+----+----+         +------+----+----+
+ roots: stacks, statics, old->young refs        S0 <-> S1 each GC
+----
+
+* mark-copy: only live objects are touched
+* each copy increments the object *age*
+* age >= *tenuring threshold* (or survivor space full) => *promoted* to Old
+
+=== Object age
+
+* age is stored in the object header (*mark word*, 4 bits => max 15)
+* every young GC an object survives: age + 1
+* the JVM adapts the threshold at runtime (survivor space occupancy)
+* promoting too early ("premature promotion") fills Old with short-lived garbage
+
+=== The old->young problem
+
+[graphviz]
+----
+digraph {
+	rankdir=LR
+	node [shape=box]
+	subgraph cluster_old { label="Old"; O [label="O (old object)"] }
+	subgraph cluster_young { label="Young"; Y [label="Y (young object)"] }
+	O->Y
+}
+----
+
+* a young GC must not scan the whole Old generation
+* but Y may be reachable *only* through O
+* solution: remember every old->young pointer, *remembered set*
+
+=== Card table
+
+[ditaa]
+----
+Heap (Old)  +--------+--------+--------+--------+--------+
+            | card 0 | card 1 | card 2 | card 3 | card 4 |   512 B each
+            +--------+--------+--------+--------+--------+
+Card table  |   0    |   1    |   0    |   0    |   1    |   1 byte per card
+            +--------+--------+--------+--------+--------+
+                         dirty                     dirty
+----
+
+* heap split into 512 byte *cards*, one byte per card in the card table
+* young GC scans only *dirty* cards of Old, then cleans them
+
+=== Post-write barrier
+
+Every reference store marks its card dirty
+
+[source,java]
+----
+obj.field = ref;        // application code
+----
+
+[source]
+----
+store obj.field, ref    // JIT emits
+CARD_TABLE[obj_address >> 9] = DIRTY
+----
+
+* ~2 extra instructions per reference store
+* *conditional card marking*: check if already dirty before writing, avoids cache line contention between threads (`-XX:+UseCondCardMark`)

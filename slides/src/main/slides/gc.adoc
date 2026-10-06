@@ -1,0 +1,20 @@
+== Garbage collection
+
+=== Agenda
+
+* Fundamentals: reachability, tracing, reclaiming memory, barriers
+* Generational collection: young/old, card table
+* JVM internals: allocation, object header, oop maps, safepoints
+* Collectors in JDK 25: Serial, Parallel, G1, Shenandoah, ZGC, Epsilon
+* Appendix: tuning and monitoring
+
+include::gc-fundamentals.adoc[]
+
+include::gc-generational.adoc[]
+
+include::gc-jvm-internals.adoc[]
+
+include::gc-collectors.adoc[]
+
+== q&a
+

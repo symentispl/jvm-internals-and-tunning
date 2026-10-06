@@ -24,16 +24,26 @@ performance,internals and tuning
 <<is_java_fast_yet,Is Java fast yet?>> +
 <<mutants_xenomorphs_and_bytecode,Mutants, xenomorphs and bytecode>> +
 <<jit_me_baby_one_more_time, JIT me baby one more time>> +
+<<java_memory_model_and_concurrency,Java Memory Model and concurrency>> +
 <<garbage_collection,Garbage collection>> +
 <<java_io,Java I/O>> +
 <<voyeurs_in_the_jvm_land,Voyeurs in the JVM land>> +
-<<virtual_threads,Virtual threads>>
+<<virtual_threads,Virtual threads>> +
+<<appendix_gc_tuning_and_monitoring,Appendix: GC tuning and monitoring>> +
+<<appendix_jit_flags_and_diagnostics,Appendix: JIT flags and diagnostics>> +
+<<appendix_concurrency_diagnostics,Appendix: concurrency diagnostics>>
 
 include::is-java-fast-yet.adoc[]
 include::bytecode.adoc[]
 include::jit.adoc[]
+include::concurrency.adoc[]
 include::gc.adoc[]
 include::io.adoc[]
 include::observability.adoc[]
 include::virtualthreads.adoc[]
 
+include::gc-appendix.adoc[]
+
+include::jit-appendix.adoc[]
+
+include::concurrency-appendix.adoc[]

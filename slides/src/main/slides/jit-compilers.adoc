@@ -1,0 +1,161 @@
+=== From source to machine code
+
+[graphviz]
+----
+digraph {
+	rankdir=LR
+	node [shape=box]
+	src [label="Foo.java"]
+	bc [label="bytecode\n(Foo.class)"]
+	interp [label="interpreter\n(slow, starts at once)"]
+	jit [label="JIT compilers\nC1, C2"]
+	mc [label="machine code\n(fast)", shape=ellipse]
+	src->bc [label="javac"]
+	bc->interp
+	interp->jit [label="hot code"]
+	jit->mc
+}
+----
+
+* bytecode is portable, the CPU needs machine code
+* the JVM starts interpreting, and compiles only what is worth compiling
+
+=== JIT vs AOT
+
+[cols="1,2,2",options="header"]
+|===
+| |AOT (C, C++, Go, Rust) |JIT (HotSpot)
+|compiled |before running |while running
+|startup |fast |slow, needs *warmup*
+|knows |only the source |the real program behaviour (*profile*)
+|bad guess |not possible |*deoptimize* and recompile
+|cost |none at runtime |compiler threads, memory
+|===
+
+=== Interpreted vs compiled
+
+[source,java]
+----
+public static long fibonacci(int n) {
+    if (n <= 1) return n;
+    else return fibonacci(n-1) + fibonacci(n-2);
+}
+----
+
+ $> java -Xint pl.symentis.jit.Fibonacci     # interpreter only
+ execute time is 2900 ms
+
+ $> java pl.symentis.jit.Fibonacci           # mixed mode, with JIT
+ execute time is 67 ms
+
+=== Execution engines in HotSpot
+
+[cols="1,2,2",options="header"]
+|===
+| |C1 ("client") |C2 ("server")
+|compile speed |fast |slow
+|code quality |good, few optimizations |best, aggressive optimizations
+|IR |HIR/LIR (SSA based) |"sea of nodes" graph
+|register allocation |linear scan |graph colouring
+|profile |can collect it |uses it
+|===
+
+* the *interpreter* is generated at JVM startup from templates, one per bytecode
+* GraalVM's compiler is a separate JVMCI-based option, not part of this talk
+
+=== Tiered compilation
+
+[graphviz]
+----
+digraph {
+	rankdir=LR
+	node [shape=box]
+	t0 [label="tier 0\ninterpreter\n(profiles)"]
+	t3 [label="tier 3\nC1 + full profiling"]
+	t2 [label="tier 2\nC1 + counters only"]
+	t1 [label="tier 1\nC1, no profiling"]
+	t4 [label="tier 4\nC2"]
+	t0->t3
+	t3->t4
+	t0->t2 [style=dashed, label="C2 queue long"]
+	t2->t3 [style=dashed]
+	t0->t1 [style=dashed, label="trivial method"]
+}
+----
+
+* default since Java 8: fast start thanks to C1, peak speed thanks to C2
+* typical path: 0 -> 3 -> 4
+* it does not remove warmup, it makes it shorter
+
+=== Profiling
+
+The interpreter and tier 3 code record, per method (`MethodData`):
+
+* invocation counter and loop *back-edge* counter
+* which branches were taken (and how often)
+* receiver types at each virtual call site
+* types seen at casts, `instanceof`, array stores
+
+C2 uses this data to decide what to optimize and what to *assume*
+
+=== When is code compiled?
+
+[ditaa]
+----
+interpreter       counters grow       threshold crossed
++---------+     +---------------+     +----------------+
+| invoke  | --> | invocations + | --> | enqueue for    |
+| / loop  |     | back-edges    |     | compilation    |
++---------+     +---------------+     +----------------+
+----
+
+* method is *hot* when invocations + loop iterations cross a threshold
+* roughly: ~200 invocations (or ~2000 with loops) => C1 tier 3, ~5000 (or ~15000) => C2 tier 4
+* thresholds scale with compile queue length and compiler thread load
+
+=== Compilation is asynchronous
+
+[ditaa]
+----
+app thread        compile queue          compiler thread        code cache
++--------+       +--------------+       +----------------+     +-----------+
+| runs   | ----> | m1, m2, m3.. | ----> | C1 / C2 works  | --> | nmethod   |
+| in     |       +--------------+       +----------------+     | installed |
+| interp.|                                                      +-----------+
++--------+  <---- next call uses compiled code ------------------------+
+----
+
+* the application keeps running (interpreted) while the method compiles
+* hotter methods jump the queue
+* separate thread pools for C1 and C2
+
+=== On-stack replacement (OSR)
+
+[ditaa]
+----
+long running loop in interpreter
+
+for (i...) {     iteration 1 ... 10000       compiled version ready
+   work();   --> back-edge counter high  --> jump into compiled code
+}                                            in the middle of the loop
+----
+
+* a method called once with a huge loop never reaches the invocation threshold
+* back-edge counter triggers an *OSR compilation*
+* the running frame is swapped from interpreter to compiled code mid-loop
+
+=== Code cache
+
+[ditaa]
+----
++----------------------+----------------------+----------------------+
+| non-nmethod          | profiled code        | non-profiled code    |
+| stubs, interpreter,  | tier 2, 3 (C1)       | tier 1, 4 (C1, C2)   |
+| adapters             | short lived          | long lived           |
++----------------------+----------------------+----------------------+
+----
+
+* compiled code (*nmethods*) lives in a fixed size native memory region
+* segmented (JEP 197): different lifetimes, better locality
+* if it is full, the JVM stops compiling and runs the rest interpreted
+* dead compiled code is unloaded together with GC (the sweeper thread is gone since JDK 20)

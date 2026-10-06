@@ -1,0 +1,151 @@
+=== Why should a Java developer care about CPUs?
+
+* the JVM, the JIT and the Java Memory Model all exist to hide CPU details
+* but concurrency bugs and contention show up *because of* those details
+* so we need a small mental model of a modern core
+
+=== Memory is slow
+
+[cols="2,1,1",options="header"]
+|===
+|Access |Latency |Cycles (approx.)
+|register |-- |0-1
+|L1 cache |~1 ns |4
+|L2 cache |~4 ns |12
+|L3 cache (shared) |~15-40 ns |40-100
+|main memory |~80-100 ns |200-300
+|other socket / NUMA node |~150+ ns |400+
+|===
+
+Everything a CPU does is about *hiding this gap*: caches, prefetching, out-of-order execution, store buffers
+
+=== One core: the pipeline
+
+[ditaa]
+----
++--------------------+
+|  fetch + decode    |   in order: instructions -> micro-ops (μops)
++--------------------+
+          |
+          v
++--------------------+
+|  rename + schedule |   μops wait in a queue until their inputs are ready
++--------------------+
+          |
+          v
++--------------------+
+|  execute           |   out of order, on many execution units
++--------------------+
+          |
+          v
++--------------------+
+|  retire            |   results become final in program order
++--------------------+
+----
+
+=== Micro-ops
+
+[cols="2,3",options="header"]
+|===
+|Instruction |μops
+|`add eax, ebx` |1: add
+|`add eax, [var]` |2: load, add
+|`add [var], eax` |3: load, add, store
+|===
+
+* complex instructions are split into simple μops that can run *out of order*
+* a single instruction like `add [var], eax` is *not* atomic: the CPU does load, add, store
+
+=== Out-of-order and speculative execution
+
+* a μop runs as soon as its inputs are ready, not in program order
+* the CPU *predicts branches* and runs ahead, results are discarded if it guessed wrong
+* *retirement* is in order, so a single thread always sees its own program order
+* other cores can observe effects in a *different* order, this is the root of the memory model problem
+
+=== Store buffer
+
+[ditaa]
+----
++--------+     +--------------+     +----------+     +--------+
+| core   | --> | store buffer | --> | L1 cache | --> | memory |
++--------+     +--------------+     +----------+     +--------+
+ store retires    waits here          becomes visible to others
+ immediately
+----
+
+* a store does not wait for the cache line, it goes to a *store buffer*
+* the core goes on, later loads can *overtake* earlier stores (StoreLoad reordering)
+* the core sees its own stores (store forwarding), other cores see them later
+
+=== Reordering allowed by hardware
+
+[cols="2,1,1,1",options="header"]
+|===
+|Reordering |x86 (TSO) |ARM / POWER |Barrier needed for `volatile`
+|Load -> Load |no |yes |yes
+|Load -> Store |no |yes |yes
+|Store -> Store |no |yes |yes
+|Store -> Load |*yes* |yes |yes
+|===
+
+The JMM is weaker than any CPU, the JIT inserts barriers per platform
+
+=== Cache hierarchy
+
+[ditaa]
+----
++---------+   +---------+   +---------+   +---------+
+| Core 0  |   | Core 1  |   | Core 2  |   | Core 3  |
+| L1  L2  |   | L1  L2  |   | L1  L2  |   | L1  L2  |
++---------+   +---------+   +---------+   +---------+
+     |             |             |             |
++-----------------------------------------------------+
+|                  shared L3 cache                    |
++-----------------------------------------------------+
+                          |
+                   +-------------+
+                   | main memory |
+                   +-------------+
+----
+
+* memory moves in *cache lines* (64 bytes), never single bytes
+* the same line can sit in several private caches at once
+
+=== Cache coherence (MESI)
+
+[cols="1,3",options="header"]
+|===
+|State |Meaning
+|*M*odified |only this cache has the line, memory is stale
+|*E*xclusive |only this cache has the line, same as memory
+|*S*hared |several caches have it, read-only
+|*I*nvalid |line is not usable
+|===
+
+[ditaa]
+----
+Core 0 writes line X
+  |  1. send "invalidate X" to others
+  v
+Core 1: X -> Invalid  (its next read misses and fetches from Core 0)
+----
+
+* writing needs *exclusive ownership* of the line
+* coherence makes caches consistent per line, it does *not* give ordering across lines
+
+=== False sharing
+
+[ditaa]
+----
+one 64 byte cache line
++-----------------+-----------------+----------------------------+
+| counterA (T1)   | counterB (T2)   |  ...                       |
++-----------------+-----------------+----------------------------+
+   T1 writes --> invalidates the line in T2's cache --> T2 writes --> invalidates T1 ...
+----
+
+* two threads write *different* variables on the *same* cache line
+* the line ping-pongs between cores, throughput collapses
+* fix: *padding* so hot fields sit on separate lines
+* `@Contended` (JDK internal, used by `LongAdder`, `ForkJoinPool`, `Thread`) does it for you

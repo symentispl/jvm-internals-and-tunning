@@ -1,0 +1,213 @@
+=== Why garbage collection?
+
+* Java has no `free()`, the runtime decides when memory can be reused
+* *garbage* = an object the program can never touch again
+* *mutator* = the application threads (they mutate the object graph)
+* *collector* = the GC threads (they find garbage and reclaim memory)
+
+=== Reachability
+
+[graphviz]
+----
+digraph {
+	rankdir=LR
+	node [shape=box]
+	A->B
+	A->C
+	A->D
+	B->E
+	C->E
+	F->G
+	G->H
+	I->J
+
+	A [label="A (GC root)"]
+	F [label="F (GC root)"]
+	I [label="I (unreachable)", style=dashed]
+	J [label="J (unreachable)", style=dashed]
+}
+----
+
+An object is *live* if it can be reached from a GC root, everything else is garbage
+
+=== GC roots
+
+[graphviz]
+----
+digraph {
+	rankdir=LR
+	node [shape=box]
+	subgraph cluster_roots {
+		label="GC roots"
+		stack  [label="thread stacks\n(locals, operands)"]
+		static [label="static fields\n(of loaded classes)"]
+		jni    [label="JNI handles"]
+		cl     [label="class loaders,\nclass mirrors"]
+		mon    [label="monitors, internal\nJVM structures"]
+	}
+	heap [label="object graph\nin the heap", shape=ellipse]
+	stack->heap
+	static->heap
+	jni->heap
+	cl->heap
+	mon->heap
+}
+----
+
+=== Reference strength
+
+[cols="1,3,3",options="header"]
+|===
+|Type |Cleared when |Used for
+
+|strong |never, while reachable |ordinary references
+|`SoftReference` |memory is tight |caches
+|`WeakReference` |next GC, if only weakly reachable |canonical maps, `WeakHashMap`
+|`PhantomReference` |after object is unreachable |cleanup actions (`Cleaner`)
+|===
+
+`finalize()` is deprecated for removal, use `Cleaner` / try-with-resources
+
+=== Tracing: tri-colour marking
+
+[graphviz]
+----
+digraph {
+	rankdir=LR
+	node [shape=circle, style=filled]
+	root [label="root", fillcolor=gray]
+	a [label="A", fillcolor=black, fontcolor=white]
+	b [label="B", fillcolor=gray]
+	c [label="C", fillcolor=white]
+	d [label="D", fillcolor=white]
+	root->a->b->c
+	a->d
+}
+----
+
+* *white* - not visited yet (garbage if still white at the end)
+* *grey* - visited, children not scanned yet (the work list)
+* *black* - visited and all children scanned
+* when marking ends, white = garbage
+
+=== Concurrent marking needs barriers
+
+If the mutator runs while the collector marks, it can hide a live object
+
+[graphviz]
+----
+digraph {
+	rankdir=LR
+	node [shape=circle, style=filled]
+	a [label="A", fillcolor=black, fontcolor=white]
+	b [label="B", fillcolor=gray]
+	c [label="C", fillcolor=white]
+	a->c [label="mutator: A.f = C", color=red, fontcolor=red]
+	b->c [label="mutator: B.f = null", style=dashed, color=red, fontcolor=red]
+}
+----
+
+C is live (via black A) but the collector will never scan A again, so C would be freed
+
+A *barrier* (extra code on reference reads/writes) prevents this
+
+=== Barriers
+
+[cols="1,3,2",options="header"]
+|===
+|Barrier |What it does |Used by
+
+|post-write (card marking) |remembers old->young reference stores |Serial, Parallel, G1
+|pre-write (SATB) |records the *old* value before it is overwritten, so marking sees the snapshot |G1, Shenandoah
+|load (read) barrier |checks/fixes the reference when it is loaded from the heap |ZGC, Shenandoah
+|===
+
+Cost: a few instructions on every reference access, paid by the application
+
+=== Reclaiming memory: mark-sweep
+
+[ditaa]
+----
+before   +---+---+---+---+---+---+---+---+
+         | A | x | B | x | x | C | x | D |
+         +---+---+---+---+---+---+---+---+
+after    +---+---+---+---+---+---+---+---+
+         | A |   | B |   |   | C |   | D |
+         +---+---+---+---+---+---+---+---+
+              free list: 4 holes, no big block
+----
+
+* fast, no object movement
+* *fragmentation*: allocation needs a free list and can fail even if enough total space is free
+
+=== Reclaiming memory: mark-compact
+
+[ditaa]
+----
+before   +---+---+---+---+---+---+---+---+
+         | A | x | B | x | x | C | x | D |
+         +---+---+---+---+---+---+---+---+
+after    +---+---+---+---+---+---+---+---+
+         | A | B | C | D |    free       |
+         +---+---+---+---+---+---+---+---+
+----
+
+* live objects slide together, free space is one contiguous block
+* allocation = pointer bump (very cheap)
+* cost: every reference to a moved object must be updated
+
+=== Reclaiming memory: mark-copy (evacuation)
+
+[ditaa]
+----
+from-space  +---+---+---+---+---+---+---+---+
+            | A | x | B | x | x | C | x | D |
+            +---+---+---+---+---+---+---+---+
+                  | copy live objects only
+                  v
+to-space    +---+---+---+---+---+---+---+---+
+            | A | B | C | D |    free       |
+            +---+---+---+---+---+---+---+---+
+from-space is now entirely free
+----
+
+* work is proportional to *live* data, not to heap size
+* needs spare space for the copy
+* a *forwarding pointer* in the old copy tells others where the object went
+
+=== Stop-the-world, parallel, concurrent
+
+[ditaa]
+----
+Stop-the-world   app  |==========|          |==========|
+                 GC   |          |##########|
+                                   pause
+
+Parallel         app  |==========|          |==========|
+                 GC   |          |####|     (many GC threads, still paused)
+                 GC   |          |####|
+
+Concurrent       app  |====================================|
+                 GC   |      |##########|     (GC threads run next to the app)
+----
+
+* *stop-the-world (STW)*: all mutators are stopped, simplest
+* *parallel*: several GC threads work together, app still stopped
+* *concurrent*: GC runs while the app runs, needs barriers
+
+=== The GC trade-off triangle
+
+[ditaa]
+----
+              low pause
+                /\
+               /  \
+              /    \
+             /      \
+   high throughput --- small footprint
+----
+
+You can optimise two, the third pays for it
+
+* concurrent GC: low pause, but barriers and extra threads cost throughput and memory
+* STW GC: best throughput per CPU, long pauses on big heaps

@@ -1,0 +1,210 @@
+=== What makes it fast?
+
+* modern CPUs are fast at: predictable branches, sequential memory access, registers
+* slow at: calls through pointers, cache misses, memory loads and stores
+* JIT rewrites your code to fit that: *fewer calls, fewer loads, more registers*
+* the key enabler is *inlining*
+
+=== Inlining
+
+[ditaa]
+----
+before                            after inlining getX() and add()
+
+main()                            main()
+  |--> add(a, b)                    t = a.getX() body + b
+         |--> a.getX()              (one big method, no calls)
+----
+
+* the callee body is pasted into the caller
+* saves the call, but more importantly *widens the horizon* of the optimizer
+* limits: callee bytecode size, nesting depth, already compiled code size, call site type profile
+
+=== Inlining, in numbers
+
+[cols="2,1",options="header"]
+|===
+|Rule (C2, defaults, approximate) |Value
+|trivial method, always inlined |<= 6 bytes
+|method inlined if it is smaller than |35 bytes
+|hot call site inlined if smaller than |325 bytes
+|max nesting of inlined calls |15
+|===
+
+* values change between JDK versions, see appendix for flags
+* huge methods (> 8000 bytes) are not compiled at all
+
+=== Inlining unlocks other optimizations
+
+[source,java]
+----
+public static void assertNotNull(Object obj) {
+  if (obj == null) { out.println("obj is null"); }
+}
+
+public void check() { assertNotNull(this); }
+----
+
+=== !
+
+after *inlining*
+
+[source,java]
+----
+public void check() {
+  if (this == null) { out.println("obj is null"); }
+}
+----
+
+after *constant folding* (`this` is never null)
+
+[source,java]
+----
+public void check() {
+  if (false) { out.println("obj is null"); }
+}
+----
+
+after *dead code elimination*
+
+[source,java]
+----
+public void check() { }
+----
+
+=== Constant folding and propagation
+
+[source,java]
+----
+public static long constantPropagation() {
+    int x = 14;
+    int y = 7 - x / 2;       // 0
+    return y * (28 / x + 2); // 0 * 4
+}
+----
+
+compiled as: `return 0;`
+
+=== Pointer compare
+
+[source,java]
+----
+public static int pointerCompare(Object obj) {
+  Object another = new Object();   // brand new object
+  if (obj == another) {            // can never be true
+    return 0;
+  }
+  return -1;
+}
+----
+
+compiled as: `return -1;` (and the allocation disappears)
+
+=== Type profile and call sites
+
+[cols="1,2,2",options="header"]
+|===
+|Call site |Seen receiver types |Compiled as
+|*monomorphic* |1 |type check + inlined body
+|*bimorphic* |2 |two type checks + inlined bodies
+|*megamorphic* |3+ |virtual call through vtable/itable, *no inlining*
+|===
+
+* *class hierarchy analysis (CHA)*: if only one loaded class implements the method, no type check is needed at all
+* the type check is guarded by an *uncommon trap* (next section)
+
+=== Escape analysis
+
+[ditaa]
+----
+Point p = new Point(x, y);        int px = x;       // no allocation
+return p.x + p.y;           ==>   int py = y;       // fields live in registers
+                                  return px + py;
+----
+
+* if an object never *escapes* the compiled method (not stored to the heap, not passed on), nobody else can see it
+* *scalar replacement*: the object is removed, its fields become local variables
+* result: no allocation, no GC pressure
+
+=== Lock elision and coarsening
+
+[source,java]
+----
+public static int lockElision(int j) {
+    Object lock = new Object();    // never escapes
+    synchronized (lock) { j++; }   // lock is removed
+    return j;
+}
+----
+
+* *lock elision*: lock on a non-escaping object is removed
+* *lock coarsening*: adjacent `synchronized` blocks on the same lock merge into one
+
+=== Implicit null checks
+
+[ditaa]
+----
+explicit                          implicit
+test obj, obj                     mov  eax, [obj+16]     ; just load
+je   throw_NPE                    ; null => CPU fault => signal handler
+mov  eax, [obj+16]                ;   => uncommon trap / throws NPE
+----
+
+* if the profile says "never null", the check costs nothing
+* the hardware page fault does the check for free
+* only when it really is null, we pay (and deoptimize)
+
+=== Loop optimizations
+
+[ditaa]
+----
+for (i = 0; i < n; i++)         for (i = 0; i < n; i += 4) {
+  sum += a[i];             ==>    sum += a[i] + a[i+1] + a[i+2] + a[i+3];
+                                }
+----
+
+* *unrolling*: more work per iteration, fewer branches and counter updates
+* *range check elimination*: prove `0 <= i < a.length` once, outside the loop
+* *loop invariant hoisting*: move constant work out of the loop
+* *counted loops* (`int` index, simple stride) get the most optimizations
+
+=== Auto-vectorization (SuperWord)
+
+[ditaa]
+----
+scalar                         SIMD (one instruction, 4+ values)
+x1 = y1 + z1                   +------+------+------+------+
+x2 = y2 + z2                   | y1   | y2   | y3   | y4   |
+x3 = y3 + z3              +    +------+------+------+------+
+x4 = y4 + z4                   | z1   | z2   | z3   | z4   |
+                               +------+------+------+------+
+----
+
+[source,java]
+----
+for (int i = 0; i < a.length; i++) { a[i] = a[i] * a[i]; }
+----
+
+* C2 recognizes simple loops and emits SSE / AVX instructions
+* fragile: easy to write a loop that does not vectorize, no feedback from the compiler
+* explicit alternative: Vector API (still incubating in JDK 25, JEP 508)
+
+=== Intrinsics
+
+* a method the compiler replaces with *hand-written* machine code or special IR
+* not JNI, no call overhead, can be inlined
+* used for: `System.arraycopy`, `Arrays.fill`, `Math.*`, `String.indexOf`, CRC32, AES, `Unsafe` / `VarHandle` CAS, ...
+
+[source,java]
+----
+System.arraycopy(arr, 0, destArr, 0, arr.length);
+----
+
+compiles to a call of a *stub* generated at JVM startup (e.g. `jlong_disjoint_arraycopy`) using the widest copy instructions of the CPU
+
+=== Exceptions
+
+* `throw` and `catch` in the same compiled (inlined) method becomes a plain `goto`
+* real cost is filling the stack trace, not unwinding
+* `NullPointerException`, `ArrayIndexOutOfBounds`, ... thrown very often from the same place are replaced by a *preallocated exception without stack trace* ("fast throw")
+* exceptions as control flow defeat the optimizer

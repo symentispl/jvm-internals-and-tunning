@@ -1,0 +1,22 @@
+== Appendix: concurrency diagnostics
+
+Everything above is how concurrency works. This appendix is about finding problems.
+
+=== Finding contention and deadlocks
+
+* `jcmd <pid> Thread.print`, `jstack <pid>`: thread states, held and awaited locks, detects deadlocks
+* `jcmd <pid> Thread.dump_to_file -format=json <file>`: thread dump including virtual threads
+* JDK Flight Recorder: `JavaMonitorEnter`, `JavaMonitorWait`, `ThreadPark`, `ThreadSleep` events with stack traces
+* async-profiler `-e lock` shows where threads wait for locks
+
+=== Testing the memory model
+
+* bugs show up only on some CPUs, only rarely
+* *jcstress* (OpenJDK) runs tiny concurrent tests millions of times and reports every observed outcome
+* run tests on ARM too, x86 hides many reordering bugs
+
+=== False sharing and cache misses
+
+* `perf c2c` finds cache lines contended between cores
+* `@Contended` for application classes needs `-XX:-RestrictContended`
+* `-XX:+PrintAssembly` (with hsdis) shows the actual `lock` prefixes and fences the JIT emitted

@@ -1,0 +1,21 @@
+== Java Memory Model and concurrency
+
+=== Agenda
+
+* Hardware: pipeline, store buffers, caches, coherence, false sharing
+* Memory model: reordering, visibility, happens-before, barriers
+* Java primitives: `volatile`, `synchronized`, locks, atomics
+* Lock-free programming: CAS, ABA, spinning, queues
+* Other concurrency models
+* Appendix: concurrency diagnostics
+
+include::concurrency-hardware.adoc[]
+
+include::concurrency-memory-model.adoc[]
+
+include::concurrency-primitives.adoc[]
+
+include::concurrency-lockfree.adoc[]
+
+== Q&A
+

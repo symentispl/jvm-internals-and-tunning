@@ -1,0 +1,136 @@
+=== Atomicity: is `i++` safe?
+
+[source,java]
+----
+int i = 0;
+i++;
+----
+
+[source,bytecode]
+----
+iload_1
+iconst_1
+iadd
+istore_1
+----
+
+* four bytecodes, and even a single `inc [mem]` instruction is load + add + store μops
+* another core can write in between: a lost update
+* needs a *read-modify-write* that is atomic in hardware
+
+=== Compare-and-swap
+
+[ditaa]
+----
+lock cmpxchg [addr], new       (expected value in EAX)
+
+   [addr] == EAX ?  --yes-->  [addr] = new, ZF = 1  (success)
+        |
+        no --> EAX = [addr], ZF = 0  (failure, somebody else won)
+----
+
+* one instruction, atomic across all cores: the core owns the cache line for its duration (`lock` prefix)
+* other atomics: `lock xadd` (fetch-and-add), `xchg`
+* ARM: load-linked / store-conditional (`ldxr`/`stxr`) or `cas` instructions (LSE)
+
+=== java.util.concurrent.atomic
+
+[source,java]
+----
+// AtomicInteger.incrementAndGet(), conceptually
+int prev;
+do {
+  prev = get();
+} while (!compareAndSet(prev, prev + 1));
+----
+
+* `AtomicInteger`, `AtomicLong`, `AtomicReference` call *intrinsics*, JIT turns them into `lock cmpxchg` / `lock xadd`
+* under high contention CAS keeps failing and the cache line ping-pongs
+* `LongAdder`: spreads updates over several cells (padded with `@Contended`), sums on read
+
+=== LongAdder
+
+[ditaa]
+----
+AtomicLong                         LongAdder
++-------+                          +------+ +------+ +------+ +------+
+| value | <-- all threads CAS      | base | | cell | | cell | | cell |  <-- threads hash to cells
++-------+                          +------+ +------+ +------+ +------+
+                                   sum() = base + cell0 + cell1 + ...
+----
+
+=== synchronized
+
+* `monitorenter` / `monitorexit` bytecodes, javac adds a `try/finally` so the monitor is always released
+* the lock state lives in the object header (*mark word*)
+* reentrant, no fairness, released automatically at the end of the block
+* since Java 24 a virtual thread blocked on `synchronized` no longer pins its carrier thread (JEP 491)
+
+=== Monitor states
+
+[graphviz]
+----
+digraph {
+	rankdir=LR
+	node [shape=box]
+	free [label="unlocked"]
+	thin [label="lightweight lock\n(CAS on object header / lock stack)"]
+	fat  [label="inflated\nObjectMonitor"]
+	free->thin [label="lock (CAS)"]
+	thin->free [label="unlock"]
+	thin->fat [label="contention,\nwait(), hashCode..."]
+	fat->free [label="deflated\nwhen idle"]
+}
+----
+
+* uncontended: one CAS, no OS involvement
+* contended: *inflate* to a heavyweight monitor, spin briefly, then the thread *parks* (OS call)
+* biased locking (a third state) was disabled in 15 and removed in 18
+
+=== java.util.concurrent.locks
+
+[cols="1,2",options="header"]
+|===
+|`synchronized` |`ReentrantLock`
+|block scoped, automatic unlock |explicit `lock()` / `unlock()` in `finally`
+|no timeout, not interruptible |`tryLock(timeout)`, `lockInterruptibly()`
+|one wait set (`wait`/`notify`) |many `Condition`s
+|unfair |fair or unfair
+|JVM implementation |plain Java on top of `AbstractQueuedSynchronizer`
+|===
+
+* also `ReentrantReadWriteLock`, `StampedLock` (optimistic reads, not reentrant)
+
+=== AbstractQueuedSynchronizer
+
+[ditaa]
+----
+state (volatile int)          wait queue (linked list of nodes)
++---------+                   head --> [T2] --> [T3] --> [T4] <-- tail
+| 0 / 1.. |                            parked   parked   parked
++---------+
+ lock:   CAS state 0 -> 1, on failure enqueue and LockSupport.park()
+ unlock: state = 0, LockSupport.unpark(first waiter)
+----
+
+* *the* building block of `ReentrantLock`, `Semaphore`, `CountDownLatch`, `FutureTask`, ...
+* a volatile `state` + CAS + a FIFO queue + park/unpark: all of `j.u.c` is made of these
+
+=== Concurrent collections
+
+[cols="2,3",options="header"]
+|===
+|Class |Technique
+|`ConcurrentHashMap` |CAS to insert into empty bins, `synchronized` on the head of a bin otherwise, lock-free reads
+|`CopyOnWriteArrayList` |every write copies the array, reads need no locks
+|`ArrayBlockingQueue` |one lock, bounded ring buffer
+|`LinkedBlockingQueue` |two locks (head and tail)
+|`ConcurrentLinkedQueue` |lock-free (Michael-Scott), CAS on head and tail
+|===
+
+=== Thread pools
+
+* `ExecutorService` = a queue of tasks + a set of worker threads
+* `ForkJoinPool`: one deque per worker, idle workers *steal* from the others
+* platform threads are 1:1 with OS threads, so they are expensive: see *virtual threads* section
+* `ThreadLocal` costs memory per thread, `ScopedValue` (final in Java 25, JEP 506) is the immutable, bounded alternative

@@ -1,0 +1,93 @@
+=== JIT speculates
+
+* C2 does not compile everything, it compiles the *hot paths* that the profile showed
+* a branch never taken in profile => not compiled at all, replaced by an *uncommon trap*
+* a call site that saw one type => assume it is always that type
+* faster code, but valid only while the assumption holds
+
+=== Uncommon trap
+
+[ditaa]
+----
+compiled code                       trap                    interpreter
++---------------+   assumption   +-----------+            +--------------+
+| fast path     | ---- broken -> | uncommon  | --------> | continue in   |
+| (no else-case)|                | trap      |  rebuild   | interpreter   |
++---------------+                +-----------+  frames    +--------------+
+----
+
+* the compiled frame is converted back into *interpreter frames* and execution continues
+* the compiled method is thrown away, profiling restarts, a better version is compiled later
+* this is called *deoptimization*
+
+=== Example: branch never taken
+
+[source,java]
+----
+private static Object uncommonTrap(Object trap) {
+  if (trap != null) {
+    System.out.println("I am being trapped!");  // never executed in the first 200 rounds
+  }
+  return null;
+}
+----
+
+[source,java]
+----
+for (int i = 0; i < 250; ++i) {
+  for (int j = 0; j < CHUNK_SIZE; ++j) { trap = uncommonTrap(trap); }
+  if (i == 200) { trap = new Object(); }   // the assumption breaks here
+}
+----
+
+=== Example: type profile changes
+
+[source,java]
+----
+Calculator trap = new Sum(1, 1);
+for (int i = 0; i < 250; ++i) {
+  for (int j = 0; j < CHUNK_SIZE; ++j) { result = trap.calculate(); }  // inlined Sum.calculate()
+  if (i == 200) {
+    trap = new Multiply(1, 1);          // different type => trap
+  }
+}
+----
+
+=== The compilation loop
+
+[ditaa]
+----
++--------------+          +-----------+
+|  Interpreter |--------->|  Profile  |
++--------------+          +-----------+
+       ^                        |
+       |                        v
++--------------+          +-----------+
+|  Deoptimize  |<---------|  Compile  |
++--------------+          +-----------+
+----
+
+=== Why does deoptimization happen?
+
+* an *uncommon trap* fires (branch, type, null, array bounds, ...)
+* *class loading* invalidates a CHA assumption (new subclass appears)
+* tier transition: tier 3 code replaced by tier 4 code
+
+Old code is marked *made not entrant*: running calls finish, new calls go elsewhere, memory is freed later
+
+=== Warmup
+
+* the JIT needs time and traffic before the application runs at full speed
+* JDK 24 (JEP 483): AOT cache of *loaded and linked classes*
+* JDK 25 (JEP 515): AOT cache also stores *method profiles* from a training run, so C2 can start earlier
+* alternatives: CRaC (checkpoint/restore), GraalVM native image (AOT, no JIT)
+
+=== JIT friendly code
+
+* small methods get inlined, even before profile data exists
+* deep call stacks and megamorphic call sites block inlining (frameworks, deep hierarchies, layers of lambdas)
+* unpredictable branches defeat both the CPU and the profile
+* do not use exceptions for control flow
+* choose good data structures first, the compiler can't fix the algorithm
+
+Flags, logs and disassembly: see the *Appendix*

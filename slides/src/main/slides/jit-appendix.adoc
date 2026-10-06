@@ -1,0 +1,112 @@
+== Appendix: JIT flags and diagnostics
+
+Everything above is how the JIT works. This appendix is about observing and configuring it.
+
+=== Appendix agenda
+
+* Compiler and tier flags
+* Inlining settings
+* Code cache flags
+* Compilation logs
+* Reading generated assembly
+* Tools
+
+=== Compiler flags
+
+`-Xint`:: interpreter only
+`-XX:+TieredCompilation`:: enables tiered compilation (default)
+`-XX:TieredStopAtLevel=<n>`:: stop at given compilation level (1 = C1 only)
+`-XX:Tier3InvocationThreshold`, `-XX:Tier4InvocationThreshold`:: invocation counts that trigger tier 3 / 4
+`-XX:Tier3BackEdgeThreshold`, `-XX:Tier4BackEdgeThreshold`:: back-edge counts that trigger OSR compilation
+`-XX:-BackgroundCompilation`:: compile synchronously, application waits
+
+=== Compiler threads
+
+`-XX:CICompilerCount=N`:: total number of compiler threads (minimum 2), split between C1 and C2, scales with CPU count
+`-XX:+UseDynamicNumberOfCompilerThreads`:: threads are started and stopped on demand (default)
+
+The queue is not strictly ordered, hot methods are compiled first, so compilation ids in logs may be out of order
+
+=== Inlining settings
+
+`MaxTrivialSize=6`:: bytecode size of a trivial method, always inlined
+`MaxInlineSize=35`:: max bytecode size of a method to inline
+`FreqInlineSize=325`:: max bytecode size of a frequent (hot) method to inline
+`MaxInlineLevel=15`:: max nesting of inlined calls
+`C1MaxInlineSize=35`, `C1MaxInlineLevel=9`:: same limits for C1
+
+Defaults differ between JDK versions, check with `java -XX:+PrintFlagsFinal -version | grep Inline`
+
+=== Code cache flags
+
+`-XX:InitialCodeCacheSize`:: initial size of the code cache
+`-XX:ReservedCodeCacheSize`:: maximum size of the code cache (240 MB by default with tiered compilation)
+`-XX:+SegmentedCodeCache`:: three segments, enabled by default with tiered compilation
+
+`jcmd <pid> Compiler.codecache` shows usage of each segment
+
+=== Compilation log
+
+*-Xlog:jit+compilation=debug*
+
+[source]
+--
+[0,080s][debug][jit,compilation]   36   !   3       java.util.concurrent.ConcurrentHashMap::putVal (432 bytes)
+[0,080s][debug][jit,compilation]   40     n 0       jdk.internal.misc.Unsafe::compareAndSetLong (native)
+[0,086s][debug][jit,compilation]   39       3       java.util.concurrent.ConcurrentHashMap::spread (10 bytes)
+--
+
+columns: timestamp, compile id, attributes, tier, method (bytecode size)
+
+=== Compilation attributes
+
+* `%`: the compilation is OSR
+* `s`: the method is synchronized
+* `!`: the method has an exception handler
+* `b`: compilation occurred in blocking mode
+* `n`: compilation occurred for a wrapper to a native method
+
+=== Inlining and deoptimization logs
+
+`-Xlog:jit+inlining=debug`:: which calls were inlined and why not
+`-Xlog:deoptimization=debug`:: every deoptimization with reason and action
+`-XX:+UnlockDiagnosticVMOptions -XX:+PrintInlining`:: older equivalent
+
+=== Reading assembly
+
+Needs `hsdis` disassembler plugin and `-XX:+UnlockDiagnosticVMOptions`
+
+  -XX:+UnlockDiagnosticVMOptions
+  -XX:CompileCommand="print,*NullCheckFolding.nullCheckFolding"
+  -XX:PrintAssemblyOptions=intel
+
+`java -XX:CompileCommand=help` prints all `CompileCommand` options
+
+=== Example: disassembled empty method
+
+[source,nasm]
+----
+sub    $0x18,%rsp
+mov    %rbp,0x10(%rsp)    ;*synchronization entry
+                              ; - NullCheckFolding::nullCheckFolding@-1 (line 19)
+
+add    $0x10,%rsp
+pop    %rbp
+test   %eax,0x16b74929(%rip)        # 0x00007f6cd3c86000
+                                                ;   {poll_return}
+retq
+----
+
+=== Tools
+
+* https://github.com/AdoptOpenJDK/jitwatch[JITWatch]: log analyser and visualiser for the HotSpot JIT
+* JDK Flight Recorder: `Compilation`, `Deoptimization`, `CodeCacheFull` events
+* `jcmd <pid> Compiler.queue`, `jcmd <pid> Compiler.CodeHeap_Analytics`
+* JMH `-prof perfasm`
+
+=== Source code and links
+
+* https://github.com/openjdk/jdk/blob/master/src/hotspot/share/c1/c1_globals.hpp[c1_globals.hpp], https://github.com/openjdk/jdk/blob/master/src/hotspot/share/opto/c2_globals.hpp[c2_globals.hpp]
+* https://github.com/openjdk/jdk/blob/master/src/hotspot/share/oops/methodData.hpp[methodData.hpp], https://github.com/openjdk/jdk/blob/master/src/hotspot/share/runtime/deoptimization.hpp[deoptimization.hpp]
+* https://stackoverflow.com/questions/35601841/how-does-the-jvm-decided-to-jit-compile-a-method-categorize-a-method-as-hot[How does the JVM decide to JIT-compile a method?]
+* https://jpbempel.github.io/2016/03/16/compilecommand-jvm-option.html[CompileCommand JVM option], https://jpbempel.github.io/2015/12/30/printassembly-output-explained.html[PrintAssembly output explained]

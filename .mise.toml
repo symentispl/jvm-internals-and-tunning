@@ -1,0 +1,75 @@
+[settings]
+ruby.compile = false
+
+[tools]
+ruby = "3.3"
+node = "22"
+java = "temurin-21"
+"npm:@mermaid-js/mermaid-cli" = "latest"
+"npm:decktape" = "3.16.1"
+"conda:graphviz" = "latest"
+
+[env]
+BUNDLE_PATH = "vendor/bundle"
+
+[tasks.install]
+description = "Install Ruby gems"
+run = "bundle install"
+
+[tasks.build]
+description = "Build the slides (HTML output in build/slides/)"
+depends = ["install"]
+run = [
+  "mkdir -p build/slides",
+  "bundle exec asciidoctor -r asciidoctor-revealjs -r asciidoctor-diagram -b revealjs -a revealjsdir=https://cdn.jsdelivr.net/npm/reveal.js@5.1.0 -a puppeteer-config=$(pwd)/slides/puppeteer-config.json -a diagram-mmdc=$(mise which mmdc) -D build/slides slides/src/main/slides/index.adoc",
+  "cp -r slides/src/main/resources/. build/slides/"
+]
+
+[tasks.serve]
+description = "Build and serve slides with live reload at http://localhost:4000"
+depends = ["build"]
+run = "bundle exec ruby -run -e httpd build/slides -p 4000 & bundle exec guard --no-interactions"
+
+[tasks.export-pdf]
+description = "Export slides as PDF"
+depends = ["build"]
+run = """
+bundle exec ruby -run -e httpd build/slides -p 4000 &
+SERVER_PID=$!
+echo "Waiting for HTTP server..."
+until curl -s http://localhost:4000 > /dev/null 2>&1; do sleep 0.5; done
+echo "Server ready. Exporting PDF..."
+mkdir -p build/export
+decktape reveal --chrome-arg="--no-sandbox" http://localhost:4000 build/export/slides.pdf
+kill $SERVER_PID
+"""
+
+[tasks.dist]
+description = "Aggregate HTML + PDF into build/dist/ for publishing"
+depends = ["build", "export-pdf"]
+run = [
+  "rm -rf build/dist",
+  "mkdir -p build/dist",
+  "cp -r build/slides/. build/dist/",
+  "cp build/export/slides.pdf build/dist/slides.pdf"
+]
+
+[tasks.clean]
+description = "Remove build output"
+run = "rm -rf build/slides build/export build/dist"
+
+[tasks.build-code]
+description = "Build the code/ Java subproject via Gradle"
+run = "./gradlew :code:build"
+
+[tasks.test-code]
+description = "Test the code/ Java subproject via Gradle"
+run = "./gradlew :code:test"
+
+[tasks.clean-code]
+description = "Clean the code/ Java subproject"
+run = "./gradlew :code:clean"
+
+[tasks.package]
+description = "Create distributable upgrade zip (slides-bootstrap-vX.Y.Z.zip)"
+run = "bash bin/package.sh"

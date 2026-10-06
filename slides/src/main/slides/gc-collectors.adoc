@@ -1,0 +1,313 @@
+=== Collectors in OpenJDK 25
+
+[cols="2,1,1,2,2",options="header"]
+|===
+|Collector |Generational |Compaction |Marking / moving objects |Pause
+
+|Serial |yes |STW |STW, single thread |proportional to live set
+|Parallel |yes |STW |STW, many threads |proportional to live set
+|G1 |yes (regions) |STW evacuation |concurrent marking, STW evacuation |bounded by pause goal, ms - 100s ms
+|Shenandoah |yes (since 25) |concurrent |concurrent marking and evacuation |ms, independent of heap size
+|ZGC |yes (only mode since 24) |concurrent |concurrent marking and relocation |sub-ms, independent of heap size
+|Epsilon |no |none |no GC at all |none, JVM exits when heap is full
+|===
+
+=== What changed since Java 8
+
+[cols="1,4",options="header"]
+|===
+|JDK |Change
+|8 |Parallel is the default, CMS available
+|9 |G1 becomes the default (JEP 248)
+|10 |G1 full GC is parallel (JEP 307)
+|14 |CMS removed (JEP 363)
+|15 |ZGC and Shenandoah are product features (JEP 377, 379)
+|21 / 23 |Generational ZGC added / made default (JEP 439, 474)
+|24 |non-generational ZGC removed (JEP 490)
+|25 |Generational Shenandoah (JEP 521), compact object headers (JEP 519)
+|===
+
+* also: G1 region pinning for JNI (22), G1 late barrier expansion (24), compact object headers (25)
+* *default collector*: G1, or Serial when the JVM sees < 2 CPUs or < 1792 MB memory
+* select explicitly: `-XX:+UseSerialGC`, `-XX:+UseParallelGC`, `-XX:+UseG1GC`, `-XX:+UseZGC`, `-XX:+UseShenandoahGC`
+
+=== Serial and Parallel
+
+[ditaa]
+----
+Young (STW)     Eden + S0/S1  --mark-copy-->  S1 / Old
+Old / Full (STW)  Old  --mark-sweep-compact-->  Old (compacted)
+
+Serial     app |====|  GC  |====|        1 GC thread
+Parallel   app |====|  GC  |====|        N GC threads
+                      GC
+                      GC
+----
+
+* *Serial*: one thread, tiny footprint, good for small heaps and containers with 1 CPU
+* *Parallel*: same algorithms with many threads, best raw throughput
+* both pause the application for the whole young or old collection
+* pause grows with live data (young) or heap size (old / full)
+
+=== Why G1?
+
+* Parallel / Serial: Old collection pause grows with heap size
+* heap sizing of generations had to be done by hand
+* G1 idea: split the heap into many small *regions* and collect only some of them per pause
+* pause time is limited by *how many regions* we collect, not by heap size
+
+=== G1: regions
+
+[ditaa]
+----
++----+----+----+----+----+----+----+----+
+| E  | E  | O  | S  | O  | E  | H  | H  |    E = eden
++----+----+----+----+----+----+----+----+    S = survivor
+| O  |free| E  | O  |free| S  | O  | E  |    O = old
++----+----+----+----+----+----+----+----+    H = humongous
+----
+
+* heap = ~2048 equal regions, 1 MB - 512 MB each (power of 2)
+* a region is eden, survivor, old, humongous or free; the role changes over time
+* no fixed generation boundaries, so generation sizes adapt freely
+
+=== G1: young collection (evacuation pause)
+
+[ditaa]
+----
+before                       after
++----+----+----+----+        +----+----+----+----+
+| E  | E  | O  | S  |        |free|free| O  | S  |
++----+----+----+----+   ->   +----+----+----+----+
+| O  | E  | E  | O  |        | O  |free|free| O  |
++----+----+----+----+        +----+----+----+----+
+ live objects of E and S are copied into new S / O regions
+----
+
+* STW, parallel: live objects of the *collection set* (all eden + survivor regions) are *evacuated* (copied) to free regions
+* evacuated regions go back to the free list
+* eden size is adapted so that the pause meets the pause-time goal
+
+=== G1: remembered sets
+
+[ditaa]
+----
+Region A (old)  --ref-->  Region B
+                              |
+                      RSet of B: "card 17 of A points into me"
+----
+
+* G1 can collect *any* subset of regions, so each region keeps a *remembered set* of incoming references from other regions
+* post-write barrier puts the dirty card in a *queue*, *refinement threads* update the remembered sets concurrently
+* during evacuation the RSet of each region in the collection set is a root
+
+=== G1: concurrent marking cycle
+
+[ditaa]
+----
+young GC | young GC | young GC | young GC | young GC | mixed | mixed | ...
+  |                                  |
+  v                                  v
+Concurrent Start (STW)      Remark (STW) + Cleanup
+        \======= Concurrent Mark ======/
+----
+
+* starts when heap occupancy crosses *IHOP* (initiating heap occupancy, adaptive, ~45% initially)
+* *concurrent start* piggybacks on a young pause: scans roots
+* concurrent mark computes *live bytes per region*, application keeps running
+* *remark* (STW) finishes marking, *cleanup* frees fully empty regions
+
+=== G1: SATB marking
+
+* marking runs while the application changes the graph
+* G1 marks the *snapshot at the beginning* (SATB): everything reachable at the start stays live
+* pre-write barrier logs the *overwritten* reference so the collector still visits it
+* objects allocated during marking are implicitly live
+* result: *floating garbage* (died after the snapshot), freed in the next cycle
+
+=== G1: mixed collections
+
+[ditaa]
+----
+Old regions sorted by live data (garbage first):
+ +----+----+----+----+----+----+
+ | 5% |10% |30% |60% |90% |95% |   % live
+ +----+----+----+----+----+----+
+  \_________/                      <- added to collection set
+   cheap to evacuate, most space reclaimed
+----
+
+* after marking, young pauses become *mixed* pauses: young regions + a few old regions
+* old regions with the most garbage first ("garbage first"), nearly full regions are skipped
+* spread over several pauses to respect the pause goal
+
+=== G1: humongous objects
+
+[ditaa]
+----
+region size = 4 MB
++--------+--------+--------+--------+
+| H start| H cont.| H cont.|  free  |    one 9 MB array
++--------+--------+--------+--------+
+----
+
+* object >= 50% of a region => allocated directly in *contiguous* old regions
+* never copied in young collections, freed when dead (can be reclaimed eagerly)
+* can fragment the heap, may force extra concurrent cycles
+
+=== G1: when things go wrong
+
+* *evacuation failure*: no free region to copy into, objects stay where they are, expensive pause
+* *Full GC*: last resort, STW mark-compact of the entire heap (parallel)
+* pinned regions (JNI critical sections) are skipped, they no longer block GC (since 22)
+* the aim of concurrent cycle + mixed GCs is to never get here
+
+=== Shenandoah: concurrent evacuation
+
+[ditaa]
+----
+          Init Mark  Concurrent Mark  Final Mark  Concurrent Evacuation  Init/Final Update Refs
+app |=====|##|=======================|##|=======================|##|=====...
+              STW                       STW                        STW
+----
+
+* regionalised like G1, but objects are *moved while the application runs*
+* the hard part: moving an object while threads read and write it
+
+=== Shenandoah: load reference barrier
+
+[ditaa]
+----
+load ref ->  in collection set? --no--> use it
+                  |
+                 yes
+                  v
+        already forwarded? --no--> copy object (CAS to install forwarding ptr)
+                  |
+                  v
+          return the new copy (and fix the slot)
+----
+
+* every reference *load* goes through a barrier, so mutators always see the one current copy
+* forwarding pointer lives in the object's mark word (the extra Brooks pointer word was removed in JDK 13)
+* plus SATB pre-write barrier for concurrent marking
+* mutator and GC threads race to copy, only one CAS wins
+
+=== Shenandoah: cycle
+
+[cols="2,1,3",options="header"]
+|===
+|Phase |STW? |Work
+|Init Mark |yes |scan roots (short)
+|Concurrent Mark |no |trace object graph (SATB)
+|Final Mark |yes |drain queues, choose collection set
+|Concurrent Evacuation |no |copy live objects out of collection set
+|Init Update Refs |yes |tiny, sync threads
+|Concurrent Update Refs |no |fix all references to moved objects
+|Final Update Refs |yes |fix roots, recycle regions
+|===
+
+* pauses depend on root set size, not on heap size
+* *generational mode* (product in JDK 25, `-XX:ShenandoahGCMode=generational`): frequent young cycles, old cycles rarely
+
+=== ZGC: coloured pointers
+
+[ditaa]
+----
+64-bit reference
++---------------------+------------------------------------+
+| colour / metadata   |   address (up to 16 TB heap)       |
+| bits (GC state)     |                                    |
++---------------------+------------------------------------+
+----
+
+* GC state (e.g. "marked", "remapped", "remembered") lives in the *reference itself*
+* the object does not need to be touched to know if it was visited
+* no compressed oops with ZGC
+
+=== ZGC: load barrier and self-healing
+
+[ditaa]
+----
+load ref -> colour is "good"? --yes--> use it
+                 |
+                no
+                 v
+      mark it / relocate it / remap it
+                 |
+                 v
+      write healed reference back to the field   (self-healing)
+----
+
+* the check is a bit test per loaded reference
+* the first access to a stale reference pays the fix, later loads are fast
+* generational ZGC adds *store barriers* to track old->young references
+
+=== ZGC: pages and relocation
+
+[ditaa]
+----
+small page 2 MB     medium page 32 MB     large page (1 object)
++--------------+    +----------------+    +---------------------+
+| objects      |    | objects        |    | big array           |
++--------------+    +----------------+    +---------------------+
+----
+
+* heap is a set of *pages*; garbage-heavy pages are evacuated into new pages
+* *forwarding table* per page (off-heap): old address -> new address
+* stale references are fixed lazily by the load barrier or the next marking
+
+=== ZGC: cycle
+
+[ditaa]
+----
+Pause Mark Start   Concurrent Mark   Pause Mark End   Concurrent Relocate
+       |===============|================|=================|
+      STW            no STW            STW              no STW
+----
+
+* three tiny pauses (roots), everything else concurrent, sub-millisecond typical
+* *generational*: young and old collected independently, so short-lived garbage is cheap
+* *allocation stall*: if the app allocates faster than ZGC reclaims, allocating threads wait
+
+=== Epsilon
+
+* "no-op" collector: allocates, never reclaims
+* JVM exits with `OutOfMemoryError` when heap is full
+* use for: benchmarks (zero GC noise), short-lived jobs, GC-free design experiments
+* `-XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC`
+
+=== Choosing a collector
+
+[graphviz]
+----
+digraph {
+	node [shape=box, style=rounded]
+	q1 [label="tiny heap / 1 CPU?", shape=diamond]
+	q2 [label="max throughput,\npauses don't matter?", shape=diamond]
+	q3 [label="need ms or sub-ms pauses\non big heaps?", shape=diamond]
+	serial [label="Serial"]
+	parallel [label="Parallel"]
+	g1 [label="G1 (default)"]
+	zgc [label="ZGC / Shenandoah"]
+	q1->serial [label="yes"]
+	q1->q2 [label="no"]
+	q2->parallel [label="yes"]
+	q2->q3 [label="no"]
+	q3->zgc [label="yes"]
+	q3->g1 [label="no"]
+}
+----
+
+Tuning flags and GC monitoring: see the *Appendix*
+
+=== Further reading
+
+* https://openjdk.org/jeps/439[JEP 439 Generational ZGC], https://openjdk.org/jeps/474[474], https://openjdk.org/jeps/490[490]
+* https://openjdk.org/jeps/521[JEP 521 Generational Shenandoah], https://openjdk.org/jeps/519[JEP 519 Compact Object Headers]
+* https://wiki.openjdk.org/display/zgc[ZGC wiki], https://wiki.openjdk.org/display/shenandoah[Shenandoah wiki]
+* https://docs.oracle.com/en/java/javase/25/gctuning/[HotSpot GC Tuning Guide]
+* https://shipilev.net/jvm/anatomy-quarks/22-safepoint-polls/[JVM Anatomy Quark #22: Safepoint Polls]
+* http://psy-lob-saw.blogspot.com/2015/12/safepoints.html[Safepoints: Meaning, Side Effects and Overheads]
+* http://psy-lob-saw.blogspot.com/2014/10/the-jvm-write-barrier-card-marking.html[The JVM Write Barrier - Card Marking]
+* https://shipilev.net/talks/jugbb-Sep2019-shenandoah.pdf[Shenandoah talk]

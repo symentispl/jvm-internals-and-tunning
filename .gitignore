@@ -13,3 +13,11 @@ build
 infrastructure/vbox/jvm-workshops/
 infrastructure/vbox/packer_cache/
 .factorypath
+
+# Ruby / Bundler
+vendor/
+.bundle/
+*.gem
+
+# mise
+.mise.local.toml

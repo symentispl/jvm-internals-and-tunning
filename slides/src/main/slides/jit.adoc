@@ -1,0 +1,19 @@
+== JIT me baby one more time
+
+=== Agenda
+
+* What the JIT is and how HotSpot executes code
+* Tiered compilation: interpreter, C1, C2, profiling
+* When and what gets compiled, code cache
+* Optimizations: inlining, escape analysis, loops, intrinsics
+* Speculation, uncommon traps, deoptimization
+* Appendix: JIT flags and diagnostics
+
+include::jit-compilers.adoc[]
+
+include::jit-optimizations.adoc[]
+
+include::jit-speculation.adoc[]
+
+== Q&A
+
