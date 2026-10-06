@@ -1,0 +1,32 @@
+== Appendix: I/O tools and tuning
+
+Everything above is how I/O works. This appendix is about observing and tuning it.
+
+=== Looking at system calls
+
+ $ strace -f -e trace=file,read,write -p <pid>
+ $ sysdig proc.name=java and fd.name contains "geecon.json"
+
+ 20:33:34.445888720 < openat fd=4(<f>geecon.json)
+ 20:33:34.445889433 > fstat fd=4(<f>geecon.json)
+ 20:33:34.445900380 > read fd=4(<f>geecon.json) size=512
+
+=== Page cache experiments
+
+ $ sync                                       # write dirty pages to storage
+ $ echo 1 | sudo tee /proc/sys/vm/drop_caches # drop clean page cache (cold start)
+ $ free -h                                    # "buff/cache" column
+ $ vmtouch file                               # which pages of a file are cached
+
+=== Devices and schedulers
+
+ $ iostat -x 1                                # utilisation, queue size, latency
+ $ cat /sys/block/nvme0n1/queue/scheduler     # none, mq-deadline, kyber, bfq
+ $ fio --name=test --rw=randread --bs=4k ...  # synthetic load
+
+=== JVM settings and events
+
+* `-Djdk.nio.maxCachedBufferSize=<bytes>`: do not cache large temporary direct buffers
+* `-XX:MaxDirectMemorySize=<size>`: limit for `allocateDirect`
+* `-XX:NativeMemoryTracking=summary` + `jcmd <pid> VM.native_memory`: direct buffers and mapped files
+* JFR: `jdk.FileRead`, `jdk.FileWrite`, `jdk.FileForce`, `jdk.SocketRead`

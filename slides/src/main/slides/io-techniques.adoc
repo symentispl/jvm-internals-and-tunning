@@ -1,0 +1,141 @@
+=== Ways to do I/O in Java
+
+[cols="2,2,2",options="header"]
+|===
+|Technique |Java API |Main idea
+|plain streams |`FileInputStream` |one system call per call, copy through native buffer
+|buffered |`BufferedInputStream` |fewer system calls, one more copy
+|channels + direct buffers |`FileChannel`, `ByteBuffer.allocateDirect` |no copy of the heap array
+|vectored (scatter/gather) |`FileChannel.read(ByteBuffer[])` |many buffers, one system call
+|memory mapped |`FileChannel.map` |file appears as memory, no `read()`
+|zero copy |`FileChannel.transferTo` |kernel moves data, never visits Java
+|direct I/O |`ExtendedOpenOption.DIRECT` |bypass the page cache
+|===
+
+=== Buffered I/O
+
+[ditaa]
+----
+app --write(10 B)--> [ buffer 8 KB ] --one write(8 KB)--> kernel
+app --write(10 B)--> [   ...       ]
+----
+
+* many small writes become one big system call
+* gotcha: a read or write *larger than the buffer* bypasses it, you are back to plain streams
+
+=== Vectored I/O
+
+[source,java]
+----
+ByteBuffer[] buffers = {
+  ByteBuffer.allocateDirect(1024),
+  ByteBuffer.allocateDirect(1024)};
+
+long readSize = FileChannel
+  .open(Paths.get("geecon.json"), StandardOpenOption.READ)
+  .read(buffers);
+----
+
+* *scatter read / gather write*: `readv()` / `writev()` fill or drain many buffers in *one* system call
+* typical use: header buffer + body buffer
+* limited by `IOV_MAX`: 1024 buffers on Linux (JDK asks the OS with `sysconf`)
+
+=== Memory mapped files
+
+[ditaa]
+----
+process virtual memory         page cache (RAM)            file on disk
++-----------------+           +----------------+          +----------+
+| mapped region   | ========> | file pages     | <======> | file     |
++-----------------+  page     +----------------+  kernel  +----------+
+ load / store       fault                          reads/writes
+----
+
+* `mmap()`: the file pages in the page cache are mapped into the process address space
+* access = plain memory load/store, no system call, *no copy*
+* first touch of a page = *page fault* (kernel loads the page)
+* `MAP_SHARED`: stores reach the file and other processes, `MAP_PRIVATE`: copy-on-write
+
+=== Memory mapped files: Java
+
+[source,java]
+----
+try (var channel = FileChannel.open(path, CREATE, READ, WRITE);
+     var arena = Arena.ofConfined()) {
+
+  MemorySegment segment = channel.map(MapMode.READ_WRITE, 0, FILE_SIZE, arena);
+  segment.set(ValueLayout.JAVA_LONG, 0, 42L);
+  segment.force();                         // msync()
+}                                          // unmapped here, deterministically
+----
+
+* since Java 22 (FFM API): sizes are `long`, mapping is released when the `Arena` is closed
+* old API: `MappedByteBuffer` has an `int` size, so max 2 GB per mapping, unmapped only by GC
+* a page fault in the middle of compiled code blocks the thread, and a safepoint waits for it
+
+=== Zero copy
+
+[ditaa]
+----
+read() + write()                                  sendfile() / transferTo()
+
+device -> page cache -> native buf -> Java buf    device -> page cache
+                                       |                        |
+                                       v                        | kernel copies or
+device <- page cache <- native buf <- Java buf    device <-  page cache    passes pages
+----
+
+[source,java]
+----
+try (var from = FileChannel.open(src, READ);
+     var to = FileChannel.open(dst, CREATE, WRITE)) {
+  from.transferTo(0, from.size(), to);
+}
+----
+
+* data never enters the Java heap or the JVM process
+* works file to file and file to socket, the OS decides how (`sendfile`, `copy_file_range`)
+
+=== Direct I/O
+
+[ditaa]
+----
+buffered                         direct (O_DIRECT)
+app --> page cache --> device    app ------------------> device
+----
+
+* bypasses the page cache: the application is its own cache (databases)
+* data is written to the device with the call, predictable latency
+* requires *aligned* buffers, offsets and sizes (device block size)
+* Java: `ExtendedOpenOption.DIRECT` (JDK 10, in `jdk.unsupported`) with `ByteBuffer.alignedSlice()`
+
+=== Durability
+
+[ditaa]
+----
+write()                        force() / fsync()
+app --> page cache (dirty)     page cache --> device, wait for acknowledgement
+         |                       -- only now the data survives a power loss
+     returns here
+----
+
+* `write()` returning does not mean the data is on disk
+* `FileChannel.force(true)` = `fsync`, `MappedByteBuffer.force()` / `MemorySegment.force()` = `msync`
+* `StandardOpenOption.SYNC` / `DSYNC` make every write durable (slow)
+* cost of durability is the device latency, so databases batch commits (group commit)
+
+=== Asynchronous I/O and virtual threads
+
+* Linux file I/O is *blocking*: a thread waits in the kernel
+* `AsynchronousFileChannel` is emulated with a thread pool, there is no io_uring in the JDK
+* sockets are different: non-blocking + `epoll`, a virtual thread *parks* and its carrier is freed
+* a virtual thread doing file I/O blocks its carrier thread (the scheduler adds a temporary carrier to compensate)
+
+=== Summary of limits
+
+* `FileOutputStream` writes above 8 KB pay a `malloc` / `free`
+* buffered streams: operations larger than the buffer skip it
+* vectored I/O: at most `IOV_MAX` (1024) buffers
+* `MappedByteBuffer`: 2 GB, use `MemorySegment` mapping (Java 22+)
+* direct I/O: only through `jdk.unsupported`, alignment is your problem
+* not covered: concurrent access to one file, locking, `pread()` / `pwrite()` (`FileChannel.read(dst, position)`)

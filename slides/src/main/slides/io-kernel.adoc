@@ -1,0 +1,68 @@
+=== The Linux storage stack
+
+[ditaa]
+----
+      |  read(), write()
+      v
++------------+      +--------------+
+|    VFS     |<---->|  page cache  |
++------------+      +--------------+
+      |
+      v
++------------+
+| filesystem |   ext4, xfs, ...
++------------+
+      |
+      v
++-------------------------+
+| block layer             |   I/O queues, I/O scheduler
++-------------------------+
+      |
+      v
++------------+
+|   driver   |   SATA, NVMe
++------------+
+----
+
+* *VFS*: one interface for all filesystems
+* two parts matter most for performance: *page cache* and *block layer*
+
+=== Page cache
+
+[ditaa]
+----
+read(): hit                   read(): miss                  write()
+app <-- page cache            app <-- page cache <-- disk   app --> page cache (dirty page)
+                               (+ read-ahead of next pages)                |
+                                                              flusher thread later --> disk
+----
+
+* the kernel keeps file data in RAM in 4 KB *pages*
+* *read*: a hit is a memory copy, a miss reads from disk (and prefetches the following pages, *read-ahead*)
+* *write*: copied to a page marked *dirty*, `write()` returns, a background thread writes it to disk later
+* so "written" does not mean "on disk" (see durability)
+
+=== Copies on the read path
+
+[ditaa]
+----
++-------------+      +----------------+      +----------------+      +----------------------+
+|cRED device  |----->|cRED page cache |----->|cBLU native buf |----->|cBLU Java heap buffer |
++-------------+  DMA +----------------+ copy +----------------+ copy +----------------------+
+----
+
+* DMA: the device writes into the page cache without CPU
+* two CPU copies before the Java code sees the bytes (or one with a direct buffer)
+
+=== Page cache replacement
+
+* RAM is limited, the kernel evicts the *least recently used* pages
+* Linux approximates LRU with active / inactive lists (multi-generation LRU in recent kernels)
+* databases and brokers (Neo4j, Cassandra, Kafka) are built around this: hot data stays in the page cache, free RAM = cache
+
+=== Block layer and I/O scheduler
+
+* *I/O scheduler*: reorders and merges requests so that a spinning disk seeks less
+* SSD / NVMe: no seek cost, *multi-queue* block layer (a queue per CPU, many hardware queues)
+* ordering matters little, but *merging* adjacent requests still reduces the number of operations
+* so: sequential, large, aligned I/O is the fastest pattern on any device

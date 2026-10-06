@@ -1,0 +1,119 @@
+=== Reading a file, the simple way
+
+[source,java]
+----
+var file = new File("geecon.json");
+try (var input = new FileInputStream(file)) {
+  byte[] buff = new byte[512];
+  int fileSize = 0, buffSize;
+  while ((buffSize = input.read(buff)) != -1) {
+    fileSize += buffSize;
+  }
+  out.println(format("file size is = %d", fileSize));
+}
+----
+
+What really happens when we call `read()`?
+
+=== Layers
+
+[ditaa]
+----
++---------------------------+
+| your code                 |  FileInputStream / Files / FileChannel
++---------------------------+
+| JDK Java classes          |  FileDescriptor, buffers
++---------------------------+
+| JDK native code (JNI)     |  C, libjava / libnio
++---------------------------+
+| libc                      |  read(), write(), open()
++---------------------------+
+| kernel                    |  VFS, page cache, drivers
++---------------------------+
+| device                    |  SSD / NVMe / disk
++---------------------------+
+----
+
+=== File vs Path
+
+* `java.io.File` is a legacy *path name*, it is not an open file
+* `java.nio.file.Path` + `Files` is the modern API (Java 7), better errors and attributes
+* the file is opened by the *stream or channel* constructor, not by `new File()`
+
+=== File descriptor
+
+[ditaa]
+----
+process fd table        open file description (kernel)       inode
++---+----------------+  +---------------------------+     +------------+
+| 3 | ---------------+->| offset, flags (R/W, append)| --> | file data  |
+| 4 | ---------------+->|                           |     | on disk    |
++---+----------------+  +---------------------------+     +------------+
+----
+
+* an *fd* is a small integer: an index into the process table of open files
+* two fds can share one open file description (and its offset)
+
+=== FileDescriptor in Java
+
+* `java.io.FileDescriptor` wraps the integer fd
+* one `FileDescriptor` can be shared by several streams and channels
+* the fd is closed when the *last* user closes it, or when a `Cleaner` runs after GC (finalizers are no longer used)
+* always close files explicitly: try-with-resources
+
+=== From `write()` to the system call
+
+[source]
+----
+FileOutputStream.write()
+FileOutputStream.writeBytes()                     <native>
+Java_java_io_FileOutputStream_writeBytes()        <JNI, FileOutputStream_md.c>
+writeBytes()                                      <io_util.c>
+write()                                           <system call>
+----
+
+=== Why does the JDK copy the array?
+
+[ditaa]
+----
+Java heap                         native memory
++-------------+   memcpy   +--------------------+   write()   +--------+
+| byte[] buf  | ---------> | C buffer           | ----------> | kernel |
++-------------+            | (stack <= 8 KB,    |             +--------+
+                           |  else malloc)      |
+                           +--------------------+
+----
+
+* the *GC may move* a heap array at any time, the kernel needs a stable address
+* so `GetByteArrayRegion` copies the data to a native buffer first
+* buffer up to 8 KB: on the C stack, above: `malloc` + `free` on every call
+
+=== NIO: direct buffers
+
+[ditaa]
+----
+FileChannel.write(heapBuffer)               FileChannel.write(directBuffer)
+
+heap buffer --copy--> temp direct buffer    direct buffer ---------------> write()
+                      (thread local cache)  (native memory, never moved)
+                          |
+                          v
+                       write()
+----
+
+* `ByteBuffer.allocateDirect()` lives in native memory (outside the Java heap), the GC never moves it
+* with a *heap* buffer, NIO copies to a cached temporary direct buffer
+* direct buffers are expensive to allocate and free: reuse them
+* the size of the thread-local cache is limited by `jdk.nio.maxCachedBufferSize`
+
+=== What the OS sees
+
+ openat(AT_FDCWD, "geecon.json", O_RDONLY) = 4
+ fstat(4, {st_size=...})                   = 0
+ read(4, "...", 512)                       = 512
+ read(4, "...", 512)                       = 512
+ ...
+ close(4)                                  = 0
+
+* one system call per `read()`: user space -> kernel switch every time
+* `read(512)` over a big file = a lot of system calls
