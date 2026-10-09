@@ -84,7 +84,7 @@ long stop = System.currentTimeMillis();
 [role="highlight_title"]
 == Java Microbenchmark Harness
 
-image::https://static.pexels.com/photos/45202/brownie-dessert-cake-sweet-45202.jpeg[background]
+image::old-tools.jpg[background, size=cover]
 
 == !
 
@@ -253,7 +253,7 @@ java -jar target/benchmarks.jar -p loadFactor=0.8,0.9
 [role="highlight_title"]
 == dead code
 
-image::https://static.pexels.com/photos/34153/pexels-photo.jpg[background, size=cover]
+image::cave-light-2.gif[background, size=cover]
 
 == ... and black holes
 
@@ -273,7 +273,7 @@ public void testMethod(Blackhole blackhole){
 [role="highlight_title"]
 == asymmetric tests
 
-image::https://static.pexels.com/photos/632445/pexels-photo-632445.jpeg[background, size=cover]
+image::a-bumpy-road-1-of-1.jpg[background, size=cover]
 
 === !
 sometimes you want to benchmark your concurrent code, +

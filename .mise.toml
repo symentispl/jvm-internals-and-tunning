@@ -35,13 +35,14 @@ description = "Export slides as PDF"
 depends = ["build"]
 run = """
 bundle exec ruby -run -e httpd build/slides -p 4000 &
-SERVER_PID=$!
 echo "Waiting for HTTP server..."
 until curl -s http://localhost:4000 > /dev/null 2>&1; do sleep 0.5; done
 echo "Server ready. Exporting PDF..."
 mkdir -p build/export
-decktape reveal --chrome-arg="--no-sandbox" http://localhost:4000 build/export/slides.pdf
-kill $SERVER_PID
+# decktape wants the Chrome version of its own puppeteer, use any Chrome from the puppeteer cache
+CHROME=$(ls -d "$HOME"/.cache/puppeteer/chrome/*/chrome-linux64/chrome 2>/dev/null | tail -1)
+decktape reveal ${CHROME:+--chrome-path="$CHROME"} --chrome-arg="--no-sandbox" http://localhost:4000 build/export/slides.pdf
+kill $(lsof -t -i:4000) 2>/dev/null || true
 """
 
 [tasks.dist]
