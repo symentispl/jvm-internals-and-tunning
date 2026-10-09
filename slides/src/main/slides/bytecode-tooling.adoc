@@ -1,0 +1,92 @@
+=== Why change bytecode?
+
+* frameworks generate and rewrite classes at runtime: Hibernate (lazy proxies), Spring (AOP proxies), Mockito (mocks), JEE containers
+* observability: profilers, APM agents, tracing
+* other JVM languages generate all their code: Kotlin, Scala, Groovy, Clojure
+* the JDK itself: lambdas, records, string concatenation use `invokedynamic`
+
+=== Where it can happen
+
+[mermaid,format=svg]
+----
+flowchart LR
+  gen["generate<br/>(build time or run time)"] --> def["ClassLoader.defineClass /<br/>Lookup.defineClass"]
+  file["Foo.class"] --> cl["class loading"]
+  cl --> tr["ClassFileTransformer<br/>(java agent)"] --> def2["JVM defines<br/>the class"]
+  def --> def2
+----
+
+* *generate* a new class and define it through a loader (proxies)
+* *transform* an existing class while it is being loaded (agents)
+* *redefine / retransform* a class that is already loaded (limited: same shape)
+
+=== Java agent
+
+[mermaid,format=svg]
+----
+sequenceDiagram
+  participant J as JVM
+  participant A as Agent premain
+  participant T as ClassFileTransformer
+  J->>A: premain(args, Instrumentation) before main
+  A->>J: inst.addTransformer(t)
+  J->>T: transform(className, bytes)
+  T-->>J: new bytes
+----
+
+[source]
+----
+// MANIFEST.MF
+Premain-Class: pl.symentis.agent.Agent
+----
+
+[source,java]
+----
+public class Agent {
+  public static void premain(String args, Instrumentation inst) {
+    inst.addTransformer((loader, name, cls, pd, bytes) -> {
+      // parse and change bytes with ASM / ByteBuddy ..., return new bytes or null
+      return null;
+    });
+  }
+}
+----
+
+=== Running an agent
+
+ java -javaagent:agent.jar -jar app.jar
+
+* `premain` runs before `main`: it sees every class loaded after
+* `agentmain` + Attach API: load an agent into a *running* JVM
+* since JDK 21 dynamic loading prints a warning and will be disallowed by default (JEP 451), use `-XX:+EnableDynamicAgentLoading` to allow it
+* startup agents (`-javaagent`) are unaffected
+
+=== Libraries
+
+[cols="1,3",options="header"]
+|===
+|Library |What it is
+|*Class-File API* (`java.lang.classfile`) |standard API in the JDK, final in Java 24 (JEP 484), parses, generates and transforms class files, the JDK uses it internally
+|*ASM* |classic low-level library, visitor API, used by many tools (and formerly inside the JDK)
+|*ByteBuddy* |high-level, Java DSL, proxies and agents (used by Mockito, Hibernate)
+|*Javassist* |source-level API, accepts Java-like strings
+|*Byteman* |rule based, inject code by script, fault injection
+|===
+
+=== Why the class file API now?
+
+* the class file format changes every 6 months (new Java release = new version number)
+* third party libraries must be updated before they can read new class files
+* the JDK needs one library that always matches the current format: `java.lang.classfile`
+* Java 25 = class file major version 69
+
+=== Hidden classes and lookups
+
+* `MethodHandles.Lookup.defineHiddenClass` (Java 15): a class that can't be found by name, can be unloaded
+* used by lambdas (`LambdaMetafactory`) and by dynamic proxies
+* replaces `Unsafe.defineAnonymousClass`
+* *the* supported way for frameworks to generate classes at runtime
+
+=== Appendix pointer
+
+Commands to look at bytecode and class loading: see the *Appendix*

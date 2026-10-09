@@ -76,8 +76,92 @@ flowchart LR
 ----
 
 * GC must tell references from plain numbers precisely
-* *OopMap*: per class (object layout) and per safepoint in compiled code (stack frame layout)
-* this is why threads must be at a known state: a *safepoint*
+* details of the maps: next slides
+
+=== Oop and OopMap
+
+* *oop* = "ordinary object pointer": a reference to a Java object in the heap (HotSpot name)
+* the GC must find *every* oop: in objects, in thread stacks, in registers
+* it can't guess: an `int` can look like an address, a compressed oop is a shifted number
+* so the JVM keeps *OopMaps*: tables that say "here is a reference, everything else is not"
+* three different kinds of map, depending on what is being scanned
+
+[cols="1,2,2",options="header"]
+|===
+|Scanning |Map |Built
+|object in heap |class *OopMapBlocks* |once, when the class is loaded
+|compiled frame |*OopMap* per safepoint |by the JIT, at compile time
+|interpreted frame |computed from bytecode |on demand, cached per bci
+|===
+
+=== OopMap of a class
+
+[mermaid,format=svg]
+----
+flowchart LR
+  cls["class Order<br/>int id; String name;<br/>Customer c; Item i; long total"] --> map["OopMapBlocks<br/>(offset 16, count 3)"]
+  map --> obj
+  subgraph obj["Order object layout"]
+    direction LR
+    hdr["header"] ~~~ id["id"] ~~~ nm["name"]:::ref ~~~ c["c"]:::ref ~~~ it["i"]:::ref ~~~ tt["total"]
+  end
+  classDef ref fill:#ef9a9a,stroke:#c62828,color:#000
+----
+
+* every class keeps a short list of *(offset, count)* blocks: runs of consecutive reference fields
+* the JVM may reorder fields so references sit together, fewer blocks
+* GC marks an object by walking its blocks, the superclass fields are included
+* arrays: `Object[]` = all elements are oops, `int[]` = none (nothing to scan)
+
+=== OopMap of a compiled frame
+
+[mermaid,format=svg]
+----
+flowchart LR
+  pc["return address / poll<br/>pc offset 0x4c in method"] --> om["OopMap"]
+  om --> e1["SP + 8: oop"]:::ref
+  om --> e2["SP + 16: narrow oop"]:::ref
+  om --> e3["register r8: oop"]:::ref
+  om --> e4["SP + 24: derived oop<br/>base = SP + 8"]:::der
+  classDef ref fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef der fill:#fff59d,stroke:#f9a825,color:#000
+----
+
+* the JIT knows the types, so it writes an OopMap for *every safepoint and call site*
+* key = pc offset in the compiled method, found from the frame's return address
+* an entry = *where* (stack slot from SP, or register) + *what* (oop, narrow oop, derived oop)
+* a slot without an entry is not scanned
+
+=== Derived pointers
+
+[source,java]
+----
+for (int i = 0; i < a.length; i++) sum += a[i];     // JIT keeps p = &a[i], not (a, i)
+----
+
+[mermaid,format=svg]
+----
+flowchart LR
+  base["base oop: a"] --- d["derived pointer p<br/>= a + 16 + i * 4"]
+  d --> gc["GC moves the array:<br/>1. save delta = p - a<br/>2. update a<br/>3. p = new a + delta"]
+----
+
+* the optimizer holds *interior pointers* in registers
+* the map lists them as (derived location, base location) so the GC can relocate them with their base
+
+=== OopMap of an interpreted frame
+
+* the interpreter has no compile-time types: slots are untyped
+* the map is computed *on demand*: abstract interpretation of the method's bytecode up to this *bci*
+* result: for every local and stack slot, is it a reference at this point?
+* cached by *(method, bci)*, so repeated scans are cheap
+* the same dataflow idea as the bytecode verifier (see *bytecode* section)
+
+=== Why maps only at safepoints?
+
+* a map for every instruction would be huge, it is stored per *safepoint and call site* only
+* so the GC can only scan a thread when it stands at one: that is what a *safepoint* is
+* the next slides: how threads get there
 
 === Safepoint
 

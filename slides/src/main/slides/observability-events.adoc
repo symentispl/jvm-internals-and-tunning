@@ -1,0 +1,81 @@
+=== Unified JVM logging (Java 9+)
+
+[mermaid,format=svg]
+----
+flowchart LR
+  c["JVM components<br/>gc, safepoint, jit, class ..."] --> t["tag + level<br/>gc+heap=debug"] --> o["output<br/>stdout / file<br/>+ decorators"]
+----
+
+[source]
+----
+-Xlog:gc*,safepoint:file=jvm.log:time,uptime,level,tags:filecount=5,filesize=10m
+----
+
+* one syntax for all subsystems (replaces `-XX:+PrintGCDetails`, `PrintCompilation`, `TraceClassLoading`...)
+* `-Xlog:help` lists tags and levels, levels: error, warning, info, debug, trace
+* cheap enough for production, GC logging should be always on
+
+=== Logs for what we learned
+
+[cols="2,3",options="header"]
+|===
+|Topic |Option
+|GC pauses and heap |`-Xlog:gc*`
+|tenuring / object age |`-Xlog:gc+age=trace`
+|TLAB sizes and waste |`-Xlog:gc+tlab=trace`
+|safepoints, time to safepoint |`-Xlog:safepoint`
+|JIT compilations |`-Xlog:jit+compilation=debug`
+|inlining decisions |`-Xlog:jit+inlining=debug`
+|class loading |`-Xlog:class+load`
+|===
+
+=== Native memory: why is RSS bigger than -Xmx?
+
+[mermaid,format=svg]
+----
+block-beta
+  columns 4
+  heap["Java heap<br/>(-Xmx)"] meta["Metaspace<br/>class metadata"] code["Code cache<br/>JIT code"] thr["Thread stacks<br/>1 MB each"]
+  gc["GC data<br/>card table, remembered sets"] dir["Direct buffers,<br/>mapped files"] sym["Symbols, arenas,<br/>JVM internals"] lib["native libraries,<br/>malloc"]
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class heap g
+  class meta,code,thr,gc,dir,sym,lib y
+----
+
+* the process uses far more than the heap
+* *Native Memory Tracking* shows JVM-internal categories: `-XX:NativeMemoryTracking=summary`, then `jcmd <pid> VM.native_memory summary`
+* it does not see native libraries or `malloc` of JNI code: compare with `pmap` / `/proc/<pid>/smaps`
+
+=== Java Flight Recorder
+
+[mermaid,format=svg]
+----
+flowchart LR
+  ev["events<br/>(JVM, JDK, application)"] --> tl["thread-local buffers"] --> gb["global buffers"] --> ch["chunk files on disk<br/>(repository)"] --> f[".jfr recording"]
+----
+
+* an *event recorder built into the JVM*: GC, JIT, locks, I/O, allocation, thread parking, CPU samples...
+* each event has a timestamp, thread, optional stack trace and a duration threshold
+* events are written to thread-local buffers without locks: overhead target about 1%, safe for production
+* open source since JDK 11 (JEP 328), no unlock flags needed
+
+=== Using JFR
+
+[source]
+----
+java -XX:StartFlightRecording=filename=rec.jfr,duration=60s,settings=profile ...
+jcmd <pid> JFR.start name=r filename=rec.jfr
+jcmd <pid> JFR.dump name=r filename=now.jfr
+----
+
+* `default` settings: low overhead, always-on friendly, `profile`: more events and sampling
+* analyse: *JDK Mission Control* (separate download), IntelliJ, or the `jfr` tool: `jfr print`, `jfr summary`, `jfr view`
+* *event streaming* (JDK 14, `RecordingStream`): consume events live from inside or outside the process
+
+=== What's new in JFR (JDK 21-25)
+
+* virtual thread events: `jdk.VirtualThreadPinned`, `jdk.VirtualThreadSubmitFailed`
+* JDK 25, *cooperative sampling* (JEP 518): the sampler records only PC and SP, the thread walks its own stack at the next safepoint, safer, less biased
+* JDK 25, *CPU-time profiling* (JEP 509, experimental, Linux): samples by the kernel CPU timer, includes time in native code
+* JDK 25, *method timing and tracing* (JEP 520): count and time chosen methods by bytecode instrumentation, no code changes

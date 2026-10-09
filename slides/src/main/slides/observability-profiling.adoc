@@ -1,0 +1,137 @@
+=== Sampling profiler
+
+[mermaid,format=svg]
+----
+flowchart LR
+  t["timer<br/>every 10 ms"] --> s["capture stack<br/>of running threads"] --> a["count: top frame,<br/>whole stack"] --> r["method X: 30% of samples"]
+----
+
+* a profiler can't trace every call (too slow), it *samples* stacks periodically
+* more samples in a method = more time spent there (statistical estimate)
+* the real question: *how* is the stack captured safely while the thread runs?
+
+=== Safepoint bias
+
+[mermaid,format=svg]
+----
+flowchart LR
+  req["profiler asks<br/>for a stack"] --> run["thread runs<br/>a long loop without poll"] --> sp["reaches next safepoint poll"] --> st["stack captured HERE,<br/>not where the time was spent"]
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  class st r
+----
+
+* the official JVMTI call `GetAllStackTraces` needs a *safepoint* (see safepoint slides in the GC section)
+* samples can only land on safepoint polls: loops and method returns
+* time spent in code without polls is attributed to the next poll, profiles *lie*
+
+=== Async sampling
+
+[mermaid,format=svg]
+----
+sequenceDiagram
+  participant K as OS timer (SIGPROF / perf_events)
+  participant T as running Java thread
+  participant P as profiler
+  K->>T: signal at any instruction
+  T->>P: signal handler calls AsyncGetCallTrace
+  P-->>P: store stack in buffer
+  T-->>T: continues, no safepoint
+----
+
+* `AsyncGetCallTrace` (AGCT): an internal HotSpot call that can walk a stack *from a signal handler*, no safepoint needed
+* `-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints` improves attribution to lines inside compiled code
+* tools: *async-profiler*, JFR (since JDK 25 cooperative sampling), previously Honest Profiler (abandoned)
+
+=== async-profiler
+
+[mermaid,format=svg]
+----
+flowchart LR
+  ev["event source"] --> ap["async-profiler<br/>AGCT + perf_events"] --> out["flame graph,<br/>JFR, collapsed stacks"]
+  ev --- c["cpu"]
+  ev --- a["alloc (TLAB events)"]
+  ev --- l["lock"]
+  ev --- w["wall clock"]
+----
+
+ asprof -e cpu -d 30 -f profile.html <pid>
+ asprof -e alloc -d 30 -f alloc.html <pid>
+
+* low overhead, works with Java *and* native / kernel frames
+* modes: *cpu* (where is CPU burnt), *wall* (where do threads wait), *alloc* (who allocates), *lock* (who blocks)
+
+=== Flame graph
+
+[mermaid,format=svg]
+----
+block-beta
+  columns 6
+  main["main"]:6
+  a["handleRequest"]:4 b["GC thread work"]:2
+  c["parseJson"]:2 d["queryDb"]:2 e["G1 evacuation"]:2
+  classDef j fill:#6cef5a,stroke:#2e7d32,color:#000
+  classDef c fill:#d2d23c,stroke:#8a8a00,color:#000
+  class main,a,c,d j
+  class b,e c
+----
+
+* each box = a method, *width = share of samples*, stacking = call stack (caller below, callee above)
+* look for *wide plateaus on top*: the code that actually burns the time
+* the x-axis is *not time*: siblings are sorted alphabetically, identical stacks are merged
+
+=== Flame graph colours (async-profiler)
+
+[mermaid,format=svg]
+----
+block-beta
+  columns 4
+  j["Java compiled<br/>(C2 code)"] i["Java inlined"] c1["C1 compiled"] it["Interpreted"]
+  cpp["C++<br/>(JVM internals, GC)"] n["Native<br/>(libc, JNI libraries)"] k["Kernel"] m["Match found<br/>(search highlight)"]
+  classDef j fill:#6cef5a,stroke:#2e7d32,color:#000
+  classDef i fill:#7adfe0,stroke:#00838f,color:#000
+  classDef c1 fill:#d9f58a,stroke:#8aa000,color:#000
+  classDef it fill:#c2ebc0,stroke:#6a9a6a,color:#000
+  classDef cpp fill:#d2d23c,stroke:#8a8a00,color:#000
+  classDef n fill:#f08080,stroke:#c62828,color:#000
+  classDef k fill:#df8500,stroke:#8a5200,color:#000
+  classDef m fill:#e526f0,stroke:#8a1590,color:#000
+  class j j
+  class i i
+  class c1 c1
+  class it it
+  class cpp cpp
+  class n n
+  class k k
+  class m m
+----
+
+* the colour encodes the *frame type*: where the code runs and how it was compiled
+* lots of *C++* = JVM itself (GC, JIT, class loading) is busy, lots of *kernel* = system calls, I/O or locks
+* *interpreted* frames on top = code not yet compiled (warm-up) or deoptimized
+* other flame graph tools use other palettes, check the legend
+
+=== Linux: what is the process doing?
+
+[cols="2,3",options="header"]
+|===
+|Tool |Answers
+|`top -H -p <pid>` |which threads use CPU
+|`pidstat -t -d -p <pid> 1` |I/O per thread
+|`pidstat -t -w -p <pid> 1` |context switches per thread
+|`pidstat -r -p <pid> 1` |page faults and memory
+|`perf stat -p <pid>` |cycles, instructions, cache misses
+|`perf record -g -p <pid>` + `perf report` |CPU profile including kernel
+|===
+
+=== perf and the JVM
+
+* `perf` samples CPU performance counters, sees kernel, native libraries and JIT code
+* JIT code has no symbols: use async-profiler, `perf-map-agent`, or `-XX:+PreserveFramePointer` with a map file
+* *sysdig* / *bpftrace* / eBPF: trace system calls and kernel events with low overhead
+* `strace` uses `ptrace` and slows the process a lot, avoid it on production
+
+=== Application level
+
+* JVM tools see the JVM, not your business
+* logs, metrics and traces from the application: *OpenTelemetry* (also as Java agent, a bytecode agent), Micrometer
+* correlate: a slow request trace -> JFR recording of the same time window -> thread dump

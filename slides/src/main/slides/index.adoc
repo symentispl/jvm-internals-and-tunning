@@ -29,7 +29,9 @@ performance,internals and tuning
 <<java_io,Java I/O>> +
 <<voyeurs_in_the_jvm_land,Voyeurs in the JVM land>> +
 <<virtual_threads,Virtual threads>> +
+<<appendix_bytecode_tools_and_commands,Appendix: bytecode tools and commands>> +
 <<appendix_gc_tuning_and_monitoring,Appendix: GC tuning and monitoring>> +
+<<appendix_jvm_observability_cheat_sheet,Appendix: JVM observability cheat sheet>> +
 <<appendix_jit_flags_and_diagnostics,Appendix: JIT flags and diagnostics>> +
 <<appendix_concurrency_diagnostics,Appendix: concurrency diagnostics>> +
 <<appendix_io_tools_and_tuning,Appendix: I/O tools and tuning>>
@@ -43,7 +45,11 @@ include::io.adoc[]
 include::observability.adoc[]
 include::virtualthreads.adoc[]
 
+include::bytecode-appendix.adoc[]
+
 include::gc-appendix.adoc[]
+
+include::observability-appendix.adoc[]
 
 include::jit-appendix.adoc[]
 

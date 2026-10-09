@@ -1,0 +1,145 @@
+=== Bytecode is assembly for a CPU that does not exist
+
+[mermaid,format=svg]
+----
+flowchart LR
+  src["Hello.java"] -- javac --> cls["Hello.class<br/>(bytecode)"]
+  cls --> jvm["JVM<br/>(interpreter + JIT)"]
+  jvm --> cpu["real CPU<br/>(x86, AArch64)"]
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class cls y
+  class jvm g
+----
+
+* a compact, platform independent instruction set for a *stack machine*
+* the JVM executes it by interpreting, or compiles it to machine code (JIT)
+* languages other than Java (Kotlin, Scala, Groovy, ...) compile to the same bytecode
+
+=== Runtime data areas
+
+[mermaid,format=svg]
+----
+flowchart TB
+  subgraph shared["shared by all threads"]
+    direction LR
+    heap["Heap<br/>objects, arrays"]
+    meta["Metaspace (method area)<br/>classes, methods, bytecode,<br/>runtime constant pool"]
+  end
+  subgraph per["per thread"]
+    direction LR
+    pc["PC register<br/>(bytecode index)"]
+    stack["JVM stack<br/>frames"]
+    nat["native stack"]
+  end
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class heap g
+  class meta y
+----
+
+* *method area*: everything about loaded classes (in HotSpot: *Metaspace*, native memory)
+* each thread has its own *PC* (which bytecode is executing) and its own *stack of frames*
+
+=== A frame = one method call
+
+[mermaid,format=svg]
+----
+flowchart LR
+  subgraph frame["frame of main(String[])"]
+    direction TB
+    loc["local variables<br/>0: args, 1: i, 2: obj ..."]
+    ops["operand stack<br/>(working area of instructions)"]
+    cp["reference to runtime<br/>constant pool"]
+  end
+  call["invoke"] --> frame --> ret["return"]
+----
+
+* created on `invoke*`, destroyed on `return` or exception
+* *local variables*: slots for `this`, arguments and locals (`long` and `double` take 2 slots)
+* *operand stack*: instructions pop operands from it and push results
+* sizes are computed by `javac` and stored in the class file (`stack=2, locals=4`)
+
+=== Hello world
+
+[source,java]
+----
+public class HelloWorld {
+  public static void main(String[] argv) {
+    System.out.println("Hello world!");
+  }
+}
+----
+
+[source]
+----
+getstatic     #7    // Field java/lang/System.out:Ljava/io/PrintStream;
+ldc           #13   // String Hello world!
+invokevirtual #15   // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+return
+----
+
+=== How it executes
+
+[mermaid,format=svg]
+----
+flowchart LR
+  s0["start<br/>stack: empty"] --> s1["getstatic out<br/>stack: [out]"]
+  s1 --> s2["ldc Hello<br/>stack: [out, Hello]"]
+  s2 --> s3["invokevirtual println<br/>pops both, stack: empty"]
+  s3 --> s4["return"]
+----
+
+=== The class file
+
+[mermaid,format=svg]
+----
+block-beta
+  columns 3
+  magic["magic 0xCAFEBABE"] ver["version (Java 25 = 69)"] cpool["constant pool"]
+  acc["access flags,<br/>this / super class"] ifs["interfaces"] fields["fields"]
+  methods["methods<br/>(with Code attribute)"]:2 attrs["attributes"]
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class cpool y
+----
+
+* one `.class` file = one class, format defined by the JVM specification (chapter 4)
+* the *constant pool* holds all names and literals, other structures refer to it by index
+
+=== Constant pool
+
+* a table of everything the class refers to by name or value
+* class names, field and method references (name + descriptor), string and number literals
+* *descriptors*: type encoding, `([Ljava/lang/String;)V` = takes `String[]`, returns `void`
+* instructions say `invokevirtual #15`: index into this table
+* resolved lazily: the symbolic reference is turned into a direct pointer on first use
+
+=== Method and attributes
+
+[source]
+----
+public static void main(java.lang.String[]);
+  descriptor: ([Ljava/lang/String;)V
+  flags: (0x0009) ACC_PUBLIC, ACC_STATIC
+  Code:
+    stack=2, locals=1, args_size=1
+----
+
+* *attributes* hold extra information: `Code`, `LineNumberTable`, `StackMapTable`, exception table, annotations, `BootstrapMethods`, `Record`, ...
+* unknown attributes are ignored, so the format can grow without breaking old JVMs
+
+=== Instruction format
+
+[mermaid,format=svg]
+----
+block-beta
+  columns 3
+  op["opcode<br/>1 byte"] a1["operand<br/>0..n bytes"] a2["operand"]
+  ex["iload 16"]:3
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class op y
+----
+
+* a stream of single byte *opcodes*, most followed by operands (index into locals or constant pool, branch offset)
+* about 200 instructions defined
+* position of an instruction in the method = *bci* (bytecode index), the PC register holds it

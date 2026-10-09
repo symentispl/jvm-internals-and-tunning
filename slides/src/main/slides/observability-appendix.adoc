@@ -1,0 +1,45 @@
+== Appendix: JVM observability cheat sheet
+
+Everything above is how the data gets out of the JVM. This appendix is the command reference.
+
+=== JDK tools
+
+ jps -lv                              # JVMs on this machine
+ jcmd <pid> help                      # all commands of that JVM
+ jcmd <pid> Thread.print              # thread dump
+ jcmd <pid> GC.heap_info              # heap summary
+ jcmd <pid> GC.class_histogram        # objects per class
+ jcmd <pid> GC.heap_dump /tmp/h.hprof # heap dump
+ jstat -gcutil <pid> 1000             # GC counters every second
+
+=== JVM options
+
+ -Xlog:gc*:file=gc.log:time,uptime,level,tags:filecount=5,filesize=10m
+ -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps
+ -XX:NativeMemoryTracking=summary
+ -XX:StartFlightRecording=filename=rec.jfr,settings=profile
+ -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints
+
+=== JFR
+
+ jfr summary rec.jfr                           # events and counts
+ jfr print --events jdk.GCPhasePause rec.jfr   # one event type
+ jfr view hot-methods rec.jfr                  # built-in views (JDK 21+)
+ jcmd <pid> JFR.start name=r settings=profile
+ jcmd <pid> JFR.stop name=r filename=rec.jfr
+
+=== Tools I didn't mention
+
+* Eclipse MAT, VisualVM, JDK Mission Control
+* GCeasy, GCViewer, JITWatch, jcstress
+* *async-profiler*, perf, bpftrace, sysdig
+* Prometheus + Grafana, OpenTelemetry collector
+
+=== Useful links
+
+* https://openjdk.org/jeps/328[JEP 328 Flight Recorder], https://openjdk.org/jeps/509[JEP 509 CPU-Time Profiling], https://openjdk.org/jeps/518[JEP 518], https://openjdk.org/jeps/520[JEP 520]
+* https://github.com/async-profiler/async-profiler[async-profiler]
+* https://www.brendangregg.com/flamegraphs.html[Flame graphs, Brendan Gregg]
+* https://shipilev.net/jvm/anatomy-quarks/[JVM Anatomy Quarks]
+* http://psy-lob-saw.blogspot.com/2016/06/the-pros-and-cons-of-agct.html[The Pros and Cons of AGCT]
+* https://docs.oracle.com/en/java/javase/25/docs/specs/man/jcmd.html[jcmd man page]

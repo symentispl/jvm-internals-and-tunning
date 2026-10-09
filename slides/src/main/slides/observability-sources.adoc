@@ -1,0 +1,88 @@
+=== Where does the information come from?
+
+[mermaid,format=svg]
+----
+flowchart TB
+  jvm(("HotSpot JVM"))
+  jvm --> perf["perf counters<br/>(hsperfdata file)"] --> t1["jps, jstat"]
+  jvm --> dcmd["diagnostic commands<br/>(attach socket)"] --> t2["jcmd, jstack, jmap"]
+  jvm --> log["unified logging<br/>-Xlog"] --> t3["log files"]
+  jvm --> jfr["Flight Recorder<br/>events"] --> t4[".jfr file, JMC, jfr tool"]
+  jvm --> jmx["JMX MXBeans"] --> t5["JConsole, VisualVM,<br/>monitoring agents"]
+  jvm --> ti["JVMTI / AsyncGetCallTrace"] --> t6["profilers"]
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  class jvm g
+----
+
+* the JVM is a *producer* of data in several different channels
+* each tool is just a client of one channel
+
+=== Performance counters: hsperfdata
+
+[mermaid,format=svg]
+----
+flowchart LR
+  jvm["JVM process<br/>updates counters"] -- "writes (memory mapped)" --> f["/tmp/hsperfdata_user/pid"]
+  f -- "reads" --> jps["jps"]
+  f -- "reads" --> jstat["jstat -gc pid 1000"]
+----
+
+* every JVM publishes counters (GC, heap, class loading, compiler) in a *memory mapped file*
+* tools read it directly, the JVM is not involved, so it is cheap and works even when the JVM is busy
+* `jps` lists JVMs by scanning these files, `jstat` samples them periodically
+* can be switched off with `-XX:-UsePerfData`
+
+=== Attach mechanism
+
+[mermaid,format=svg]
+----
+sequenceDiagram
+  participant T as jcmd (tool)
+  participant J as target JVM
+  T->>J: create .attach_pid file, send SIGQUIT
+  J->>J: Signal Dispatcher starts Attach Listener
+  J-->>T: UNIX socket /tmp/.java_pid appears
+  T->>J: command, e.g. Thread.print
+  J-->>T: result as text
+----
+
+* how `jcmd`, `jstack`, `jmap` talk to a *running* JVM, no restart needed
+* only the same OS user (or root) can attach
+* the JVM executes *diagnostic commands* (DCmd), some of them need a *safepoint*
+
+=== jcmd: one tool for all commands
+
+[cols="2,3",options="header"]
+|===
+|Command |Does
+|`jcmd` |lists JVMs (like `jps`)
+|`jcmd <pid> help` |lists all commands of that JVM
+|`Thread.print` |thread dump, same as `jstack` (needs a safepoint)
+|`GC.heap_info`, `GC.class_histogram` |heap summary, objects per class
+|`GC.heap_dump file` |heap dump (`.hprof`) for Eclipse MAT
+|`VM.flags`, `VM.system_properties` |effective JVM options
+|`JFR.start`, `VM.native_memory` |Flight Recorder, native memory
+|===
+
+=== Thread dump
+
+* shows every thread: name, state, stack, held and awaited locks (`jstack -l`)
+* a *global safepoint* is needed, so the dump is a consistent snapshot, but it is also a pause
+* `jcmd <pid> Thread.dump_to_file -format=json file` includes *virtual threads* (JDK 21+)
+* take 3 dumps a few seconds apart: threads stuck at the same place = the problem
+* thread ids: OS thread `top -H` shows decimal ids, the dump has hex `nid=0x...`
+
+=== Heap dump and histogram
+
+* *histogram*: number of instances and bytes per class, quick, answers "what is filling the heap?"
+* *heap dump*: complete copy of the heap in `.hprof`, analyse with Eclipse MAT or VisualVM
+* both walk the heap, by default they first run a *full GC* (only live objects), `-all` keeps unreachable ones
+* a dump of a 30 GB heap = a 30 GB file and a long pause: do it on one instance, with disk space
+* `-XX:+HeapDumpOnOutOfMemoryError` writes one automatically
+
+=== JMX
+
+* *MXBeans*: standard management interfaces of the JVM (memory, threads, GC, class loading, runtime, OS)
+* local via attach, remote through a JMX port (secure it!)
+* clients: JConsole, VisualVM, Prometheus JMX exporter, APM agents
+* application metrics (Micrometer, OpenTelemetry) sit on top, they are the *application level* complement

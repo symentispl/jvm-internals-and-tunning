@@ -1,0 +1,36 @@
+== Appendix: bytecode tools and commands
+
+Everything above is how bytecode works. This appendix is about looking at it.
+
+=== javap
+
+ javap -c Hello               # disassemble methods
+ javap -c -v Hello            # + constant pool, flags, stack and locals, attributes
+ javap -p -s Hello            # private members, descriptors
+ javap -c -l -cp app.jar com.example.Foo
+
+* `-c` code, `-v` verbose (constant pool), `-p` include private, `-s` descriptors, `-l` line numbers
+* bundled with the JDK
+
+=== Class loading and verification logs
+
+ -Xlog:class+load=info           # every class loaded, with source
+ -Xlog:class+unload=info
+ -Xlog:class+init=info           # class initialization
+ -verbose:class                  # older equivalent
+ -Xshare:dump                    # create CDS archive of loaded classes (faster startup)
+
+=== Other tools
+
+* `jshell`: try Java quickly, `javap` the result
+* IntelliJ: *View > Show Bytecode*, ASM bytecode viewer plugin
+* https://godbolt.org[Compiler Explorer]: javac output next to the source
+* `-XX:+TraceBytecodes`: trace executed bytecodes, only in debug JVM builds
+
+=== Useful links
+
+* https://docs.oracle.com/javase/specs/jvms/se25/html/index.html[JVM Specification, Java SE 25]
+* https://openjdk.org/jeps/484[JEP 484: Class-File API]
+* https://openjdk.org/jeps/451[JEP 451: Prepare to disallow dynamic loading of agents]
+* https://shipilev.net/blog/2015/black-magic-method-dispatch/[The Black Magic of (Java) Method Dispatch]
+* https://bytebuddy.net[Byte Buddy], https://asm.ow2.io[ASM]

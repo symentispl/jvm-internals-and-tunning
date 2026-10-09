@@ -1,0 +1,99 @@
+=== The interpreter
+
+[mermaid,format=svg]
+----
+flowchart LR
+  f["fetch opcode<br/>at bci"] --> d["dispatch:<br/>jump to its code"] --> x["execute:<br/>pop / push / call"] --> n["bci += length"] --> f
+----
+
+* HotSpot's interpreter is a *template interpreter*: at JVM startup a machine code snippet is generated for each bytecode
+* *dispatch table*: opcode -> address of its snippet
+* the cost of the loop (fetch, dispatch) is why interpreted code is slow, ~10-50x slower than compiled
+
+=== Interpreter frame
+
+[mermaid,format=svg]
+----
+block-beta
+  columns 1
+  locals["local variables (args first)"]
+  meta["method pointer, constant pool cache, bytecode pointer (bcp), monitors"]
+  ops["operand stack (grows up)"]
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class meta y
+----
+
+* on a real CPU stack: locals and operand stack are neighbours, so arguments are *passed without copying* (callee's locals overlap caller's operand stack)
+* the *top of the operand stack is cached in registers*
+
+=== Interpreter makes JIT possible
+
+* counts method invocations and loop back edges
+* collects a *profile* (branches taken, receiver types) in `MethodData`
+* when a counter crosses a threshold, the method is queued for compilation (see *JIT* section)
+* compiled code can *deoptimize* back to an interpreter frame at any bytecode index
+
+=== Quickening
+
+[mermaid,format=svg]
+----
+flowchart LR
+  a["getfield #5<br/>(symbolic reference)"] -- first execution --> r["resolve #5:<br/>find field offset"] --> b["rewritten to<br/>fast_agetfield offset"]
+----
+
+* the first execution *resolves* the constant pool entry (finds the class, field offset, method)
+* the interpreter then rewrites the bytecode (in its private copy) to a faster internal form
+* the constant pool cache stores resolved results
+
+=== Class loading lifecycle
+
+[mermaid,format=svg]
+----
+flowchart LR
+  l["Loading<br/>find bytes, create Class"] --> v["Verification"] --> p["Preparation<br/>static fields = defaults"] --> r["Resolution<br/>(lazy)"] --> i["Initialization<br/>run static init"]
+  subgraph linking["Linking"]
+    v
+    p
+    r
+  end
+----
+
+* *loading*: a class loader finds the bytes (file, jar, network, generated) and defines the class
+* *linking*: verify, allocate static fields with default values, resolve references (usually lazily)
+* *initialization*: static initializers run, once, on first use (`new`, static call, field access)
+
+=== Class loaders
+
+[mermaid,format=svg]
+----
+flowchart BT
+  app["Application loader<br/>classpath"] --> plat["Platform loader<br/>JDK modules"] --> boot["Bootstrap loader<br/>java.base (in JVM)"]
+----
+
+* `loadClass()` first asks the *parent*, only if it fails does it load by itself (*parent delegation*)
+* so `java.lang.Object` is always the JDK's, not one from your jar
+
+=== Class loaders: identity
+
+* a class's identity = name + defining loader, so the same class loaded by two loaders = two classes
+* the bootstrap loader is native code inside the JVM, it loads `ClassLoader` itself
+* application servers and frameworks use their own loaders (isolation, hot reload)
+
+=== Bytecode verification
+
+* bytecode is untrusted input: the JVM must be sure it can't corrupt memory or break type safety
+* the verifier checks that every instruction gets operands of the right type and the stack never over/underflows
+* Java 7+: *type checking verifier* using the `StackMapTable` attribute
+
+=== StackMapTable
+
+[mermaid,format=svg]
+----
+flowchart LR
+  b1["linear code<br/>types inferred"] --> j["jump target:<br/>frame lists types of<br/>locals and stack"]
+  j --> b2["linear code<br/>types inferred"]
+----
+
+* the compiler records the expected types only at *jump targets* (start of each basic block)
+* verification is then a *single linear pass*, the old inference verifier iterated until a fixpoint
+* a frame is written only where control flow merges, so the attribute stays small

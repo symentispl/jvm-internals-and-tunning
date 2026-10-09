@@ -1,0 +1,175 @@
+=== Instruction families
+
+[cols="2,3,3",options="header"]
+|===
+|Family |Examples |What it does
+|load / store |`iload`, `astore`, `getfield`, `putstatic` |move values between locals, fields and stack
+|stack |`dup`, `pop`, `swap` |manipulate the top of stack
+|arithmetic |`iadd`, `lmul`, `dcmpl`, `iinc` |compute on the top of stack
+|control |`if_icmpge`, `goto`, `tableswitch` |jump to another bci
+|objects |`new`, `anewarray`, `checkcast`, `instanceof` |create, test objects
+|invoke / return |`invokevirtual`, `ireturn` |call methods, leave a frame
+|exceptions, locks |`athrow`, `monitorenter` |throw, synchronize
+|===
+
+=== Type prefixes
+
+[cols="1,2",options="header"]
+|===
+|Prefix |Type
+|`i` |int (also boolean, byte, char, short on the stack)
+|`l`, `f`, `d` |long, float, double
+|`a` |reference
+|`b`, `c`, `s` |byte, char, short (arrays, narrowing)
+|===
+
+`iadd`, `ladd`, `fadd`, `dadd`: one instruction per type, so the verifier always knows what is on the stack
+
+=== Example: arithmetic
+
+[source,java]
+----
+int c = a + b;     // a in local 1, b in local 2
+----
+
+[mermaid,format=svg]
+----
+flowchart LR
+  i1["iload_1<br/>stack: [a]"] --> i2["iload_2<br/>stack: [a, b]"] --> i3["iadd<br/>stack: [a+b]"] --> i4["istore_3<br/>stack: [], c = a+b"]
+----
+
+=== Creating objects
+
+[source,java]
+----
+Object obj = new Object();
+----
+
+[source]
+----
+new           #2   // class java/lang/Object     stack: [ref]
+dup                //                            stack: [ref, ref]
+invokespecial #1   // Object.<init>()V           stack: [ref]   (consumes one ref)
+astore_2           //                            stack: []      (obj = ref)
+----
+
+* `new` only allocates (zeroed fields), the constructor `<init>` is a separate call
+* `dup` keeps one reference for the constructor and one for the variable
+
+=== Control flow
+
+[source,java]
+----
+for (int i = 0; i < 10; i++) { System.out.println(i); }
+----
+
+[source]
+----
+ 0: iconst_0
+ 1: istore_1
+ 2: iload_1
+ 3: bipush     10
+ 5: if_icmpge  21        // i >= 10 ? jump to 21
+ 8: getstatic  #2        // System.out
+11: iload_1
+12: invokevirtual #3     // println(I)V
+15: iinc       1, 1
+18: goto       2         // back edge
+21: return
+----
+
+=== Control flow graph
+
+[mermaid,format=svg]
+----
+flowchart LR
+  a["0-1<br/>i = 0"] --> b["2-5<br/>i < 10 ?"]
+  b -- yes --> c["8-15<br/>println(i); i++"]
+  c --> b
+  b -- no --> d["21<br/>return"]
+----
+
+* bytecode has no `for`, `while`, `switch` blocks: only conditional jumps and `goto`
+* a jump back (*back edge*) is a loop: the JIT counts these to find hot loops
+
+=== Method invocation
+
+[cols="1,2,2",options="header"]
+|===
+|Instruction |Used for |Target chosen
+|`invokestatic` |static methods |at link time
+|`invokespecial` |constructors, `private`, `super.m()` |at link time
+|`invokevirtual` |instance methods |at run time, by the receiver's class
+|`invokeinterface` |interface methods |at run time, by the receiver's class
+|`invokedynamic` |lambdas, string concat, records... |at run time, by a bootstrap method
+|===
+
+=== Virtual dispatch: vtable
+
+[source,java]
+----
+class A { void m1() {} }
+class B extends A { void m1() {} void m2() {} }
+----
+
+[mermaid,format=svg]
+----
+flowchart LR
+  obj["object of B<br/>header: class B"] --> vtb["vtable of B<br/>0: B.m1<br/>1: B.m2"]
+  vta["vtable of A<br/>0: A.m1"]
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class vta,vtb y
+----
+
+* every class has a *vtable*, an array of method pointers (Java has *single dispatch*: only the receiver decides)
+* a subclass keeps its superclass slot numbers: `m1` is slot 0 in `A` and `B`
+* `a.m1()` = class from header, pointer at slot 0, call: one extra load
+
+=== Interface dispatch
+
+[source,java]
+----
+interface Intrf { void m1(); }
+class A implements Intrf { public void m1() {} }
+class B implements Intrf { void m2() {} public void m1() {} }   // m1 is slot 1 in B
+----
+
+* a class can implement many interfaces, so a method has no fixed slot across classes
+* `invokeinterface`: the class has an *itable* per interface, searched at run time (with caches)
+* slower than `invokevirtual`, the JIT removes most of it using the *type profile*
+
+=== invokedynamic
+
+[mermaid,format=svg]
+----
+flowchart LR
+  c1["first execution of<br/>invokedynamic site"] --> bsm["bootstrap method<br/>(LambdaMetafactory,<br/>StringConcatFactory ...)"]
+  bsm --> cs["CallSite<br/>wraps a MethodHandle"]
+  cs --> link["call site is linked,<br/>next calls jump directly"]
+----
+
+* the call target is decided by a *bootstrap method*, once per call site, at run time
+* the JIT can inline through the linked `MethodHandle`
+* used by: lambdas, string concatenation (`+`), records' `equals/hashCode/toString`, pattern `switch`, enum `switch`...
+* this is also how non-Java languages implement their own dispatch
+
+=== Exceptions
+
+[source,java]
+----
+try { new File("io.txt").createNewFile(); }
+catch (IOException e) { System.exit(0); }
+catch (Throwable e)   { e.printStackTrace(); }
+----
+
+[source]
+----
+Exception table:
+   from    to  target type
+       0    15    18   Class java/io/IOException
+       0    15    26   Class java/lang/Throwable
+----
+
+* no `try`/`catch` instructions: the *exception table* of the method maps a bci range to a handler bci
+* on `athrow` the JVM scans the table top to bottom, first match wins, otherwise the frame is popped and the search continues in the caller
+* normal execution costs nothing, `finally` blocks are copied to every exit path
