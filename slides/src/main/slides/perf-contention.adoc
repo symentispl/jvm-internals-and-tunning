@@ -1,0 +1,516 @@
+=== Contention bound
+
+* *contention* = several threads compete for the same resource (lock, cache line, queue, connection) and have to wait
+* CPUs are idle, yet the application is slow
+* adding threads or cores does not help, it can even hurt
+* the cure is not "faster code" but *less sharing*
+
+=== How to recognise it
+
+[mermaid,format=svg]
+----
+flowchart LR
+  s1["CPU low<br/>(well below 100%)"]:::y --> s2["throughput flat<br/>under load"]:::y
+  s2 --> s3["more threads:<br/>no gain or LOWER"]:::r
+  s3 --> s4["thread dumps full of<br/>BLOCKED / WAITING"]:::r
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+----
+
+* high context switch rate (`vmstat 1`: `cs`), long run queue
+* latency grows with load while the CPU is *not* saturated
+* compare with CPU bound: there `top` shows 100% and threads are `RUNNABLE`
+
+=== Symptoms: CPU bound vs contention bound
+
+[cols="2,2,2",options="header"]
+|===
+| |CPU bound |contention bound
+|CPU utilisation |~100% |low / medium
+|thread state |`RUNNABLE` |`BLOCKED`, `WAITING`
+|+threads |more throughput (up to cores) |flat or *less*
+|context switches |low |high
+|fix |less work per request |less sharing
+|===
+
+=== Investigate: thread dumps
+
+[source,bash]
+----
+for i in 1 2 3 4 5; do jcmd <pid> Thread.print > td-$i.txt; sleep 2; done
+----
+
+* take *several* dumps, a single one is an anecdote
+* look for the *same lock* in many `waiting to lock <0x...>` / `parking to wait for` lines
+* the owner (`locked <0x...>`) is the thread to blame, what is it doing?
+* `jcmd <pid> Thread.dump_to_file -format=json file` also shows virtual threads
+
+=== Investigate: profilers and JFR
+
+[source,bash]
+----
+asprof -e lock -d 30 -f locks.html <pid>     # time spent waiting for monitors and j.u.c locks
+----
+
+* async-profiler `-e lock`: *which* lock, *which* stack, how long
+* JFR `jdk.JavaMonitorEnter` (synchronized) and `jdk.ThreadPark` (j.u.c locks, queues), with the threshold set to e.g. 10 ms
+* `jdk.JavaMonitorWait` is mostly idle waiting (`Object.wait`), do not confuse it with contention
+* see the observability chapter for the tooling
+
+=== Investigate: OS view
+
+[source,bash]
+----
+pidstat -w -t -p <pid> 1      # cswch/s voluntary (blocked), nvcswch/s involuntary (preempted)
+vmstat 1                      # r = run queue, cs = context switches
+perf c2c record -p <pid> -- sleep 10 && perf c2c report   # false sharing
+----
+
+* many *voluntary* switches = threads wait for something (locks, I/O)
+* many *involuntary* switches with a long run queue = more runnable threads than cores
+* `perf c2c` finds cache lines bounced between cores (*HITM*), see the hardware chapter
+
+=== Investigate: draw the scalability curve
+
+[source,bash]
+----
+for n in 1 2 4 8 16 32 64; do run-load-test --threads $n; done   # record throughput X(n)
+----
+
+* a single measurement tells nothing, you need *throughput as a function of threads*
+* keep everything else fixed (data size, warm-up, same machine, no noisy neighbours)
+* the shape of the curve names the disease: linear, flattening, or *falling*
+* next: the theory that explains these shapes
+
+=== Amdahl's law
+
+* *serial fraction* = the part of the work that cannot run in parallel (a lock, a single writer, I/O to one device)
+* with parallel fraction `p` and `N` workers:
+
+[source,text]
+----
+speedup(N) = 1 / ((1 - p) + p / N)        limit for N -> infinity:  1 / (1 - p)
+----
+
+* 5% serial (`p = 0.95`) means *never more than 20x*, whatever the hardware
+* 10% serial: 10x, 1% serial: 100x
+
+=== Amdahl: the curve
+
+[mermaid,format=svg]
+----
+---
+config:
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#c62828, #2e7d32"
+---
+xychart-beta
+  title "Speedup for p = 0.95 (limit 20) vs ideal"
+  x-axis "threads N" ["1", "8", "16", "24", "32", "40", "48", "56", "64"]
+  y-axis "speedup" 0 --> 64
+  line "Amdahl p=0.95" [1, 5.93, 9.14, 11.16, 12.55, 13.56, 14.33, 14.93, 15.42]
+  line "ideal" [1, 8, 16, 24, 32, 40, 48, 56, 64]
+----
+
+* red: Amdahl, green: ideal; 64 threads give only 15x
+* the curve only *flattens*, it never falls
+* real systems fall: Amdahl ignores the cost of coordination
+
+=== Amdahl: what it teaches
+
+* the serial part decides the ceiling, optimise it first (halving 5% -> 2.5% doubles the ceiling to 40x)
+* parallelising the already-parallel part gives diminishing returns
+* the serial fraction is often *hidden*: one lock, one connection, one GC (STW), one log appender
+* the law assumes a fixed problem size; if the work grows with `N` (Gustafson) the ceiling is higher
+
+=== Universal Scalability Law (USL)
+
+* Neil Gunther's extension of Amdahl, it adds the cost of *coherency*
+* *coherency* (crosstalk) = threads must exchange data to stay consistent: cache line transfers, lock hand-off, cache invalidations
+* the cost grows with *every pair* of threads, so it is quadratic
+
+[source,text]
+----
+C(N) = N / (1 + a(N-1) + b N (N-1))
+a = contention (serialisation, queueing)      b = coherency (pairwise crosstalk)
+----
+
+* `b = 0` gives Amdahl (with `a = 1 - p`)
+
+=== USL: the retrograde curve
+
+[mermaid,format=svg]
+----
+---
+config:
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#c62828, #2e7d32"
+---
+xychart-beta
+  title "Capacity C(N), a = 0.05, b = 0.001"
+  x-axis "threads N" ["1", "8", "16", "24", "32", "40", "48", "56", "64"]
+  y-axis "relative capacity" 0 --> 16
+  line "USL" [1, 5.69, 8.04, 8.88, 9.03, 8.87, 8.56, 8.2, 7.82]
+  line "Amdahl (b = 0)" [1, 5.93, 9.14, 11.16, 12.55, 13.56, 14.33, 14.93, 15.42]
+----
+
+* red: USL peaks near `N* = sqrt((1-a)/b)` = 31 threads at ~9x, then *falls*
+* *retrograde* = past the peak more threads mean *less* throughput
+* the green line (no coherency) never falls, the red one does
+
+=== USL: fit it from 4-6 measurements
+
+* measure throughput `X(N)` for e.g. N = 1, 2, 4, 8, 16, 32
+* normalise: `C(N) = X(N) / X(1)`
+* fit `a` and `b` by non-linear regression (a spreadsheet solver, R `usl` package, python `scipy.optimize.curve_fit`)
+* a fit with `b` ~ 0 and `a` > 0 means a *queue-like* bottleneck, a fit with large `b` means *crosstalk*
+* the model is a diagnosis tool, not a promise: check that the fit is sensible (a, b >= 0)
+
+=== USL: what a and b tell you
+
+[cols="1,2,2",options="header"]
+|===
+| |meaning |typical culprit
+|*a* high |work is serialised, queueing |one big lock, single writer, shared connection
+|*b* high |threads disturb each other |false sharing, contended atomics, cache-coherence traffic
+|both ~0 |scales linearly |share-nothing
+|===
+
+* `a` is attacked by *shorter critical sections / splitting*
+* `b` is attacked by *not sharing writable data at all*
+
+=== Little's law
+
+[mermaid,format=svg]
+----
+flowchart LR
+  in["arrivals<br/>lambda = 200 req/s"]:::g --> sys
+  subgraph sys ["system"]
+    direction LR
+    w["each request stays<br/>W = 50 ms"]:::y
+  end
+  sys --> out["L = lambda x W<br/>= 10 requests inside"]:::r
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+----
+
+* `L = lambda * W`: average number in the system = arrival rate x average time in the system
+* holds for any stable system, no assumptions about distributions
+* `L` is the number of busy threads / open connections / queue + service
+* if `W` grows (contention!), `L` grows for the same `lambda`: queues build up
+
+=== Thread pool sizing
+
+[source,text]
+----
+threads ~ cores * (1 + wait / compute)
+----
+
+* pure CPU work (`wait = 0`): about `cores` threads (or `cores + 1`)
+* 10 ms compute + 90 ms waiting on a database: `wait / compute = 9`, so ~10 x cores
+* more threads than that only add context switches and contention
+* Little's law gives the same: `L = lambda * W` threads needed for the target throughput
+* measure `wait` and `compute` (profiler), do not guess; limit by the downstream (DB pool size)
+
+=== How to improve: the toolbox
+
+[mermaid,format=svg]
+----
+flowchart LR
+  c["contention"]:::r --> a["hold it shorter"]:::y
+  c --> b["split it"]:::y
+  c --> d["share less"]:::g
+  c --> e["do not lock"]:::g
+  a --> a1["small critical sections"]:::n
+  b --> b1["striping, LongAdder,<br/>ConcurrentHashMap"]:::n
+  d --> d1["immutability, confinement,<br/>sharding, single writer"]:::n
+  e --> e1["CAS, lock-free queues"]:::n
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* ordered from cheapest to most invasive, the right-hand ones change the design
+
+=== Shrink the critical section
+
+[source,java]
+----
+// before: the whole request under the lock
+synchronized (lock) { var r = parse(in); var v = compute(r); cache.put(r.key(), v); }
+
+// after: only the shared state is protected
+var r = parse(in); var v = compute(r);
+synchronized (lock) { cache.put(r.key(), v); }
+----
+
+* never do I/O, logging or calls to unknown code while holding a lock
+* Amdahl: the time in the lock *is* the serial fraction
+* copy what you need under the lock, work on the copy outside
+
+=== Lock splitting and striping
+
+[mermaid,format=svg]
+----
+flowchart LR
+  subgraph one ["one lock"]
+    direction LR
+    t1["T1, T2, T3"]:::n --> L["lock"]:::r --> d["whole map"]:::n
+  end
+  subgraph many ["striped"]
+    direction LR
+    u1["T1"]:::n --> s1["lock 1"]:::g --> p1["part A"]:::n
+    u2["T2"]:::n --> s2["lock 2"]:::g --> p2["part B"]:::n
+  end
+  one ~~~ many
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* *striping* = N locks, each guarding a part of the data (chosen by hash)
+* `ConcurrentHashMap`: CAS on empty bins, `synchronized` on the head node of a bin
+* `LongAdder`: striped cells instead of one hot `AtomicLong`, `sum()` adds them up
+
+=== LongAdder instead of AtomicLong
+
+[source,java]
+----
+LongAdder hits = new LongAdder();
+hits.increment();            // under contention each thread updates its own cell
+long total = hits.sum();     // not an atomic snapshot, fine for metrics
+----
+
+* one `AtomicLong`: all threads CAS the same cache line, failed CAS retried (the `b` term!)
+* `LongAdder`: cells padded to separate cache lines, memory for throughput
+* use it for counters and statistics, not when you need the exact value to make decisions
+
+=== Read-mostly data
+
+[cols="2,3",options="header"]
+|===
+|Tool |Use when
+|`ReentrantReadWriteLock` |many readers, rare writers, readers hold the lock for a while; writers can starve
+|`StampedLock` |*optimistic read*: read without a lock, validate the stamp, retry on failure; not reentrant
+|`CopyOnWriteArrayList` |tiny, almost never changed (listeners)
+|immutable snapshot in a `volatile` |reader sees a consistent object, writer swaps the reference
+|===
+
+* read lock still writes the lock state: it is a *shared cache line* again
+
+=== StampedLock: optimistic read
+
+[source,java]
+----
+long st = sl.tryOptimisticRead();
+double x = this.x, y = this.y;            // plain reads, no writes to shared memory
+if (!sl.validate(st)) {                   // a writer came in between
+  st = sl.readLock();
+  try { x = this.x; y = this.y; } finally { sl.unlockRead(st); }
+}
+return Math.hypot(x, y);
+----
+
+* the fast path writes nothing, so readers do not bounce a cache line
+* the reads must be safe to repeat and the result discarded
+
+=== Share nothing
+
+[mermaid,format=svg]
+----
+flowchart LR
+  in["requests"]:::n --> h["hash(key) mod N"]:::y
+  h --> w1["worker 1<br/>owns shard 1"]:::g
+  h --> w2["worker 2<br/>owns shard 2"]:::g
+  h --> w3["worker 3<br/>owns shard 3"]:::g
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* *thread confinement*: data touched by one thread only needs no lock (`ThreadLocal`, stack, `ScopedValue`)
+* *immutability*: shared but never written means no contention
+* *partitioning / sharding*: each key has exactly one owner thread
+* *single-writer principle*: one thread writes a piece of data, others only read (Disruptor, LMAX, Kafka partitions)
+
+=== Batching and combining
+
+* *batching*: pay the synchronisation once per N items (drain a queue, `bulk insert`, group commit)
+* *combining*: threads leave their request, one thread applies all of them (flat combining, `LongAdder` is a cousin)
+* each thread-to-thread hand-off costs a cache miss, so fewer hand-offs means higher throughput
+* trade-off: latency of the first item in the batch
+
+[source,java]
+----
+var batch = new ArrayList<Event>(256);
+queue.drainTo(batch, 256);          // one lock acquisition for up to 256 items
+----
+
+=== Lock-free structures
+
+* design: no thread holds anything that others wait for, see *lock-free programming* in the concurrency chapter (CAS loop, ABA, memory ordering)
+* *CAS* = compare-and-set one word atomically, the loser retries instead of sleeping
+* *MPSC* = many producers, single consumer queue; the single consumer needs no CAS
+* libraries: *JCTools* (`MpscArrayQueue`, `SpscArrayQueue`), *LMAX Disruptor* (ring buffer), `ConcurrentLinkedQueue`
+* `ConcurrentHashMap`, `ConcurrentSkipListMap` are already built on it
+
+=== Progress guarantees
+
+[cols="1,3,2",options="header"]
+|===
+|Class |Guarantee |Example
+|*blocking* |a stalled lock holder stops everybody |`synchronized`, `ReentrantLock`
+|*obstruction-free* |a thread alone makes progress |`StampedLock` optimistic read
+|*lock-free* |some thread always progresses (system-wide) |CAS loop, `ConcurrentLinkedQueue`
+|*wait-free* |every thread finishes in bounded steps |`AtomicLong.getAndIncrement` on x86 (intrinsic `lock xadd`, no retry loop)
+|===
+
+* lock-free is *not* automatically faster: under heavy CAS contention retries burn CPU
+* ABA in one line: the CAS sees `A` again and cannot tell that it was `A -> B -> A` in between (stamps solve it)
+
+=== False sharing
+
+[mermaid,format=svg]
+----
+flowchart LR
+  c1["core 1<br/>writes x"]:::n --> line
+  c2["core 2<br/>writes y"]:::n --> line
+  subgraph line ["ONE 64-byte cache line"]
+    direction LR
+    x["x: counter of thread 1"]:::r --- y["y: counter of thread 2"]:::r
+  end
+  line -. "every write invalidates<br/>the other core's copy" .-> c1
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* *false sharing* = independent variables on one cache line: every write invalidates the line in the other core's cache
+* no lock in the code, yet it scales like a lock (the `b` term)
+* detect: `perf c2c`, high `HITM`; JMH `-prof perfnorm`
+
+=== False sharing: padding and @Contended
+
+[source,java]
+----
+class Counter {
+  @jdk.internal.vm.annotation.Contended    // JVM adds padding around the field
+  volatile long value;
+}
+----
+
+* `@Contended` outside the JDK needs `-XX:-RestrictContended` and `--add-exports java.base/jdk.internal.vm.annotation=ALL-UNNAMED`
+* portable alternative: manual padding with unused `long` fields or a `long[]` with stride of 8-16 elements
+* padding costs memory: use it only for proven hot, independently written fields
+* `LongAdder.Cell`, `Thread` internals and the Disruptor already use it
+
+=== Concurrency models: overview
+
+[mermaid,format=svg]
+----
+flowchart LR
+  sh["shared state"]:::r --> m1["threads + locks<br/>STM"]:::y
+  mp["message passing"]:::g --> m2["actors<br/>CSP / channels"]:::y
+  df["data flow"]:::g --> m3["CompletableFuture<br/>reactive streams"]:::y
+  tk["cheap threads"]:::g --> m4["virtual threads<br/>structured concurrency"]:::y
+  pool["task pools"]:::n --> m5["Executors<br/>ForkJoinPool"]:::y
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* every model answers: *who owns the data* and *what happens while waiting*
+
+=== Concurrency models compared
+
+[cols="2,3,3",options="header"]
+|===
+|Model |Idea |Fits
+|threads + locks |shared memory, mutual exclusion |small shared state, you control it
+|executors / `ForkJoinPool` |tasks on a fixed pool; FJP uses *work stealing* (idle worker takes tasks from the tail of another's deque) |CPU bound, divide and conquer, parallel streams
+|`CompletableFuture` / reactive |callbacks and operators, no thread blocked while waiting |I/O bound, high fan-out; hard to debug
+|actors (Akka, Erlang) |private state + mailbox, messages only |many independent stateful entities
+|CSP (Go channels, `BlockingQueue`) |processes linked by channels |pipelines, back-pressure
+|STM (Clojure; not in the JDK) |transactions, retried on conflict |shared state with rare conflicts
+|virtual threads |one cheap thread per task, blocking style |I/O bound, many concurrent waits
+|===
+
+=== Virtual threads (Java 21+)
+
+[mermaid,format=svg]
+----
+flowchart LR
+  v1["virtual thread 1"]:::g --> c["carrier thread<br/>(ForkJoinPool, ~cores)"]:::y
+  v2["virtual thread 2"]:::g --> c
+  v3["virtual thread N"]:::g --> c
+  c --> os["OS thread"]:::n
+  v1 -. "blocks on I/O:<br/>unmounted" .-> park["parked on heap"]:::n
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* JEP 444, final in Java 21; details in the virtual threads chapter
+* blocking I/O or `LockSupport.park` unmounts the virtual thread: the carrier runs another one
+* Java 24 (JEP 491): `synchronized` no longer pins the carrier while blocked on a monitor
+* remaining pinning: native frames (JNI / FFM upcalls) and some class initialisation
+
+=== Virtual threads: what they do not fix
+
+* they lift the *thread count* limit (Little's law: `L = lambda * W` with 100k waits in flight is fine)
+* they do *not* shorten a critical section or remove a hot lock
+* CPU bound work gains nothing, you still have only `cores` of CPU
+* a contended downstream (DB pool of 20 connections) is now the bottleneck: limit with a `Semaphore`
+* do not pool virtual threads, create one per task
+
+[source,java]
+----
+try (var ex = Executors.newVirtualThreadPerTaskExecutor()) { for (var r : reqs) ex.submit(() -> handle(r)); }
+----
+
+=== Structured concurrency and ScopedValue
+
+[source,java]
+----
+try (var scope = StructuredTaskScope.open()) {          // JEP 505, fifth preview in 25
+  var user  = scope.fork(() -> loadUser(id));
+  var order = scope.fork(() -> loadOrder(id));
+  scope.join();                                           // both done, or one failed and the other cancelled
+  return new Page(user.get(), order.get());
+}
+----
+
+* *structured concurrency*: subtasks live inside a scope, so errors and cancellation cannot leak
+* needs `--enable-preview` in Java 25 (API changed again: `open()` instead of constructors)
+* `ScopedValue` (JEP 506, *final* in 25): immutable, inherited by forked subtasks, cheap with millions of virtual threads, replaces `ThreadLocal` for passing context
+
+=== Which model for which problem
+
+[mermaid,format=svg]
+----
+flowchart LR
+  q["what limits you?"]:::y --> cpu["CPU bound"]:::n
+  q --> io["I/O bound<br/>(many waits)"]:::n
+  q --> st["shared mutable state"]:::n
+  cpu --> a["fixed pool = cores,<br/>ForkJoin, parallel streams"]:::g
+  io --> b["virtual threads,<br/>structured concurrency"]:::g
+  st --> c["sharding / single writer,<br/>actors, lock-free, STM"]:::g
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* the models differ in *how they hide waiting*, none removes contention on shared state
+* mix freely: virtual threads for the requests, a single-writer queue for the hot state
+
+=== Contention bound: summary
+
+* recognise: low CPU, flat or falling throughput, `BLOCKED` threads
+* investigate: several thread dumps, `-e lock`, JFR monitor events, `pidstat -w`, `perf c2c`, thread-count sweep
+* model: Amdahl (ceiling from the serial part), USL (`a` contention, `b` coherency, retrograde), Little (`L = lambda * W`)
+* improve in order: shorter, split, share less, lock-free, then change the model
+* measure after each step, redraw the curve

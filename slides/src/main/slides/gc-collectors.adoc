@@ -385,7 +385,7 @@ flowchart LR
   class serial,parallel,zgc,g1 lead
 ----
 
-Tuning flags and GC monitoring: see the *Appendix*
+GC tuning and monitoring: see the chapter *Writing performant Java applications*
 
 === Further reading
 

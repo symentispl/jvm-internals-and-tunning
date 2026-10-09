@@ -1,0 +1,444 @@
+=== I/O bound
+
+* the CPU is idle, threads *wait* for a disk, a socket or another service
+* faster code does not help, *fewer and cheaper* waits do
+* and the hidden part: (de)serialization, the CPU and allocation price of every I/O
+
+=== I/O bound: how to recognise it
+
+[mermaid,format=svg]
+----
+flowchart LR
+  r["requests"]:::n --> t["threads<br/>WAITING in read()"]:::y --> d["disk / network<br/>/ downstream"]:::r
+  t -. "pool exhausted,<br/>queue grows" .-> q["latency grows"]:::r
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* low CPU in user time, high `iowait` (`vmstat`, `top`)
+* thread dumps: many threads in `SocketInputStream.read`, `FileInputStream.read`, `epollWait`
+* device `await` and `%util` high (`iostat -x`)
+* connection pool exhausted, a slow downstream dependency
+* latency grows with queueing, throughput stays flat
+
+=== How to investigate: Java side
+
+[cols="2,3",options="header"]
+|===
+|Tool |What it tells
+|JFR `jdk.SocketRead`, `jdk.SocketWrite` |host, bytes, duration of each blocking call
+|JFR `jdk.FileRead`, `jdk.FileWrite`, `jdk.FileForce` |path, bytes, duration (threshold 20 ms by default)
+|thread dump (`jcmd <pid> Thread.print`) |where threads wait, repeat a few times
+|per-dependency latency histograms |which downstream is slow, p50 vs p99
+|tracing (OpenTelemetry) |time spent per call along the request path
+|===
+
+* details of JFR and thread dumps: observability chapter
+
+=== How to investigate: OS side
+
+[mermaid,format=svg]
+----
+flowchart LR
+  app["JVM"]:::g --> sc["system calls<br/>strace, perf trace"]:::y
+  app --> sk["sockets<br/>ss -ti"]:::y
+  app --> bd["block device<br/>iostat -x"]:::y
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* `iostat -x`: `r_await` / `w_await`, queue size, `%util`; `ss -ti`: RTT, retransmissions, queues
+* `perf trace`: system call latency with low overhead
+* `strace -f -T`: detailed but *slows the process down* (ptrace), never on a hot production service
+* database: query statistics, slow query log, `EXPLAIN`
+
+=== How to improve: the big picture
+
+[mermaid,format=svg]
+----
+flowchart LR
+  a["do less I/O<br/>fewer round trips,<br/>cache, batch"]:::g
+  b["do it cheaper<br/>buffering, zero copy,<br/>compression"]:::g
+  c["wait smarter<br/>NIO, virtual threads,<br/>async"]:::y
+  d["stay stable<br/>timeouts, retries,<br/>back-pressure"]:::r
+  a --> b --> c --> d
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* the cheapest I/O is the one you do not do
+* order matters: first remove, then optimise, then parallelise
+
+=== Fewer round trips
+
+[mermaid,format=svg]
+----
+sequenceDiagram
+  participant A as app
+  participant D as database
+  rect rgb(239,154,154)
+  Note over A,D: N+1: one call per item
+  A->>D: items of order 1
+  A->>D: items of order 2
+  A->>D: items of order 3
+  end
+  rect rgb(165,214,167)
+  Note over A,D: batched: one call
+  A->>D: items of orders 1,2,3
+  end
+----
+
+* *N+1*: one query for a list, then one more query for each element (typical ORM trap)
+* *batching*: many operations in one request (`IN (...)`, JDBC batch, bulk APIs)
+* *pipelining*: send the next request before the previous response arrived (Redis, HTTP/2)
+* *caching*: serve repeated reads from memory, accept staleness
+
+=== Connection pooling and keep-alive
+
+[mermaid,format=svg]
+----
+sequenceDiagram
+  participant A as app
+  participant S as server
+  rect rgb(239,154,154)
+  Note over A,S: new connection per request
+  A->>S: TCP handshake + TLS handshake
+  A->>S: request
+  S-->>A: response
+  end
+  rect rgb(165,214,167)
+  Note over A,S: pooled, kept alive
+  A->>S: request
+  S-->>A: response
+  A->>S: request
+  S-->>A: response
+  end
+----
+
+* handshakes cost several round trips, TLS also CPU
+* reuse connections: pool for JDBC, keep-alive / HTTP/2 for HTTP
+* pool size is a *concurrency limit* towards the dependency: too small = queueing, too big = overload of the database
+
+=== Buffering and the cheap I/O techniques
+
+* small writes into a buffer, one big system call (`BufferedOutputStream`, 8 KB default)
+* `readv` / `writev` for header + body in one call
+* `transferTo` for file to socket or file to file: data never enters the heap
+* the details and pictures: Java I/O chapter, ways to do I/O
+
+=== Technique: when to use it
+
+[cols="2,3",options="header"]
+|===
+|Technique |Use it when
+|buffered streams |many small reads/writes
+|vectored I/O |several pieces (header, body) go together
+|memory mapped file |random access to a big file, read mostly
+|`transferTo` (zero copy) |serving files, copying, no need to look at the data
+|direct I/O |you run your own cache (database-like)
+|`force()` / `fsync` |only where durability is required, it is the slow part
+|===
+
+=== Blocking, non-blocking, virtual threads
+
+[mermaid,format=svg]
+----
+flowchart LR
+  subgraph B["platform thread per request"]
+    direction LR
+    t1["1 thread = 1 OS thread<br/>blocks in read()"]:::r
+  end
+  subgraph N["NIO / epoll"]
+    direction LR
+    t2["few threads, selector<br/>callbacks / state machines"]:::y
+  end
+  subgraph V["virtual threads"]
+    direction LR
+    t3["blocking style,<br/>JVM parks and unmounts"]:::g
+  end
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* waiting is free only if the waiter is cheap: OS threads cost memory and scheduling
+* NIO scales, but the code is harder to write and debug
+* virtual threads: simple blocking code, scales with the number of waiting tasks
+
+=== Virtual threads and I/O: what to know
+
+* final in Java 21 (JEP 444), details in the virtual threads chapter
+* socket I/O is non-blocking underneath, the virtual thread unmounts while waiting
+* *file I/O still blocks the carrier thread*, the scheduler may temporarily add carriers to compensate
+* Java 24 (JEP 491): `synchronized` no longer pins the carrier, remaining pinning: native frames, class initialization
+* virtual threads help *waiting*, not CPU: they remove the thread limit, so limit the downstream with a semaphore or pool
+
+=== Compression: CPU for bytes
+
+[mermaid,format=svg]
+----
+flowchart LR
+  a["data"]:::g --> c["compress<br/>costs CPU"]:::y --> w["wire / disk<br/>fewer bytes"]:::g --> u["decompress<br/>costs CPU"]:::y --> b["data"]:::g
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* wins when the link or disk is the bottleneck and the data compresses (text, JSON)
+* loses when the CPU is already busy, or on fast local networks
+* fast algorithms (LZ4, Snappy, zstd low levels) vs high ratio (gzip, zstd high levels): pick by what you are short of
+* already compressed data (images, archives): do not compress twice
+
+=== Back-pressure
+
+[mermaid,format=svg]
+----
+flowchart LR
+  p["fast producer"]:::g -- "data" --> q["bounded queue"]:::y -- "data" --> c["slow consumer"]:::r
+  c -. "slow down / reject" .-> p
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* *back-pressure*: the consumer tells the producer to slow down, instead of buffering without limit
+* unbounded queues turn a slow dependency into latency, then `OutOfMemoryError`
+* tools: bounded queues, semaphores, TCP windows, reactive streams `request(n)`, rejecting with 429/503
+
+=== Timeouts and retries
+
+[mermaid,format=svg]
+----
+sequenceDiagram
+  participant A as client
+  participant S as server
+  A->>S: try 1
+  Note over A: timeout
+  A->>S: try 2 after 100 ms + jitter
+  Note over A: timeout
+  A->>S: try 3 after 200 ms + jitter
+  S-->>A: response
+----
+
+* every remote call needs a timeout (connect and read), the default is often *infinite*
+* retry only idempotent calls, with a limit and exponential back-off
+* *jitter* (random delay): clients do not retry in lockstep and flatten the server again
+* retries multiply load: a retry storm kills a recovering service
+
+=== Serialization and deserialization
+
+* *serialization*: object graph to bytes, *deserialization*: bytes back to objects
+* every request crosses it twice: client and server
+* CPU heavy (reflection, parsing, conversions) and allocation heavy (Strings, byte arrays, objects)
+* often the hidden part of "I/O time": profile before blaming the network
+
+=== The pipeline
+
+[mermaid,format=svg]
+----
+flowchart LR
+  o1["object<br/>(heap)"]:::g -- "encode" --> b1["byte[] / String<br/>copy 1, garbage"]:::y -- "write" --> n1["native / socket buffer<br/>copy 2"]:::y --> w["network"]:::n --> n2["socket buffer<br/>copy 3"]:::y -- "read" --> b2["byte[] / String<br/>copy 4, garbage"]:::y -- "decode" --> o2["object<br/>(heap)"]:::g
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* each yellow box is a copy and short-lived garbage, each arrow is CPU
+* the goal of every technique that follows: remove a copy, remove an allocation, or remove the whole step
+
+=== Formats: overview
+
+[cols="2,2,3",options="header"]
+|===
+|Format |Kind |Remark
+|JSON (Jackson) |text, schema-less |readable, universal, slowest and biggest
+|Protocol Buffers |binary, schema-first |compact, generated code, good evolution
+|Avro |binary, schema-first |schema travels or is in a registry, big data
+|MessagePack / CBOR |binary, schema-less |JSON data model, smaller and faster
+|FlatBuffers, Cap'n Proto, SBE |binary, zero-copy |no decode step, fixed layout
+|Java serialization |binary, built in |avoid
+|===
+
+=== Text vs binary, schema-first vs schema-less
+
+[mermaid,format=svg]
+----
+flowchart LR
+  s1["schema-less<br/>field names in every message"]:::y ~~~ f1["schema-first<br/>names in schema, numbers on the wire"]:::g
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+----
+
+* *text* (JSON): readable, larger, number to text conversion; *binary*: compact, cheaper to parse, needs tooling
+* *schema-less*: flexible, self-describing, pays in size and parsing
+* *schema-first*: a contract, generated code, smaller messages: good for internal hot paths
+
+=== Zero-copy formats
+
+[mermaid,format=svg]
+----
+flowchart LR
+  subgraph T["classic format"]
+    direction LR
+    a1["bytes"]:::y -- "parse, allocate" --> a2["objects"]:::r --> a3["read field"]:::g
+  end
+  subgraph Z["zero-copy format"]
+    direction LR
+    b1["bytes"]:::y -- "offset arithmetic" --> b3["read field"]:::g
+  end
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* *zero-copy format*: the wire layout is the in-memory layout, fields are read in place from the buffer, nothing is decoded up front
+* FlatBuffers, Cap'n Proto, SBE (used in low latency trading)
+* price: fixed layouts, awkward API, harder evolution, you read through accessors, not plain objects
+* wins when you read a few fields of a big message, or need minimal garbage
+
+=== Java built-in serialization: avoid
+
+* slow and large: reflection, class descriptors and metadata in the stream
+* fragile: tied to class structure and `serialVersionUID`
+* *security*: deserialization can instantiate attacker chosen classes, a long history of remote code execution bugs
+* if you must keep it: serialization filters (JEP 290, context-specific filters JEP 415) with an allow list
+* for new code use a format with a schema; records are a good fit as the data carriers
+
+=== Parsing styles
+
+[mermaid,format=svg]
+----
+flowchart LR
+  subgraph B["data binding"]
+    direction LR
+    b1["bytes"]:::n --> b2["POJO"]:::r
+  end
+  subgraph D["tree / DOM"]
+    direction LR
+    d1["bytes"]:::n --> d2["tree of nodes"]:::y
+  end
+  subgraph T["streaming tokens"]
+    direction LR
+    t1["bytes"]:::n --> t2["token by token"]:::g
+  end
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* *data binding*: convenient, allocates the whole object graph
+* *tree / DOM*: flexible, holds the whole document in memory
+* *streaming (token) parser*: constant memory, fastest, you write the state handling
+* big payloads or only some fields needed: stream; everything else: binding
+
+=== Streaming parser example
+
+[source,java]
+----
+try (JsonParser p = factory.createParser(in)) {      // Jackson streaming API
+  while (p.nextToken() != null) {
+    if (p.currentToken() == JsonToken.FIELD_NAME
+        && p.currentName().equals("id")) {
+      p.nextToken();
+      long id = p.getLongValue();                    // no intermediate objects
+    }
+  }
+}
+----
+
+* skips what you do not need, no tree, no POJOs
+* the same idea for writing: `JsonGenerator` straight into the output stream
+
+=== Avoid reflection
+
+* classic data binding discovers fields by reflection at runtime: slow start, hard for native image and AOT
+* faster: code generation at build time (protobuf, Avro, annotation processors, Jackson afterburner-style bytecode generation)
+* records: a compact, final shape, easy to bind (supported by common libraries)
+* Java 25 AOT cache (Leyden) helps startup, it does not remove the per-message work
+* warm up: first requests run in the interpreter, see the JIT chapter
+
+=== Buffer reuse and fewer copies
+
+[source,java]
+----
+// copies: bytes -> String -> parse -> object
+String s = new String(bytes, UTF_8);
+Order o = mapper.readValue(s, Order.class);
+
+// better: parse straight from the stream or array
+Order o = mapper.readValue(in, Order.class);
+----
+
+* avoid the intermediate `String` and `byte[]` copies, hand the parser the stream
+* reuse buffers (thread-local or pooled), mind that pooled buffers need care with virtual threads
+* write with a reused `ByteArrayOutputStream` / `ByteBuffer` instead of new ones per message
+* fewer allocations = fewer young collections, see the GC chapter
+
+=== Parsing from ByteBuffer and MemorySegment
+
+[source,java]
+----
+MemorySegment seg = channel.map(MapMode.READ_ONLY, 0, size, arena);
+
+int  id    = seg.get(ValueLayout.JAVA_INT_UNALIGNED, 0);
+long price = seg.get(ValueLayout.JAVA_LONG_UNALIGNED, 4);
+----
+
+* FFM API is final since Java 22 (JEP 454): `long` offsets, deterministic release via `Arena`
+* read fixed layouts directly from mapped files or off-heap buffers, no `byte[]` copy, no objects
+* a natural fit for zero-copy formats; `ByteBuffer` does the same with `int` offsets
+* bounds are checked, you pay safety with a little CPU
+
+=== Lazy deserialization
+
+* *lazy*: keep the bytes, decode a field or nested message only when somebody asks
+* good for proxies, routers, filters that look at a header and forward the rest untouched
+* zero-copy formats are lazy by design
+* risk: the buffer must stay alive, errors in data appear late, repeated access decodes repeatedly
+
+=== Schema evolution
+
+* *schema evolution*: old and new versions of the schema must read each other's data (rolling deploys, stored data)
+* protobuf: add optional fields with new numbers, never reuse numbers
+* Avro: reader and writer schemas are resolved, defaults make fields optional
+* JSON: tolerant by convention (ignore unknown fields), but nothing enforces it
+* zero-copy formats: only append fields, layouts are rigid
+* flexibility costs bytes or CPU; decide how often you change versus how hot the path is
+
+=== Measuring serialization with JMH
+
+[mermaid,format=svg]
+----
+flowchart LR
+  a["realistic payloads"]:::g --> b["JMH<br/>warm-up + forks"]:::g --> c["throughput and<br/>allocation rate (gc profiler)"]:::y --> d["confirm in the<br/>real service"]:::r
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* pitfall: tiny constant payload, the JIT and CPU caches love it, production does not
+* pitfall: result not consumed (`Blackhole`), dead code elimination
+* pitfall: measuring only speed, size on the wire and garbage matter as much (`-prof gc`)
+* pitfall: one type profile, real traffic has many shapes, the JIT speculates differently
+* a micro-benchmark picks candidates, the load test decides
+
+=== I/O bound: summary
+
+* recognise: low CPU, waiting threads, slow device or dependency
+* investigate: JFR socket/file events, thread dumps, `iostat`, `ss`, tracing
+* first do less I/O (batching, N+1, caching), then make it cheaper, then wait smarter
+* protect yourself: timeouts, jittered retries, back-pressure, bounded pools
+* do not forget serialization: choose the format for the boundary, avoid copies and reflection

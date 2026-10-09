@@ -1,0 +1,27 @@
+== Writing performant Java applications
+
+=== Agenda
+
+* Method: find the bottleneck before you fix anything
+* *CPU bound*: JIT, algorithms, data layout
+* *Contention bound*: Amdahl, scalability law, concurrency models, lock-free
+* *I/O bound*: effective I/O, serialization
+* *Memory bound*: allocate less, native memory, GC tuning
+* Summary: symptom, tool, fix
+
+include::perf-method.adoc[]
+
+include::perf-cpu.adoc[]
+
+include::perf-contention.adoc[]
+
+include::perf-io.adoc[]
+
+include::perf-memory.adoc[]
+
+include::perf-memory-gc-tuning.adoc[]
+
+include::perf-summary.adoc[]
+
+== Q&A
+

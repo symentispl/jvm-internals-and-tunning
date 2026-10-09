@@ -1,0 +1,231 @@
+=== GC tuning: footprint vs throughput vs pause
+
+[mermaid,format=svg]
+----
+flowchart LR
+  f["footprint<br/>how much memory"] <--> t["throughput<br/>time in app vs in GC"]
+  t <--> p["pause<br/>how long the app stops"]
+  p <--> f
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class f,t,p y
+----
+
+* you can optimise two, the third pays: more heap buys throughput and shorter pauses, concurrent GC buys pauses with CPU
+* pick the goal from the requirement: batch wants throughput, online services want pause and tail latency, containers want footprint
+
+=== Goals and flags
+
+[cols="2,3,2",options="header"]
+|===
+|Goal |Flag |Notes
+|footprint |`-Xmx`, `-XX:MaxRAMPercentage` |maximum heap
+|pause |`-XX:MaxGCPauseMillis=200` |G1 default goal, a target, not a guarantee
+|throughput |`-XX:GCTimeRatio=12` |Parallel / G1 sizing goal, GC about 1/(1+12) of time
+|adaptive sizing |`-XX:+UseAdaptiveSizePolicy` |Parallel GC resizes generations, default on
+|===
+
+=== Parallel GC ergonomics
+
+* GC thread count: `-XX:ParallelGCThreads=<N>`
+* default: N = CPUs for machines with up to 8 CPUs, otherwise about 5/8 of CPUs
+* pause goal missed: only the generation with the longest pause is shrunk
+* throughput goal missed: both generations grow, in proportion to their GC time
+* see why it decided: `-Xlog:gc+ergo*=debug` (replaces the old `-XX:+PrintAdaptiveSizePolicy`)
+
+=== When tuning makes sense
+
+* you know the allocation profile and it will not change (for example batch jobs)
+* you do not own the code and cannot allocate less
+* there is a measured SLO problem tied to GC in the log
+* otherwise: allocate less first (previous section), defaults are good
+
+=== Sins of GC tuning
+
+* premature tuning: no GC log, no problem
+* copying flags from stackoverflow.com or an old blog: they were right for *someone else's* JVM version and workload
+* not knowing the ergonomics: `-Xmx`, `MaxGCPauseMillis` and `GCTimeRatio` are usually all you may touch
+* faith that tuning can hide bad code and architecture
+
+=== Sins of GC tuning, process
+
+* no systematic approach: change one thing, measure under realistic load, keep the log
+* ignoring the workload type: batch vs online, stateless vs stateful (large live set)
+* not understanding how JVM and OS interact: containers, swap, page cache, CPU limits
+* flags carried over between JDK upgrades without re-testing
+
+=== Heap and container sizing basics
+
+[source]
+----
+-Xms8g -Xmx8g                 # servers: fixed heap, no resize pauses
+-XX:MaxRAMPercentage=70       # containers: heap as share of the container limit
+-XX:+AlwaysPreTouch           # commit pages at start, no page faults later
+----
+
+* `-Xms` = `-Xmx` removes heap resize work and surprises; cost: memory is reserved up front
+* default `MaxRAMPercentage` is 25%: too low for a dedicated container, but leave room for metaspace, stacks, direct buffers (RSS > heap)
+* `AlwaysPreTouch` slows startup on large heaps, steadier latency afterwards
+* NUMA (`-XX:+UseNUMA`) and transparent huge pages (`-XX:+UseTransparentHugePages`): measure before using, both are off by default
+
+=== Generation sizing flags
+
+[cols="3,3",options="header"]
+|===
+|Flag |Meaning
+|`-XX:NewRatio=2` |Old / Young size ratio
+|`-XX:NewSize`, `-XX:MaxNewSize` |young size in bytes
+|`-XX:SurvivorRatio=8` |Eden / one Survivor
+|`-XX:TargetSurvivorRatio=50` |desired Survivor occupancy after a young GC
+|`-XX:MaxTenuringThreshold=15` |max young collections an object survives before promotion
+|===
+
+* *tenuring*: the number of young collections an object survives before it is promoted to old
+* with G1 do not set `-Xmn`, `NewSize`, `MaxNewSize`: it disables the pause-goal driven sizing
+
+=== Parallel GC: size increment flags
+
+[cols="3,3",options="header"]
+|===
+|Flag |Meaning
+|`-XX:YoungGenerationSizeIncrement=20`, `-XX:TenuredGenerationSizeIncrement=20` |growth step, percent
+|`-XX:AdaptiveSizeDecrementScaleFactor=4` |shrink step is increment / factor
+|`-XX:+UseGCOverheadLimit` |`OutOfMemoryError` when over 98% of time in GC and under 2% reclaimed (Parallel)
+|===
+
+* defaults are fine, listed so you recognise them in logs and old flag sets
+
+=== G1 tuning: mixed collections
+
+[mermaid,format=svg]
+----
+flowchart LR
+  m["concurrent mark<br/>finishes"] --> c["pick old regions<br/>under live threshold"] --> x["mixed pauses<br/>(about 8)"] --> w{"garbage under<br/>waste percent?"}
+  w -- "yes" --> y["back to young<br/>collections"]
+  w -- "no" --> x
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class m,y g
+  class c,x,w y
+----
+
+* a *mixed* cycle usually spans several pauses, until enough old regions are collected
+* the flags on the next slide decide how many old regions join each pause
+
+=== G1 mixed collection knobs
+
+[cols="3,2,3",options="header"]
+|===
+|Flag |Default |Controls
+|`-XX:G1MixedGCLiveThresholdPercent` |85 (experimental) |old region with more live data is not collected
+|`-XX:G1HeapWastePercent` |5 |tolerated garbage, below it mixed GCs stop
+|`-XX:G1MixedGCCountTarget` |8 |spread the work over this many pauses
+|`-XX:G1OldCSetRegionThresholdPercent` |10 (experimental) |max old regions per pause, percent of heap
+|===
+
+* needs `-XX:+UnlockExperimentalVMOptions` for the experimental ones
+* smaller pauses: raise the count target. Heap filling up: lower the waste percent
+
+=== G1 tuning: refinement and remembered sets
+
+* a *remembered set* (RSet) tracks references into a region, filled by write barriers and *concurrent refinement* threads (see the GC chapter)
+* `-XX:G1ConcRefinementThreads`: if refinement cannot keep up, application threads do the work, which you want to avoid
+* `-XX:G1RSetUpdatingPauseTimePercent=10`: share of the pause goal spent updating RSets during the pause, lower pushes work to the refinement threads
+* RSet statistics: `-Xlog:gc+remset*` and `-Xlog:gc+refine*` (the old `-XX:+G1SummarizeRSetStats` flag no longer exists)
+* look at it only if "Update RS" or "Scan RS" phases dominate the pause in `-Xlog:gc+phases=debug`
+
+=== G1 tuning: reference processing
+
+* long "Reference Processing" time in `-Xlog:gc+phases=debug` means many `WeakReference`, `SoftReference`, finalizers or `Cleaner`s
+* `-XX:+ParallelRefProcEnabled` processes them with several threads (default on in JDK 25, check older flag sets that disable it)
+* better: have fewer references, close resources explicitly
+* `-XX:+UseStringDeduplication` (G1, off by default) can shrink heaps full of duplicate strings, costs a little CPU
+
+=== Evacuation failure
+
+[mermaid,format=svg]
+----
+flowchart LR
+  y["young collection<br/>copies survivors"] --> f{"free region<br/>to copy into?"}
+  f -- "yes" --> ok["normal pause"]
+  f -- "no, heap at max" --> e["evacuation failure<br/>to-space exhausted"]
+  e --> r["objects stay,<br/>very expensive pause,<br/>maybe Full GC"]
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  class y,ok g
+  class e,r r
+----
+
+* *evacuation failure*: G1 cannot find free regions to copy survivors or promote into, and the heap cannot grow
+* in the log: `To-space exhausted` or `Evacuation Failure`
+* first find out why: `-Xlog:gc+ergo*=debug` shows the decisions that led there
+
+=== Troubleshooting evacuation failure
+
+[mermaid,format=svg]
+----
+flowchart LR
+  a{"over-tuned?"} -- "yes" --> a1["remove -Xmn, NewSize,<br/>SurvivorRatio...<br/>keep Xms, Xmx, pause goal"]
+  a -- "no" --> b{"humongous<br/>allocations?"}
+  b -- "yes" --> b1["allocate less, or<br/>larger G1HeapRegionSize"]
+  b -- "no" --> c{"can heap<br/>grow?"}
+  c -- "yes" --> c1["increase -Xmx"]
+  c -- "no" --> d{"marking starts<br/>too late?"}
+  d -- "yes" --> d1["lower IHOP"]
+  d -- "no" --> e{"marking too slow?"}
+  e -- "yes" --> e1["more ConcGCThreads"]
+  e -- "no" --> f1["raise G1ReservePercent"]
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class a1,b1,c1,d1,e1,f1 g
+  class a,b,c,d,e y
+----
+
+* humongous object: at least half a region, allocated straight into old regions (see the GC chapter)
+* work top to bottom, change one thing at a time
+
+=== Evacuation failure: the knobs
+
+[cols="3,3",options="header"]
+|===
+|Flag |Use
+|`-XX:InitiatingHeapOccupancyPercent=45` |lower: marking starts earlier. Raise it if marking starts early and reclaims little
+|`-XX:ConcGCThreads` |more threads make concurrent marking finish sooner
+|`-XX:G1ReservePercent=10` |false ceiling kept free as to-space, capped at 50
+|`-XX:G1HeapRegionSize` |1 to 32 MB, larger regions mean fewer humongous objects
+|===
+
+* a larger heap is usually the cheapest fix when you can afford it
+* G1 adapts IHOP by itself, a fixed value is a last resort
+
+=== Concurrent collectors: start with defaults
+
+[cols="2,3,3",options="header"]
+|===
+|Collector |Main knobs |Notes
+|ZGC |`-Xmx`, `-XX:SoftMaxHeapSize`, `-XX:ConcGCThreads` |generational is the only mode since JDK 24, `-XX:+ZGenerational` is gone
+|Shenandoah |`-XX:ShenandoahGCMode`, `-XX:ShenandoahGCHeuristics` |modes: `satb` (default), `generational` (JEP 521)
+|both |`-XX:+AlwaysPreTouch`, `-XX:+UseTransparentHugePages` |footprint vs latency trade
+|===
+
+* mark this clearly: default settings are the recommendation, give them enough headroom (heap larger than live set) and spare CPU
+* the usual cause of a pause or stall is too little headroom, not a missing flag
+
+=== ZGC and Shenandoah: headroom
+
+* ZGC: `-XX:SoftMaxHeapSize=<n>` is a soft limit that makes ZGC collect harder before the heap is used up, `-Xmx` stays the hard cap
+* both collect concurrently, so allocation must not outrun them: allocation stall (ZGC) or pacing / degenerated GC (Shenandoah) in the log means too little heap or CPU
+* Shenandoah heuristics: `adaptive` (default), `static`, `compact`, `aggressive` (stress)
+* uncommit of unused memory: `-XX:+ZUncommit` (default on)
+
+=== Monitoring after the change
+
+* keep the GC log on: `-Xlog:gc*,safepoint:file=gc.log:time,uptime,level,tags:filecount=5,filesize=10m`
+* compare before and after: pause percentiles, GC time share, allocation and promotion rate, tail latency of the service
+* a tuning that is not measured under realistic load is a guess
+* GCeasy, GCViewer, JFR events: see the memory bound section on investigation
+
+=== Useful links
+
+* https://docs.oracle.com/en/java/javase/25/gctuning/[HotSpot Virtual Machine Garbage Collection Tuning Guide, JDK 25]
+* https://docs.oracle.com/en/java/javase/25/docs/specs/man/java.html[java command reference, JDK 25]
+* https://www.petefreitag.com/articles/gctuning/[Tuning Garbage Collection Outline]

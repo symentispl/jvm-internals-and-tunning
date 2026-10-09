@@ -1,0 +1,450 @@
+=== Memory bound
+
+[mermaid,format=svg]
+----
+flowchart LR
+  a["allocate"] --> h["heap fills"] --> g["GC runs"] --> p["application<br/>waits or slows"]
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  class a,h y
+  class g,p r
+----
+
+* the application spends its time creating, moving and cleaning up objects, not computing
+* symptoms: GC pauses, GC CPU share, `OutOfMemoryError`, RSS growing
+* order of attack: *allocate less*, then *move data off heap*, then *choose and tune the GC*
+
+=== Memory bound: how to recognise it
+
+[cols="2,3",options="header"]
+|===
+|Symptom |Points to
+|frequent young pauses |high allocation rate
+|long pauses, Full GCs |high promotion rate, old gen too small, fragmentation
+|GC takes a large share of CPU time |heap too small for the live set, or too much garbage
+|used heap after GC keeps growing |memory leak
+|RSS much larger than `-Xmx` |native memory: metaspace, direct buffers, threads, malloc
+|`OutOfMemoryError` |see next slide
+|===
+
+=== Three numbers to know
+
+* *allocation rate*: bytes allocated per second, it decides how often young GC runs
+* *promotion rate*: bytes per second that survive young collections and move to old (tenuring: after surviving enough collections, an object is promoted)
+* *live set*: bytes still reachable right after a full or mixed cycle, the floor under heap sizing
+* rule of thumb: pause frequency follows allocation rate, pause length follows live data being copied
+* all three come straight from the GC log
+
+=== Stable vs leaking heap
+
+[mermaid,format=svg]
+----
+---
+config:
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#2e7d32, #c62828"
+---
+xychart-beta
+  title "heap used over time: stable (green) vs leaking (red)"
+  x-axis ["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11", "t12"]
+  y-axis "MB used" 0 --> 1000
+  line [200, 600, 200, 600, 200, 600, 200, 600, 200, 600, 200, 600]
+  line [200, 500, 320, 620, 440, 740, 560, 860, 680, 980, 800, 1000]
+----
+
+* between collections the heap climbs (allocation) and drops (GC): the sawtooth
+* what matters is the *floor* of the sawtooth: the live set
+* flat floor: healthy, only tuning is left. Rising floor: a leak, tuning only delays the crash
+
+=== OutOfMemoryError: which one?
+
+[cols="2,3",options="header"]
+|===
+|Message |Meaning
+|`Java heap space` |live set does not fit in `-Xmx`, or a leak
+|`GC overhead limit exceeded` |over 98% of time in GC, under 2% reclaimed (`UseGCOverheadLimit`)
+|`Metaspace` |too many classes or class loader leak (`MaxMetaspaceSize`)
+|`Direct buffer memory` |off-heap buffers hit `MaxDirectMemorySize`
+|`unable to create native thread` |OS limit or no memory for thread stacks
+|===
+
+* a container OOM kill (exit 137) is none of these: the kernel killed the process because RSS exceeded the limit
+
+=== Memory bound: how to investigate
+
+[mermaid,format=svg]
+----
+flowchart LR
+  s["symptom"] --> l["GC log<br/>what is happening"]
+  l --> a["JFR / async-profiler<br/>who allocates"]
+  l --> h["histogram / heap dump<br/>who retains"]
+  l --> n["NMT / pmap<br/>what is off heap"]
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class l g
+  class a,h,n y
+----
+
+* start from the GC log, it is cheap and always on
+* then pick the tool by the question: allocation rate, retention, or native memory
+
+=== Monitoring: GC and safepoint logs
+
+[source]
+----
+-Xlog:gc*,safepoint:file=gc.log:time,uptime,level,tags:filecount=5,filesize=10m
+----
+
+* unified logging (JDK 9+): `-Xlog:gc*`, `-Xlog:safepoint`, `-Xlog:gc+heap=debug`
+* gather logs from a long and representative period of time
+* look at pause times, time-to-safepoint, allocation rate, promotion rate
+* see the observability chapter for the logging syntax
+
+=== Reading a GC log line
+
+[source]
+----
+[12.345s][info][gc] GC(42) Pause Young (Normal) (G1 Evacuation Pause) 812M->96M(2048M) 14.2ms
+----
+
+[cols="2,3",options="header"]
+|===
+|Part |What to read
+|`812M->96M(2048M)` |heap before, after, total: the *after* values over time are the live set
+|`14.2ms` |pause length, compare with the goal
+|gap between lines |time between collections, with the freed amount gives the allocation rate
+|`Pause Full`, `to-space exhausted` |trouble, see the GC tuning section
+|===
+
+=== Monitoring: tools
+
+* GC log analysers: GCeasy, GCViewer, Censum, they chart pauses, allocation and promotion rate
+* JDK Flight Recorder (`jdk.GarbageCollection`, `jdk.GCPhasePause`, `jdk.GCHeapSummary` events)
+* `jcmd <pid> GC.heap_info`, `jstat -gcutil <pid> 1s` for a live view
+* JMX memory MXBeans for dashboards, see the observability chapter
+
+=== JFR: who allocates?
+
+[source]
+----
+jcmd <pid> JFR.start name=r settings=profile filename=alloc.jfr
+jfr print --events jdk.ObjectAllocationSample alloc.jfr
+jfr view allocation-by-class alloc.jfr
+----
+
+* `jdk.ObjectAllocationSample`: sampled allocations with stack trace and weight, low overhead
+* `jdk.GarbageCollection`, `jdk.GCPhasePause`: pause cause and per-phase time
+* in JDK Mission Control the allocation view shows hot classes and hot stacks
+* sampling means: trust the top entries, not the tail
+
+=== async-profiler: allocation profile
+
+[source]
+----
+asprof -e alloc -d 30 -f alloc.html <pid>
+----
+
+* samples allocations on TLAB refills and outside-TLAB allocations, result is a flame graph by allocation size
+* no safepoint bias, low overhead
+* look for wide frames in your own code: that is where to allocate less
+* see the observability chapter for profiler basics
+
+=== Class histogram
+
+[source]
+----
+jcmd <pid> GC.class_histogram | head -20
+----
+
+* instances and bytes per class, live objects only (it forces a full GC unless `-all`)
+* take two histograms minutes apart and diff them: the class that grows is the suspect
+* usual culprits: `byte[]`, `String`, `HashMap$Node`, your own domain classes
+* cheap, no big file, but no owner information
+
+=== Heap dump and Eclipse MAT
+
+[mermaid,format=svg]
+----
+flowchart LR
+  d["jcmd GC.heap_dump<br/>or HeapDumpOnOutOfMemoryError"] --> m["Eclipse MAT"] --> dom["dominator tree<br/>retained size"] --> r["path to GC roots<br/>who holds it"]
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  class d,m,dom,r g
+----
+
+* `jcmd <pid> GC.heap_dump /tmp/h.hprof`, or `-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=...`
+* *dominator tree*: objects sorted by retained size, the memory freed if that object died
+* *Leak Suspects* report is a good first click, then "path to GC roots" for the suspect
+* the dump pauses the JVM and is as big as the live heap, plan disk space and privacy (it contains data)
+
+=== Native memory: why is RSS bigger than -Xmx?
+
+[mermaid,format=svg]
+----
+block-beta
+  columns 4
+  heap["Java heap<br/>(-Xmx)"] meta["Metaspace<br/>class metadata"] code["Code cache<br/>JIT code"] thr["Thread stacks<br/>1 MB each"]
+  gc["GC data<br/>card table, remembered sets"] dir["Direct buffers,<br/>mapped files"] sym["Symbols, arenas,<br/>JVM internals"] lib["native libraries,<br/>malloc"]
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class heap g
+  class meta,code,thr,gc,dir,sym,lib y
+----
+
+* the process uses far more than the heap
+* *Native Memory Tracking*: `-XX:NativeMemoryTracking=summary`, then `jcmd <pid> VM.native_memory summary`
+* it does not see native libraries or `malloc` of JNI code: compare with `pmap -x <pid>` / `/proc/<pid>/smaps`
+
+=== NMT: find what grows
+
+[source]
+----
+java -XX:NativeMemoryTracking=summary ...
+jcmd <pid> VM.native_memory baseline
+# ... wait ...
+jcmd <pid> VM.native_memory summary.diff
+----
+
+* the diff shows which category grew: `Class`, `Thread`, `Code`, `GC`, `Internal`...
+* direct buffers and FFM allocations appear as `Other` / `Internal`
+* summary mode costs little, detail mode is much more expensive
+* RSS grows but NMT does not: suspect a native library or glibc arena fragmentation
+
+=== Memory bound: how to improve
+
+[mermaid,format=svg]
+----
+flowchart LR
+  a["1. allocate less"] --> b["2. move data<br/>off heap"] --> c["3. choose and<br/>tune the GC"]
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+  class a g
+  class b y
+  class c n
+----
+
+* cheapest and most effective first, most invasive last
+* each step must be confirmed by a measurement: allocation rate, GC share, latency
+
+=== Allocate less: the best GC tuning
+
+* memory you never allocate costs no GC time, no cache misses, no bandwidth
+* dead young objects are cheap, but not free: allocation rate sets the pause frequency
+* less allocation means fewer promotions, which means fewer old collections
+* no flag can beat removing the garbage
+* find the top allocators first (JFR, `async-profiler -e alloc`), fix only those
+
+=== Help the JIT: escape analysis
+
+[mermaid,format=svg]
+----
+flowchart LR
+  n["new Point(x, y)"] --> e{"escapes the<br/>method?"}
+  e -- "no" --> s["scalar replacement<br/>no allocation"]
+  e -- "yes" --> h["heap allocation"]
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  class s g
+  class h r
+----
+
+* C2 removes allocations of objects that do not escape (see the JIT chapter)
+* keep short-lived objects local: small methods that inline, no storing into fields or collections
+* do not rely on it for big or branching code, check with an allocation profile
+* a failing escape analysis shows up as allocation in the profile of hot code
+
+=== Boxing and autoboxing
+
+[source,java]
+----
+Map<Integer, Long> counts = new HashMap<>();
+counts.merge(id, 1L, Long::sum);   // boxes key and value
+long sum = 0;
+for (Long v : list) sum += v;      // unboxing, and list holds objects
+----
+
+* `Integer`, `Long` are objects: 12 B header plus value, 16 B in total, plus a 4 B reference to them
+* small values are cached (-128..127), others allocate
+* use primitive arrays, `IntStream`, or primitive collections (fastutil, Eclipse Collections, HPPC)
+* `int[]` of 1M ints is 4 MB, `List<Integer>` of 1M is about 20 MB
+
+=== Strings and concatenation
+
+* `a + b + c` in one expression is fine: javac emits `invokedynamic`, one allocation of the result
+* in a loop, `s += x` copies the string every iteration, use `StringBuilder` with a good initial capacity
+* `String.format` and regex are heavy: avoid them on hot paths
+* `String.substring`, `split` copy characters since JDK 7
+* JDK 9+ compact strings: Latin-1 text uses 1 byte per char, so keep text as text, not as `char[]`
+
+=== Streams and lambdas
+
+* a stream pipeline allocates the pipeline stages, lambdas, iterators and often boxed values
+* non-capturing lambdas are allocated once, capturing lambdas allocate on every evaluation
+* for tiny collections on hot paths a plain `for` loop is cheaper
+* escape analysis can remove some of it, but only when everything inlines
+* measure before rewriting: streams are fine for most code
+
+=== Reuse buffers, avoid defensive copies
+
+* reuse `byte[]`, `StringBuilder`, `ByteBuffer` per thread or per request instead of allocating per call
+* read into a caller-supplied buffer (`InputStream.read(byte[])`, `ByteBuffer`), see the I/O chapter
+* return unmodifiable views or immutable records instead of copying collections "just in case"
+* `List.copyOf` is cheap on an already immutable list, it returns the same instance
+* size collections up front: `new ArrayList<>(n)`, `new HashMap<>(n * 4 / 3 + 1)` avoids resizing garbage
+
+=== Data layout and object size
+
+[mermaid,format=svg]
+----
+packet-beta
+  0-63: "mark word (8 B)"
+  64-95: "klass ptr (4 B)"
+  96-127: "int field (4 B)"
+----
+
+* every object pays a header: 12 B (8 B mark word + 4 B compressed class pointer), sizes are rounded up to 8 B
+* `-XX:+UseCompressedOops` (default for heaps under about 32 GB): 4 B references instead of 8 B
+* a `HashMap` entry is about 32 B of overhead per element, a `LinkedList` node even more
+* prefer arrays of primitives and flat structures over graphs of small objects
+* Project Valhalla (value objects) will flatten this later, not yet in JDK 25
+
+=== Compact object headers
+
+* JEP 519, product in JDK 25 but *opt-in*: `-XX:+UseCompactObjectHeaders`
+* mark word and klass pointer share 8 B, so every object is 4 B smaller (10-20% less heap on object-heavy apps)
+* more objects per cache line and per GC cycle, often a small throughput gain too
+* no code change, test with your workload, and watch for tools that read the header layout
+* object layout details: GC chapter
+
+=== Pooling and its caveats
+
+* pooling buffers and expensive objects (connections, big arrays) can pay off
+* pooling small objects usually hurts: pooled objects live long, get promoted, and force GC to scan them
+* a pool needs synchronisation or thread-local state, and leaks when objects are not returned
+* old objects point to young ones: card marking and remembered set work grows
+* rule: pool only large or costly-to-create objects, and measure
+
+=== Caches: bound them
+
+* an unbounded `HashMap` used as a cache is a memory leak with a name
+* bound by size and by time: Caffeine (`maximumSize`, `expireAfterWrite`)
+* `SoftReference`: cleared under memory pressure, behaviour depends on the GC and heap size, hard to reason about
+* `WeakReference` / `WeakHashMap`: cleared at the next GC, good for canonicalising maps, not as a cache
+* every cache entry is live data: it grows the live set and the GC cost
+
+=== Native and off-heap memory
+
+[mermaid,format=svg]
+----
+flowchart LR
+  subgraph heap["Java heap, managed by GC"]
+    o["objects"]
+  end
+  subgraph nat["native memory, managed by you"]
+    b["direct ByteBuffer"]
+    m["MemorySegment"]
+    f["mapped file"]
+  end
+  o -- "references,<br/>small handle" --> nat
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  class o g
+  class b,m,f y
+----
+
+* off-heap data is not scanned, copied or compacted by the GC
+* three ways: direct `ByteBuffer`, FFM API `MemorySegment`, memory mapped files
+
+=== Direct ByteBuffers
+
+[source,java]
+----
+ByteBuffer buf = ByteBuffer.allocateDirect(1 << 20);
+----
+
+* memory outside the heap, the object on the heap is only a small handle
+* NIO channels can read and write without an extra copy (see the I/O chapter)
+* limited by `-XX:MaxDirectMemorySize` (default: about the max heap)
+* freed only after the handle is garbage collected (Cleaner), so a quiet heap can hold a lot of native memory
+* allocation and zeroing are slower than heap buffers: allocate once and reuse
+
+=== FFM API: MemorySegment and Arena
+
+[source,java]
+----
+try (Arena arena = Arena.ofConfined()) {
+    MemorySegment seg = arena.allocate(1024 * 1024);
+    seg.set(ValueLayout.JAVA_LONG, 0, 42L);
+    long v = seg.get(ValueLayout.JAVA_LONG, 0);
+}   // memory freed here, deterministically
+----
+
+* `java.lang.foreign`, final in JDK 22 (JEP 454), replaces `Unsafe` for off-heap access
+* `Arena` defines the lifetime: confined (one thread), shared, global, or automatic (GC-managed)
+* bounds and lifetime are checked: use after close throws instead of crashing the JVM
+* 64-bit sizes and offsets, `MemoryLayout` describes structs and arrays
+
+=== Memory mapped files
+
+[source,java]
+----
+try (Arena arena = Arena.ofShared();
+     FileChannel ch = FileChannel.open(path, StandardOpenOption.READ)) {
+    MemorySegment map = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size(), arena);
+}
+----
+
+* the file is mapped into the address space, the OS page cache is the buffer, no copy to the heap
+* `FileChannel.map` with an `Arena` returns a `MemorySegment`: no 2 GB limit, deterministic unmap
+* good for big read-mostly data: indexes, columnar files, shared between processes
+* page faults happen as latency on first touch (see the I/O chapter)
+
+=== When off-heap pays
+
+* large, long-lived data: caches and indexes of many GB would otherwise bloat the live set
+* I/O buffers: network and disk paths without a copy
+* GC pauses driven by heap size or by scanning many references
+* interop with native libraries, no marshalling
+* if data is small or short-lived, on-heap is simpler and fast
+
+=== Off-heap costs
+
+[cols="2,3",options="header"]
+|===
+|Cost |Detail
+|lifetime is yours |forget to close the `Arena` or free the buffer and you leak native memory
+|serialisation |no objects: you encode and decode fields yourself
+|visibility |not in heap dumps, only in NMT and RSS
+|limits |`MaxDirectMemorySize` for direct buffers, container limit for everything
+|no GC help |no compaction, fragmentation is your problem
+|===
+
+* FFM native calls and restricted methods need `--enable-native-access` (warnings in JDK 24+)
+
+=== Choosing and tuning the GC
+
+[mermaid,format=svg]
+----
+flowchart LR
+  q1{"tiny heap /<br/>1 CPU?"} -- "yes" --> serial["Serial"]
+  q1 -- "no" --> q2{"max throughput,<br/>pauses don't matter?"}
+  q2 -- "yes" --> parallel["Parallel"]
+  q2 -- "no" --> q3{"ms or sub-ms pauses<br/>on big heaps?"}
+  q3 -- "yes" --> zgc["ZGC / Shenandoah"]
+  q3 -- "no" --> g1["G1 (default)"]
+  classDef lead fill:#a5d6a7,stroke:#2e7d32,color:#000
+  class serial,parallel,zgc,g1 lead
+----
+
+* the decision tree is in the GC chapter, "Choosing a collector"
+* G1 is the default and right for most applications: change it only for a measured reason
+* tuning flags and the troubleshooting flow: next section
+
+=== Memory bound: summary
+
+* recognise it: GC log, allocation rate, promotion rate, live set, RSS vs heap
+* investigate: JFR and `-e alloc` for allocators, heap dump and MAT for retainers, NMT for native
+* improve in order: allocate less, move big data off heap, then choose and tune the GC
+* leak (rising floor) is a bug, not a tuning problem
+* always re-measure after each change

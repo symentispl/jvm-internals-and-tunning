@@ -1,0 +1,165 @@
+=== Performance: find the bottleneck first
+
+* "my application is slow" is not a diagnosis
+* every slow system is *waiting for one resource* at a time
+* the job: find which resource, prove it with a tool, then fix *that* one
+* fixing anything else changes nothing (or makes it worse)
+
+=== What do we measure?
+
+[cols="1,3",options="header"]
+|===
+|Metric |Meaning
+|*throughput* |work done per second (requests/s, MB/s)
+|*latency* |time for one unit of work (a request), a *distribution*, not one number
+|*utilisation* |how busy a resource is (% CPU, % disk, % of a pool)
+|*saturation* |work waiting because a resource is full (run queue, I/O queue, lock queue)
+|===
+
+=== Latency is a distribution
+
+[mermaid,format=svg]
+----
+---
+config:
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#c62828"
+---
+xychart-beta
+  title "illustrative latency by percentile (ms)"
+  x-axis ["p50", "p90", "p99", "p99.9", "p99.99"]
+  y-axis "ms" 0 --> 500
+  bar [10, 25, 90, 250, 480]
+----
+
+* the *average* hides the tail, users and SLAs feel p99 and p99.9
+* a request that touches 10 services meets the slow tail of each: tails multiply
+* always record latency as a *histogram* (HdrHistogram), never only a mean
+
+=== Four resources, one thread
+
+[mermaid,format=svg]
+----
+stateDiagram-v2
+  direction LR
+  [*] --> Running
+  Running --> Running: CPU bound,<br/>executing code
+  Running --> BlockedOnLock: contention
+  Running --> WaitingForIO: I/O
+  Running --> StoppedByGC: memory
+  BlockedOnLock --> Running
+  WaitingForIO --> Running
+  StoppedByGC --> Running
+----
+
+* a request is a thread (or a chain of them) that is either *running* or *waiting for something*
+* CPU, locks, I/O and memory: the four places where time can go
+* this chapter has one part for each
+
+=== USE method
+
+[cols="1,2,2,2",options="header"]
+|===
+|Resource |Utilisation |Saturation |Errors
+|CPU |% busy per core |run queue length |-
+|memory / heap |heap occupancy after GC |GC frequency, allocation stalls |`OutOfMemoryError`
+|disk / network |% busy, throughput |queue length, `await` |retransmits, I/O errors
+|locks, pools |% of time held, pool in use |threads waiting for the lock / pool |timeouts, rejected tasks
+|===
+
+for every resource ask three questions: *how busy*, *is work queueing*, *are there errors*
+
+=== Which resource? Triage
+
+[mermaid,format=svg]
+----
+flowchart LR
+  s["slow?"] --> c{"CPU busy?<br/>user % high"}
+  c -- yes --> g{"GC time<br/>large share?"}
+  g -- yes --> m["MEMORY bound"]
+  g -- no --> cpu["CPU bound"]
+  c -- no --> t{"threads waiting?<br/>thread dump"}
+  t -- "on locks" --> con["CONTENTION bound"]
+  t -- "in socket / file read" --> io["I/O bound"]
+  t -- "GC pauses / OOM" --> m
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  class cpu,con,io,m g
+----
+
+=== Triage in 5 minutes
+
+[cols="2,3",options="header"]
+|===
+|Question |Tool
+|is the CPU busy? |`top -H`, `vmstat 1` (us, sy, wa, r)
+|how much time in GC? |`-Xlog:gc*`, `jstat -gcutil <pid> 1000`
+|what are threads doing? |`jcmd <pid> Thread.print` three times
+|is the disk or network busy? |`iostat -x 1`, `ss -ti`
+|where does CPU go? |async-profiler, JFR
+|===
+
+details of every tool: *observability* chapter
+
+=== The improvement loop
+
+[mermaid,format=svg]
+----
+flowchart LR
+  a["measure<br/>(baseline)"] --> b["find the<br/>bottleneck"] --> c["change ONE<br/>thing"] --> d["measure again"] --> e{"better?"}
+  e -- yes --> a
+  e -- no --> f["revert"] --> b
+----
+
+* one change at a time, otherwise you don't know what helped
+* keep the baseline, the data decides, not intuition
+* stop when the *goal* (SLO) is met, not when the code is pretty
+
+=== Benchmark or profile?
+
+[cols="1,2,2",options="header"]
+|===
+| |Benchmark |Profile
+|answers |"how fast is X, is A faster than B?" |"where does the time go?"
+|scope |one piece of code (*micro*) or the whole system (*macro*) |a running application
+|tool |JMH, load generators |async-profiler, JFR
+|use |compare solutions, guard against regressions |find what to fix
+|===
+
+profile first to find *what* matters, then benchmark *candidate fixes*
+
+=== Microbenchmark pitfalls
+
+[cols="2,3",options="header"]
+|===
+|Pitfall |Fix
+|JIT not warmed up |warm-up iterations, report steady state (JMH does)
+|result unused, JIT removes the code (dead code) |return it or give it to a `Blackhole`
+|constant inputs get folded at compile time |read inputs from `@State` fields
+|one JVM fork, lucky inlining |several forks
+|noisy machine (frequency scaling, other jobs) |quiet, fixed-frequency machine, compare many runs
+|===
+
+=== Coordinated omission
+
+[mermaid,format=svg]
+----
+sequenceDiagram
+  participant L as load generator
+  participant S as server
+  L->>S: request 1 (t=0)
+  S-->>L: 1 s (stall, e.g. GC pause)
+  Note over L: closed loop: next request is sent only now,<br/>the 10 requests that should have been sent<br/>during the stall are never measured
+  L->>S: request 2 (t=1 s)
+----
+
+* a load generator that waits for the reply before sending the next request *omits* the waiting time of the stall
+* results look great, the real users still saw the pause
+* use an *open model* (fixed arrival rate) and correct for it: wrk2, HdrHistogram correction, Gatling/k6 arrival-rate scenarios
+
+=== Realistic load
+
+* production-like data volume, data distribution, concurrency and request mix
+* run long enough for JIT warm-up, GC steady state, cache effects
+* separate the load generator from the system under test
+* compare *percentiles*, not averages, and always keep the raw histograms

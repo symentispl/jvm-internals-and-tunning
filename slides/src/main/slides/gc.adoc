@@ -6,7 +6,7 @@
 * Generational collection: young/old, card table
 * JVM internals: allocation, object header, oop maps, safepoints
 * Collectors in JDK 25: Serial, Parallel, G1, Shenandoah, ZGC, Epsilon
-* Appendix: tuning and monitoring
+* GC tuning: see the chapter *Writing performant Java applications*
 
 include::gc-fundamentals.adoc[]
 

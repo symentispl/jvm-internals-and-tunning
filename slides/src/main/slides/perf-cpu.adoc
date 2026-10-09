@@ -1,0 +1,455 @@
+=== CPU bound
+
+* what does a *CPU bound* application look like from the outside?
+* how do we prove it, and find *which code* burns the cycles?
+* what can we change: algorithms, data layout, JIT friendliness, SIMD, less work
+
+=== CPU bound: where does the time go?
+
+[mermaid,format=svg]
+----
+flowchart LR
+  t["wall time"] --> r["running on CPU"]:::R
+  t --> w["waiting<br/>(lock, I/O, GC pause)"]:::N
+  r --> u["useful work<br/>(retiring instructions)"]:::G
+  r --> s["stalls<br/>(waiting for memory)"]:::Y
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef N fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* *CPU bound*: threads are ready to run and the time is spent *executing*, not waiting
+* the CPU can be busy and still stalled on memory: that is the second half of this part
+* waiting for locks, disk, network or GC is covered in the next parts
+
+=== How to recognise it
+
+[cols="2,3",options="header"]
+|===
+|Symptom |Meaning
+|high *user* CPU (`top`, `mpstat`) |time spent in your code, not in the kernel
+|*run queue* longer than the core count (`vmstat` column `r`) |more runnable threads than cores, they wait for a CPU
+|latency grows with throughput |queueing behind busy cores
+|*flame graph* with wide plateaus |a few methods own most samples
+|GC share small (GC log, JFR) |the cost is not allocation
+|===
+
+* *flame graph*: stack samples merged into boxes, width = share of CPU time (see Observability)
+
+=== Is it really CPU bound?
+
+[mermaid,format=svg]
+----
+flowchart LR
+  a["CPU busy?"] -->|no| b["not CPU bound:<br/>contention, I/O,<br/>memory parts"]:::N
+  a -->|yes| c["mostly kernel time?"]
+  c -->|yes| d["syscalls, I/O:<br/>I/O part"]:::Y
+  c -->|no| e["GC threads busy?"]
+  e -->|yes| f["memory bound:<br/>memory part"]:::Y
+  e -->|no| g["CPU bound:<br/>profile it"]:::R
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef N fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* a quick triage, not a proof: the profiler gives the proof
+* one saturated core of a single-threaded app is CPU bound too, even if `top` shows 12% of a 8 core box
+
+=== IPC: instructions per cycle
+
+[mermaid,format=svg]
+----
+flowchart LR
+  cpu["CPU core<br/>can retire several<br/>instructions per cycle"] --> hi["IPC 2 or more:<br/>compute bound,<br/>reduce the instructions"]:::G
+  cpu --> lo["IPC below 1:<br/>stalled on memory,<br/>fix data layout"]:::R
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+----
+
+* *IPC* = instructions retired / CPU cycles, read from hardware counters
+* *cache miss*: the data is not in L1/L2/L3 and the core waits for main memory (see Concurrency, cache hierarchy)
+* rule of thumb, not a law: IPC well below 1 usually means the CPU is waiting for memory, not computing
+* a "100% busy" CPU says nothing about which of the two it is
+
+=== How to investigate: the ladder
+
+[mermaid,format=svg]
+----
+flowchart LR
+  a["1. where?<br/>async-profiler / JFR"]:::R --> b["2. how much?<br/>JMH"]:::Y --> c["3. why slow?<br/>perf stat, JIT logs"]:::Y --> d["4. fix and<br/>measure again"]:::G
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+----
+
+* never optimise before you know *where* the CPU goes
+* every fix is a hypothesis: measure before and after
+
+=== async-profiler in CPU mode
+
+ asprof -e cpu -d 30 -f cpu.html <pid>
+
+* samples the stacks of threads that are *on CPU*, idle threads cost nothing
+* sees Java, native and kernel frames, low overhead (see Observability for how it works)
+* `-e cpu` uses `perf_events` where allowed, otherwise falls back to timer based `itimer`
+* add `-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints` for better line attribution
+
+=== Reading a CPU flame graph
+
+[mermaid,format=svg]
+----
+block-beta
+  columns 6
+  main["main"]:6
+  a["process"]:6
+  b["parse"]:1 c["score"]:4 d["log"]:1
+  e["x"]:1 f["Math.pow"]:2 g["HashMap.get"]:2 h["y"]:1
+  classDef hot fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
+  class f,g hot
+  class main,a,b,c,d,e,h n
+----
+
+* look at the *top edge*: wide boxes with nothing above them burn the cycles themselves
+* a wide box in the middle (`score`) is a *subtree*: ask who calls it and how often
+* if the plateau is JDK code (`HashMap.get`), the question is *why we call it so much*
+* fix the widest plateau first, then profile again: the graph changes
+
+=== JFR: hot methods
+
+ java -XX:StartFlightRecording=filename=rec.jfr,settings=profile ...
+ jfr print --events jdk.ExecutionSample rec.jfr
+ jfr view hot-methods rec.jfr
+
+* `jdk.ExecutionSample` is a sample of the stack of threads running Java code (see Observability)
+* `jfr view hot-methods` aggregates the samples per method, no extra tool needed
+* in the JDK Mission Control the same data is a flame graph
+
+=== JEP 509: JFR CPU-time profiling
+
+[mermaid,format=svg]
+----
+flowchart LR
+  k["Linux kernel<br/>CPU-time timer"] -->|"signal every N ms<br/>of CPU time"| t["running thread"] --> e["jdk.CPUTimeSample<br/>stack trace"]:::G
+  b["blocked thread"]:::N -.->|"no CPU, no sample"| k
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef N fill:#eeeeee,stroke:#9e9e9e,color:#555
+----
+
+* *experimental* in JDK 25, *Linux only*, the event is off by default
+* samples by *CPU time*, not by wall time: blocked threads add nothing
+* native work is attributed to the Java method calling it
+
+ java -XX:StartFlightRecording:jdk.CPUTimeSample#enabled=true,filename=cpu.jfr ...
+
+=== JMH: how much does it cost?
+
+[mermaid,format=svg]
+----
+flowchart LR
+  f["fork new JVM"] --> w["warm-up<br/>iterations"]:::Y --> m["measured<br/>iterations"]:::G --> r["score +<br/>error"]
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+----
+
+* *JMH* (Java Microbenchmark Harness) is the OpenJDK tool for benchmarks of small pieces of code
+* a hand made `System.nanoTime()` loop is usually measuring the JIT, not your code
+* use it to compare two variants *after* the profiler pointed at the code
+
+=== JMH: a minimal benchmark
+
+[source,java]
+----
+@State(Scope.Thread)
+public class SumBench {
+  int[] data = new Random(42).ints(1_000_000).toArray();
+
+  @Benchmark
+  public long sum() {          // returned value defeats dead code elimination
+    long s = 0;
+    for (int v : data) s += v;
+    return s;
+  }
+}
+----
+
+* inputs live in `@State` fields, so constants are not folded away
+* return the result or give it to a `Blackhole`
+* a microbenchmark can lie: confirm the win in the real application
+
+=== perf stat: IPC and cache misses
+
+ perf stat -e cycles,instructions,cache-misses,branch-misses -p <pid> -- sleep 10
+
+[cols="2,3",options="header"]
+|===
+|Counter |Read it as
+|`instructions` / `cycles` |IPC, low = stalled
+|`cache-misses` |loads that went to main memory
+|`branch-misses` |*mispredicted branch*: the CPU guessed wrong and flushes its pipeline
+|===
+
+* counters may be unavailable in VMs and containers
+* it says *that* the CPU stalls, the profiler says *where*
+
+=== JIT logs: is the hot code compiled?
+
+[mermaid,format=svg]
+----
+flowchart LR
+  i["interpreter"]:::R --> c1["C1"]:::Y --> c2["C2"]:::G
+  c2 -->|"deoptimization"| i
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+----
+
+ -Xlog:jit+compilation=debug
+ -Xlog:deoptimization=debug
+ -XX:+UnlockDiagnosticVMOptions -XX:+PrintInlining
+
+* hot method stays *interpreted* or is compiled again and again: warm-up or *deoptimization* (the JIT drops a compiled method because an assumption broke) problem
+* `PrintInlining` shows which calls were *not* inlined and why, see JIT chapter
+
+=== JITWatch
+
+* *JITWatch* is a log analyser for the JIT: it reads the `-XX:+LogCompilation` output (needs `-XX:+UnlockDiagnosticVMOptions`)
+* shows bytecode, inlining decisions and the assembly side by side, per method
+* use it when the profiler shows a hot method and you want to know what the JIT did with it
+* a tool for the last step: most CPU problems are found earlier
+
+=== How to improve: where to look
+
+[mermaid,format=svg]
+----
+flowchart LR
+  p["hot path<br/>found"]:::R --> a["do less work<br/>algorithm, cache,<br/>batch"]:::G
+  p --> d["better data layout<br/>arrays, primitives"]:::G
+  p --> j["JIT friendly code<br/>monomorphic, small"]:::Y
+  p --> s["SIMD<br/>vectorization"]:::Y
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+----
+
+* ordered by typical payoff: the cheapest and biggest wins come from the left
+* a better algorithm beats any micro tuning
+
+=== Algorithms and complexity
+
+[cols="2,1,1,1",options="header"]
+|===
+|n = 1 000 000 |O(n) |O(n log n) |O(n^2^)
+|operations |10^6^ |2 * 10^7^ |10^12^
+|at 10^9^ ops/s |1 ms |20 ms |~17 min
+|===
+
+* *complexity* = how the work grows with the input size n
+* the quadratic bug hides in tests with 100 elements and appears in production
+* typical suspects: `list.contains` in a loop, nested loops over two lists, string concatenation in a loop
+* fix: a `HashSet` / `HashMap` lookup, sorting once, an index
+
+=== Cache locality
+
+[mermaid,format=svg]
+----
+flowchart LR
+  subgraph arr["int[]: contiguous"]
+    a1["1"]:::G --- a2["2"]:::G --- a3["3"]:::G --- a4["4"]:::G
+  end
+  subgraph ll["LinkedList: pointers"]
+    l1["node"]:::R --> l2["node"]:::R --> l3["node"]:::R
+  end
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+----
+
+* a core loads a *cache line* (typically 64 bytes) at a time: neighbours come for free
+* arrays are read sequentially: the hardware *prefetcher* loads the next lines early
+* linked structures: every `next` may be a cache miss the prefetcher cannot guess
+* prefer arrays, `ArrayList`, `ArrayDeque` over `LinkedList` and trees of small nodes
+
+=== Boxing
+
+[source,java]
+----
+Map<Integer, Long> counts = new HashMap<>();
+for (int id : ids) {
+  counts.merge(id, 1L, Long::sum);   // box Integer, box Long, hash, node
+}
+----
+
+* every `Integer` and `Long` is an object: a header, a pointer, a cache miss, garbage
+* values outside the small cache (-128..127 for `Integer`) are usually new objects
+* `List<Integer>` of 1M elements is several times bigger than `int[]`
+* Project Valhalla (value classes) is the long term answer, not in JDK 25
+
+=== Primitive collections
+
+[source,java]
+----
+// Eclipse Collections, fastutil, HPPC, ...
+LongIntHashMap counts = new LongIntHashMap();
+counts.addToValue(id, 1);
+----
+
+* no boxing, no node objects: keys and values sit in plain arrays
+* a library dependency: use it for *measured* hot spots only
+* often the simplest fix is a plain `int[]` or `long[]` indexed by id
+
+=== JIT friendly code: monomorphic hot paths
+
+[mermaid,format=svg]
+----
+flowchart LR
+  m["call site<br/>shape.area()"] --> one["1 type seen<br/>inlined"]:::G
+  m --> two["2 types<br/>both inlined"]:::Y
+  m --> many["3+ types<br/>vtable call, no inlining"]:::R
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+----
+
+* the type profile of the JIT chapter, now as a design rule
+* in a hot loop keep the receivers of one type: sort or group the items by type, process each group in its own loop
+* do not hide a hot loop behind a generic framework callback
+
+=== JIT friendly code: the rest
+
+* *small methods* inline well, a method above the inlining size limits does not
+* *no exceptions for control flow*: filling the stack trace is expensive, validate the input instead of catching `NumberFormatException`
+* *exceptions that are thrown often* are fine only if preallocated and without stack trace, rarely a good idea
+* branches the CPU can predict are cheap: *sorted* or uniform data is often faster than random data
+* avoid `synchronized`, `volatile` and `System.nanoTime()` calls inside the innermost loop unless needed
+
+=== Warm-up
+
+[mermaid,format=svg]
+----
+---
+config:
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#c62828"
+---
+xychart-beta
+  title "Throughput after start"
+  x-axis ["0s", "10s", "20s", "30s", "40s", "50s", "60s"]
+  y-axis "requests per second" 0 --> 100
+  line [10, 25, 50, 75, 90, 98, 100]
+----
+
+* code starts interpreted, hot methods are compiled after thousands of invocations (JIT chapter)
+* the JIT threads *also* use CPU, so a fresh JVM is slow and CPU hungry at the same time
+* do not judge a service, or a benchmark, by its first seconds
+* short lived processes (CLI, serverless) live in the warm-up phase all their life
+
+=== AOT cache: JEP 515 in JDK 25
+
+[mermaid,format=svg]
+----
+flowchart LR
+  tr["training run"] -->|"profiles of hot methods"| c["AOT cache file"]:::G
+  c --> pr["production start:<br/>JIT compiles at once,<br/>no profile gathering"]:::G
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+----
+
+* *JEP 515, Ahead-of-Time Method Profiling*: method profiles from a training run are stored in the AOT cache
+* production JVM can compile hot methods right at startup, production still keeps profiling and can adapt
+* builds on the AOT cache of JDK 24 (class loading and linking); needs no code changes
+* helps *warm-up*, it does not make steady state code faster
+
+=== SIMD
+
+[mermaid,format=svg]
+----
+flowchart LR
+  subgraph sc["scalar"]
+    s1["a0 + b0"]:::R
+    s2["a1 + b1"]:::R
+    s3["a2 + b2"]:::R
+    s4["a3 + b3"]:::R
+  end
+  subgraph ve["SIMD: one instruction"]
+    v1["a0..a3 + b0..b3"]:::G
+  end
+  sc ==> ve
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+----
+
+* *SIMD* (single instruction, multiple data): one CPU instruction works on a whole vector of values (e.g. 8 ints)
+* C2 does it automatically for simple loops: *SuperWord auto-vectorization*
+* helps with: counted `int` loops over arrays, no calls, no early exits, simple index arithmetic
+* check it with a JMH benchmark and the generated assembly, not by assumption
+
+=== Vector API
+
+[source,java]
+----
+static final VectorSpecies<Integer> S = IntVector.SPECIES_PREFERRED;
+
+for (int i = 0; i < S.loopBound(a.length); i += S.length()) {
+  IntVector.fromArray(S, a, i)
+    .add(IntVector.fromArray(S, b, i))
+    .intoArray(c, i);          // plus a scalar tail loop
+}
+----
+
+* `jdk.incubator.vector`, *JEP 508*: still the *tenth incubator* in JDK 25
+* needs `--add-modules jdk.incubator.vector`, the API may change
+* it waits for Project Valhalla, so a production use needs a plan B
+* try plain loops first, use it for proven hot numeric kernels
+
+=== Do less work
+
+[mermaid,format=svg]
+----
+flowchart LR
+  r["request"] --> c{"cached?"}
+  c -->|yes| h["return"]:::G
+  c -->|no| w["compute"]:::R --> s["store"] --> h
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+----
+
+* *cache* results of pure, expensive computations (bounded size, think about invalidation)
+* *batch*: pay the fixed cost per call once per many items
+* *move out of the loop* what does not change: compile a `Pattern`, look up a `Method`, build a formatter once
+* the fastest code is the code that does not run
+
+=== Hot loops: what to avoid
+
+* *reflection* (`Method.invoke`): slow unless turned into a `MethodHandle` held in a `static final`
+* *regex*: `String.matches` compiles the pattern every call; precompile, or use `indexOf` / `startsWith`
+* *streams*: fine in general, but in a tiny hot loop a plain `for` is often faster, measure it
+* `String.format`, `String` concatenation in a loop, `Optional` and lambdas that capture state allocate on the hot path
+* logging with string building when the level is off: use parameterised messages
+
+=== More cores?
+
+[mermaid,format=svg]
+----
+flowchart LR
+  a["one thread<br/>is the limit"] --> b["split the work<br/>parallel streams,<br/>executors"]:::Y
+  b --> c["threads share state?"]
+  c -->|no| d["scales with cores"]:::G
+  c -->|yes| e["locks and cache<br/>coherence:<br/>contention part"]:::R
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+----
+
+* adding cores helps only for work that can be split and does not fight over shared state
+* parallelism does not make the algorithm cheaper: first reduce the work, then spread it
+* when more threads give less throughput: see the *contention bound* part
+
+=== CPU bound: summary
+
+* prove it: high user CPU, run queue, wide flame graph plateaus, IPC
+* find it: async-profiler / JFR, then JMH, `perf stat`, JIT logs
+* fix in order: algorithm, data layout, JIT friendly code, SIMD, less work
+* measure after every change
+* background: JIT, GC, Concurrency and Observability chapters of this deck

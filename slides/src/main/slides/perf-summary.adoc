@@ -1,0 +1,40 @@
+=== Summary: symptom, tool, fix
+
+[cols="2,2,3,3",options="header"]
+|===
+|Symptom |Bottleneck |Confirm with |First fixes
+|CPU 100%, flame graph with wide plateaus |CPU |async-profiler cpu, JFR, `perf stat` |better algorithm, data layout, JIT friendly code
+|CPU low, throughput flat or falling with more threads |contention |thread dumps, `-e lock`, JFR monitor events |shorter critical sections, striping, lock-free, share nothing
+|CPU low, threads in socket or file read |I/O |JFR socket/file, `iostat`, `ss` |fewer round trips, batching, async or virtual threads, cheaper serialization
+|long or frequent GC pauses, high allocation rate |memory |GC log, JFR allocation, async-profiler alloc |allocate less, right collector, heap sizing
+|RSS far above heap |native memory |NMT, `pmap` |direct buffers, thread stacks, metaspace, libraries
+|===
+
+=== Remember
+
+* measure first, find the resource, change one thing, measure again
+* the biggest wins are *algorithms, round trips and allocation*, not JVM flags
+* flags and exotic tricks come last, with a measurement that justifies them
+* performance is a property you keep with *tests and monitoring*, not a one-time project
+
+=== Anti-patterns
+
+* tuning flags found on the Internet before profiling
+* optimising code that is not on the hot path
+* benchmarking without warm-up or with unused results
+* averages instead of percentiles
+* adding threads to a system that is I/O or lock bound
+* "faster" claims without numbers, the baseline and the workload
+
+=== Where to read more
+
+[cols="2,3",options="header"]
+|===
+|Topic |Chapter in this deck
+|JIT, inlining, escape analysis |JIT me baby one more time
+|memory model, locks, lock-free |Java Memory Model and concurrency
+|collectors, safepoints, barriers |Garbage collection
+|files, page cache, zero copy, mmap |Java I/O
+|profilers, JFR, NMT, logs |Voyeurs in the JVM land
+|cheap threads for blocking code |Virtual threads
+|===
