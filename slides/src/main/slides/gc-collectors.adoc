@@ -27,21 +27,33 @@
 |25 |Generational Shenandoah (JEP 521), compact object headers (JEP 519)
 |===
 
+=== Default collector and selection
+
 * also: G1 region pinning for JNI (22), G1 late barrier expansion (24), compact object headers (25)
 * *default collector*: G1, or Serial when the JVM sees < 2 CPUs or < 1792 MB memory
 * select explicitly: `-XX:+UseSerialGC`, `-XX:+UseParallelGC`, `-XX:+UseG1GC`, `-XX:+UseZGC`, `-XX:+UseShenandoahGC`
 
 === Serial and Parallel
 
-[ditaa]
+[mermaid,format=svg]
 ----
-Young (STW)     Eden + S0/S1  --mark-copy-->  S1 / Old
-Old / Full (STW)  Old  --mark-sweep-compact-->  Old (compacted)
-
-Serial     app |====|  GC  |====|        1 GC thread
-Parallel   app |====|  GC  |====|        N GC threads
-                      GC
-                      GC
+flowchart LR
+  subgraph SER["Serial: 1 GC thread"]
+    direction LR
+    sa1["app"]:::conc --> sg["GC<br/>(STW)"]:::stw --> sa2["app"]:::conc
+  end
+  subgraph PAR["Parallel: N GC threads"]
+    direction LR
+    pa1["app"]:::conc --> pg["GC x N<br/>(STW)"]:::stw --> pa2["app"]:::conc
+  end
+  Y["Young (STW)<br/>eden + S0/S1 mark-copy to S1 / old"]:::eden
+  O["Old / Full (STW)<br/>mark-sweep-compact"]:::old
+  SER ~~~ PAR
+  Y ~~~ O
+  classDef stw fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef conc fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef eden fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef old fill:#ef9a9a,stroke:#c62828,color:#000
 ----
 
 * *Serial*: one thread, tiny footprint, good for small heaps and containers with 1 CPU
@@ -58,13 +70,47 @@ Parallel   app |====|  GC  |====|        N GC threads
 
 === G1: regions
 
-[ditaa]
+[mermaid,format=svg]
 ----
-+----+----+----+----+----+----+----+----+
-| E  | E  | O  | S  | O  | E  | H  | H  |    E = eden
-+----+----+----+----+----+----+----+----+    S = survivor
-| O  |free| E  | O  |free| S  | O  | E  |    O = old
-+----+----+----+----+----+----+----+----+    H = humongous
+block-beta
+  columns 8
+  E1["eden"]
+  E2["eden"]
+  O3["old"]
+  S4["survivor"]
+  O5["old"]
+  E6["eden"]
+  H7["humongous"]
+  H8["humongous"]
+  O9["old"]
+  F10["free"]
+  E11["eden"]
+  O12["old"]
+  F13["free"]
+  S14["survivor"]
+  O15["old"]
+  E16["eden"]
+  classDef E fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef S fill:#fff59d,stroke:#f9a825,color:#000
+  classDef O fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef H fill:#ce93d8,stroke:#6a1b9a,color:#000
+  classDef F fill:#eeeeee,stroke:#9e9e9e,color:#555
+  class E1 E
+  class E2 E
+  class O3 O
+  class S4 S
+  class O5 O
+  class E6 E
+  class H7 H
+  class H8 H
+  class O9 O
+  class F10 F
+  class E11 E
+  class O12 O
+  class F13 F
+  class S14 S
+  class O15 O
+  class E16 E
 ----
 
 * heap = ~2048 equal regions, 1 MB - 512 MB each (power of 2)
@@ -73,15 +119,33 @@ Parallel   app |====|  GC  |====|        N GC threads
 
 === G1: young collection (evacuation pause)
 
-[ditaa]
+[mermaid,format=svg]
 ----
-before                       after
-+----+----+----+----+        +----+----+----+----+
-| E  | E  | O  | S  |        |free|free| O  | S  |
-+----+----+----+----+   ->   +----+----+----+----+
-| O  | E  | E  | O  |        | O  |free|free| O  |
-+----+----+----+----+        +----+----+----+----+
- live objects of E and S are copied into new S / O regions
+block-beta
+  columns 9
+  bh["before"]:4 sp1[" "] ah["after: live objects copied"]:4
+  b00["eden"] b01["eden"] b02["old"] b03["survivor"] arrow["evacuate ➜"] a00["free"] a01["free"] a02["old"] a03["survivor"]
+  b10["old"] b11["eden"] b12["eden"] b13["old"] sp2[" "] a10["old"] a11["free"] a12["free"] a13["old"]
+  classDef E fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef S fill:#fff59d,stroke:#f9a825,color:#000
+  classDef O fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef F fill:#eeeeee,stroke:#9e9e9e,color:#555
+  class b00 E
+  class b01 E
+  class b02 O
+  class b03 S
+  class a00 F
+  class a01 F
+  class a02 O
+  class a03 S
+  class b10 O
+  class b11 E
+  class b12 E
+  class b13 O
+  class a10 O
+  class a11 F
+  class a12 F
+  class a13 O
 ----
 
 * STW, parallel: live objects of the *collection set* (all eden + survivor regions) are *evacuated* (copied) to free regions
@@ -90,11 +154,11 @@ before                       after
 
 === G1: remembered sets
 
-[ditaa]
+[mermaid,format=svg]
 ----
-Region A (old)  --ref-->  Region B
-                              |
-                      RSet of B: "card 17 of A points into me"
+flowchart LR
+  A["region A (old)"] -- "reference" --> B["region B"]
+  B -.- R["RSet of B: card 17 of A points into me"]
 ----
 
 * G1 can collect *any* subset of regions, so each region keeps a *remembered set* of incoming references from other regions
@@ -103,13 +167,16 @@ Region A (old)  --ref-->  Region B
 
 === G1: concurrent marking cycle
 
-[ditaa]
+[mermaid,format=svg]
 ----
-young GC | young GC | young GC | young GC | young GC | mixed | mixed | ...
-  |                                  |
-  v                                  v
-Concurrent Start (STW)      Remark (STW) + Cleanup
-        \======= Concurrent Mark ======/
+flowchart LR
+  y1["young GC"] --> cs["Concurrent Start<br/>(STW, in a young GC)"]:::stw
+  cs --> cm["Concurrent Mark<br/>(app keeps running,<br/>young GCs continue)"]:::conc
+  cm --> rm["Remark<br/>(STW)"]:::stw
+  rm --> cl["Cleanup<br/>(frees empty regions)"]:::stw
+  cl --> mx["mixed GCs<br/>(young + old regions)"]:::stw
+  classDef stw fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef conc fill:#a5d6a7,stroke:#2e7d32,color:#000
 ----
 
 * starts when heap occupancy crosses *IHOP* (initiating heap occupancy, adaptive, ~45% initially)
@@ -127,14 +194,19 @@ Concurrent Start (STW)      Remark (STW) + Cleanup
 
 === G1: mixed collections
 
-[ditaa]
+[mermaid,format=svg]
 ----
-Old regions sorted by live data (garbage first):
- +----+----+----+----+----+----+
- | 5% |10% |30% |60% |90% |95% |   % live
- +----+----+----+----+----+----+
-  \_________/                      <- added to collection set
-   cheap to evacuate, most space reclaimed
+---
+config:
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#c62828"
+---
+xychart-beta
+  title "old regions sorted by live data: the first ones join the collection set"
+  x-axis ["r1", "r2", "r3", "r4", "r5", "r6"]
+  y-axis "% live" 0 --> 100
+  bar [5, 10, 30, 60, 90, 95]
 ----
 
 * after marking, young pauses become *mixed* pauses: young regions + a few old regions
@@ -143,12 +215,16 @@ Old regions sorted by live data (garbage first):
 
 === G1: humongous objects
 
-[ditaa]
+[mermaid,format=svg]
 ----
-region size = 4 MB
-+--------+--------+--------+--------+
-| H start| H cont.| H cont.|  free  |    one 9 MB array
-+--------+--------+--------+--------+
+block-beta
+  columns 4
+  h1["H start"] h2["H continues"] h3["H continues"] f["free"]
+  note["one 9 MB array, region size 4 MB"]:4
+  classDef H fill:#ce93d8,stroke:#6a1b9a,color:#000
+  classDef F fill:#eeeeee,stroke:#9e9e9e,color:#555
+  class h1,h2,h3 H
+  class f F
 ----
 
 * object >= 50% of a region => allocated directly in *contiguous* old regions
@@ -164,11 +240,12 @@ region size = 4 MB
 
 === Shenandoah: concurrent evacuation
 
-[ditaa]
+[mermaid,format=svg]
 ----
-          Init Mark  Concurrent Mark  Final Mark  Concurrent Evacuation  Init/Final Update Refs
-app |=====|##|=======================|##|=======================|##|=====...
-              STW                       STW                        STW
+flowchart LR
+  im["Init Mark<br/>STW"]:::stw --> cm["Concurrent Mark"]:::conc --> fm["Final Mark<br/>STW"]:::stw --> ce["Concurrent<br/>Evacuation"]:::conc --> iu["Init Update<br/>Refs STW"]:::stw --> cu["Concurrent<br/>Update Refs"]:::conc --> fu["Final Update<br/>Refs STW"]:::stw
+  classDef stw fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef conc fill:#a5d6a7,stroke:#2e7d32,color:#000
 ----
 
 * regionalised like G1, but objects are *moved while the application runs*
@@ -176,16 +253,16 @@ app |=====|##|=======================|##|=======================|##|=====...
 
 === Shenandoah: load reference barrier
 
-[ditaa]
+[mermaid,format=svg]
 ----
-load ref ->  in collection set? --no--> use it
-                  |
-                 yes
-                  v
-        already forwarded? --no--> copy object (CAS to install forwarding ptr)
-                  |
-                  v
-          return the new copy (and fix the slot)
+flowchart LR
+  L["load reference"] --> Q{"in collection<br/>set?"}
+  Q -- "no" --> U["use it"]:::conc
+  Q -- "yes" --> F{"already<br/>forwarded?"}
+  F -- "yes" --> R["return the new copy<br/>and fix the slot"]:::conc
+  F -- "no" --> C["copy object<br/>CAS installs forwarding ptr"]:::stw --> R
+  classDef stw fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef conc fill:#a5d6a7,stroke:#2e7d32,color:#000
 ----
 
 * every reference *load* goes through a barrier, so mutators always see the one current copy
@@ -208,35 +285,43 @@ load ref ->  in collection set? --no--> use it
 |===
 
 * pauses depend on root set size, not on heap size
+
+=== Shenandoah: generational mode
+
 * *generational mode* (product in JDK 25, `-XX:ShenandoahGCMode=generational`): frequent young cycles, old cycles rarely
 
 === ZGC: coloured pointers
 
-[ditaa]
+[mermaid,format=svg]
 ----
-64-bit reference
-+---------------------+------------------------------------+
-| colour / metadata   |   address (up to 16 TB heap)       |
-| bits (GC state)     |                                    |
-+---------------------+------------------------------------+
+---
+config:
+  packet:
+    bitsPerRow: 64
+    bitWidth: 20
+    rowHeight: 60
+    paddingY: 4
+---
+packet-beta
+  0-15: "colour / metadata bits (GC state)"
+  16-63: "address (up to 16 TB heap)"
 ----
 
 * GC state (e.g. "marked", "remapped", "remembered") lives in the *reference itself*
 * the object does not need to be touched to know if it was visited
 * no compressed oops with ZGC
+* exact bit layout depends on JDK version and platform
 
 === ZGC: load barrier and self-healing
 
-[ditaa]
+[mermaid,format=svg]
 ----
-load ref -> colour is "good"? --yes--> use it
-                 |
-                no
-                 v
-      mark it / relocate it / remap it
-                 |
-                 v
-      write healed reference back to the field   (self-healing)
+flowchart LR
+  L["load reference"] --> Q{"colour<br/>is good?"}
+  Q -- "yes" --> U["use it"]:::conc
+  Q -- "no" --> S["slow path:<br/>mark / relocate / remap"]:::stw --> H["write healed ref<br/>back to the field<br/>(self-healing)"]:::conc --> U
+  classDef stw fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef conc fill:#a5d6a7,stroke:#2e7d32,color:#000
 ----
 
 * the check is a bit test per loaded reference
@@ -245,12 +330,19 @@ load ref -> colour is "good"? --yes--> use it
 
 === ZGC: pages and relocation
 
-[ditaa]
+[mermaid,format=svg]
 ----
-small page 2 MB     medium page 32 MB     large page (1 object)
-+--------------+    +----------------+    +---------------------+
-| objects      |    | objects        |    | big array           |
-+--------------+    +----------------+    +---------------------+
+block-beta
+  columns 3
+  s["small page<br/>2 MB<br/>many small objects"]
+  m["medium page<br/>32 MB<br/>medium objects"]
+  l["large page<br/>1 object<br/>(big array)"]
+  classDef E fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef S fill:#fff59d,stroke:#f9a825,color:#000
+  classDef O fill:#ef9a9a,stroke:#c62828,color:#000
+  class s E
+  class m S
+  class l O
 ----
 
 * heap is a set of *pages*; garbage-heavy pages are evacuated into new pages
@@ -259,11 +351,12 @@ small page 2 MB     medium page 32 MB     large page (1 object)
 
 === ZGC: cycle
 
-[ditaa]
+[mermaid,format=svg]
 ----
-Pause Mark Start   Concurrent Mark   Pause Mark End   Concurrent Relocate
-       |===============|================|=================|
-      STW            no STW            STW              no STW
+flowchart LR
+  a["Pause<br/>Mark Start<br/>STW"]:::stw --> b["Concurrent<br/>Mark"]:::conc --> c["Pause<br/>Mark End<br/>STW"]:::stw --> d["Concurrent<br/>Relocate"]:::conc
+  classDef stw fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef conc fill:#a5d6a7,stroke:#2e7d32,color:#000
 ----
 
 * three tiny pauses (roots), everything else concurrent, sub-millisecond typical
@@ -279,24 +372,17 @@ Pause Mark Start   Concurrent Mark   Pause Mark End   Concurrent Relocate
 
 === Choosing a collector
 
-[graphviz]
+[mermaid,format=svg]
 ----
-digraph {
-	node [shape=box, style=rounded]
-	q1 [label="tiny heap / 1 CPU?", shape=diamond]
-	q2 [label="max throughput,\npauses don't matter?", shape=diamond]
-	q3 [label="need ms or sub-ms pauses\non big heaps?", shape=diamond]
-	serial [label="Serial"]
-	parallel [label="Parallel"]
-	g1 [label="G1 (default)"]
-	zgc [label="ZGC / Shenandoah"]
-	q1->serial [label="yes"]
-	q1->q2 [label="no"]
-	q2->parallel [label="yes"]
-	q2->q3 [label="no"]
-	q3->zgc [label="yes"]
-	q3->g1 [label="no"]
-}
+flowchart LR
+  q1{"tiny heap /<br/>1 CPU?"} -- "yes" --> serial["Serial"]
+  q1 -- "no" --> q2{"max throughput,<br/>pauses don't matter?"}
+  q2 -- "yes" --> parallel["Parallel"]
+  q2 -- "no" --> q3{"ms or sub-ms pauses<br/>on big heaps?"}
+  q3 -- "yes" --> zgc["ZGC / Shenandoah"]
+  q3 -- "no" --> g1["G1 (default)"]
+  classDef lead fill:#a5d6a7,stroke:#2e7d32,color:#000
+  class serial,parallel,zgc,g1 lead
 ----
 
 Tuning flags and GC monitoring: see the *Appendix*

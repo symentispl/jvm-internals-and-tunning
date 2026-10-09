@@ -36,11 +36,19 @@ T pop() {
 
 === ABA problem
 
-[ditaa]
+[mermaid,format=svg]
 ----
-T1: reads head = A (next = B), then is descheduled
-T2: pop A, pop B, push A back      head = A (next = null)
-T1: CAS(head, A, B) succeeds!      head = B, which is already removed
+sequenceDiagram
+  participant T1
+  participant H as head
+  participant T2
+  T1->>H: read head = A (next = B)
+  Note over T1: descheduled
+  T2->>H: pop A, pop B
+  T2->>H: push A back (next = null)
+  Note over H: head = A again
+  T1->>H: CAS(head, A, B) succeeds!
+  Note over H: head = B, already removed
 ----
 
 * the CAS only compares values, `A` looks unchanged
@@ -58,10 +66,19 @@ T1: CAS(head, A, B) succeeds!      head = B, which is already removed
 
 === Queues are everywhere
 
-[ditaa]
+[mermaid,format=svg]
 ----
-producer(s) --> [ ring buffer: slot slot slot slot slot ] --> consumer(s)
-                    head/tail counters, padded to avoid false sharing
+flowchart LR
+  p["producer(s)"]:::g --> rb
+  subgraph rb ["ring buffer"]
+    direction LR
+    s1["slot"]:::y --> s2["slot"]:::y --> s3["slot"]:::y --> s4["slot"]:::y --> s5["slot"]:::y
+  end
+  rb --> c["consumer(s)"]:::g
+  ix["head / tail counters<br/>padded against false sharing"]:::n -.- rb
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * SPSC / MPSC queues use plain stores + `release` / `acquire` instead of CAS where only one side writes an index

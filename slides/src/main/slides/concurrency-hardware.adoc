@@ -21,26 +21,12 @@ Everything a CPU does is about *hiding this gap*: caches, prefetching, out-of-or
 
 === One core: the pipeline
 
-[ditaa]
+[mermaid,format=svg]
 ----
-+--------------------+
-|  fetch + decode    |   in order: instructions -> micro-ops (μops)
-+--------------------+
-          |
-          v
-+--------------------+
-|  rename + schedule |   μops wait in a queue until their inputs are ready
-+--------------------+
-          |
-          v
-+--------------------+
-|  execute           |   out of order, on many execution units
-+--------------------+
-          |
-          v
-+--------------------+
-|  retire            |   results become final in program order
-+--------------------+
+flowchart LR
+  a["fetch + decode<br/>in order<br/>instructions to μops"]:::y --> b["rename + schedule<br/>μops wait until<br/>inputs are ready"]:::y --> c["execute<br/>out of order<br/>many execution units"]:::g --> d["retire<br/>results final<br/>in program order"]:::y
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
 ----
 
 === Micro-ops
@@ -65,13 +51,15 @@ Everything a CPU does is about *hiding this gap*: caches, prefetching, out-of-or
 
 === Store buffer
 
-[ditaa]
+[mermaid,format=svg]
 ----
-+--------+     +--------------+     +----------+     +--------+
-| core   | --> | store buffer | --> | L1 cache | --> | memory |
-+--------+     +--------------+     +----------+     +--------+
- store retires    waits here          becomes visible to others
- immediately
+flowchart LR
+  c["core<br/>store retires immediately"]:::g --> sb["store buffer<br/>store waits here"]:::y --> l1["L1 cache<br/>visible to other cores"]:::r --> m["memory"]:::n
+  c -. "own loads: store forwarding" .-> sb
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * a store does not wait for the cache line, it goes to a *store buffer*
@@ -93,42 +81,55 @@ The JMM is weaker than any CPU, the JIT inserts barriers per platform
 
 === Cache hierarchy
 
-[ditaa]
+[mermaid,format=svg]
 ----
-+---------+   +---------+   +---------+   +---------+
-| Core 0  |   | Core 1  |   | Core 2  |   | Core 3  |
-| L1  L2  |   | L1  L2  |   | L1  L2  |   | L1  L2  |
-+---------+   +---------+   +---------+   +---------+
-     |             |             |             |
-+-----------------------------------------------------+
-|                  shared L3 cache                    |
-+-----------------------------------------------------+
-                          |
-                   +-------------+
-                   | main memory |
-                   +-------------+
+flowchart TB
+  subgraph cores [" "]
+    direction LR
+    c0["Core 0<br/>L1 + L2"]:::g
+    c1["Core 1<br/>L1 + L2"]:::g
+    c2["Core 2<br/>L1 + L2"]:::g
+    c3["Core 3<br/>L1 + L2"]:::g
+  end
+  l3["shared L3 cache"]:::y
+  mem["main memory"]:::n
+  c0 --- l3
+  c1 --- l3
+  c2 --- l3
+  c3 --- l3
+  l3 --- mem
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * memory moves in *cache lines* (64 bytes), never single bytes
 * the same line can sit in several private caches at once
 
-=== Cache coherence (MESI)
+=== MESI states
 
 [cols="1,3",options="header"]
 |===
 |State |Meaning
-|*M*odified |only this cache has the line, memory is stale
-|*E*xclusive |only this cache has the line, same as memory
-|*S*hared |several caches have it, read-only
-|*I*nvalid |line is not usable
+|**M**odified |only this cache has the line, memory is stale
+|**E**xclusive |only this cache has the line, same as memory
+|**S**hared |several caches have it, read-only
+|**I**nvalid |line is not usable
 |===
 
-[ditaa]
+=== Cache coherence: a write invalidates
+
+[mermaid,format=svg]
 ----
-Core 0 writes line X
-  |  1. send "invalidate X" to others
-  v
-Core 1: X -> Invalid  (its next read misses and fetches from Core 0)
+sequenceDiagram
+  participant C0 as Core 0
+  participant C1 as Core 1
+  Note over C0,C1: line X is Shared in both caches
+  C0->>C1: 1. write X: invalidate X
+  Note over C0: X = Modified
+  Note over C1: X = Invalid
+  C1->>C0: 2. read X: miss
+  C0-->>C1: 3. data, both Shared again
 ----
 
 * writing needs *exclusive ownership* of the line
@@ -136,13 +137,19 @@ Core 1: X -> Invalid  (its next read misses and fetches from Core 0)
 
 === False sharing
 
-[ditaa]
+[mermaid,format=svg]
 ----
-one 64 byte cache line
-+-----------------+-----------------+----------------------------+
-| counterA (T1)   | counterB (T2)   |  ...                       |
-+-----------------+-----------------+----------------------------+
-   T1 writes --> invalidates the line in T2's cache --> T2 writes --> invalidates T1 ...
+sequenceDiagram
+  participant T1 as Thread 1 (core 0)
+  participant L as one 64 byte line<br/>counterA | counterB
+  participant T2 as Thread 2 (core 1)
+  T1->>L: write counterA
+  L-->>T2: invalidate line
+  T2->>L: write counterB
+  L-->>T1: invalidate line
+  T1->>L: write counterA
+  L-->>T2: invalidate line again
+  Note over T1,T2: different variables, same line: ping-pong
 ----
 
 * two threads write *different* variables on the *same* cache line

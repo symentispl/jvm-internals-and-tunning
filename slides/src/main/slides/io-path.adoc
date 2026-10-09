@@ -17,21 +17,14 @@ What really happens when we call `read()`?
 
 === Layers
 
-[ditaa]
+[mermaid,format=svg]
 ----
-+---------------------------+
-| your code                 |  FileInputStream / Files / FileChannel
-+---------------------------+
-| JDK Java classes          |  FileDescriptor, buffers
-+---------------------------+
-| JDK native code (JNI)     |  C, libjava / libnio
-+---------------------------+
-| libc                      |  read(), write(), open()
-+---------------------------+
-| kernel                    |  VFS, page cache, drivers
-+---------------------------+
-| device                    |  SSD / NVMe / disk
-+---------------------------+
+flowchart LR
+  a["your code<br/>FileInputStream<br/>Files, FileChannel"]:::g --> b["JDK Java<br/>FileDescriptor<br/>buffers"]:::g --> c["JDK native<br/>JNI<br/>libjava, libnio"]:::y --> d["libc<br/>read(), write()<br/>open()"]:::y --> e["kernel<br/>VFS, page cache<br/>drivers"]:::r --> f["device<br/>SSD / NVMe"]:::n
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 === File vs Path
@@ -42,13 +35,22 @@ What really happens when we call `read()`?
 
 === File descriptor
 
-[ditaa]
+[mermaid,format=svg]
 ----
-process fd table        open file description (kernel)       inode
-+---+----------------+  +---------------------------+     +------------+
-| 3 | ---------------+->| offset, flags (R/W, append)| --> | file data  |
-| 4 | ---------------+->|                           |     | on disk    |
-+---+----------------+  +---------------------------+     +------------+
+flowchart LR
+  subgraph P["process: fd table"]
+    f3["fd 3"]
+    f4["fd 4"]
+  end
+  o["open file description<br/>offset, flags (R/W, append)"]:::r
+  i["inode<br/>file data on disk"]:::n
+  f3 --> o
+  f4 --> o
+  o --> i
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * an *fd* is a small integer: an index into the process table of open files
@@ -74,14 +76,26 @@ write()                                           <system call>
 
 === Why does the JDK copy the array?
 
-[ditaa]
+[mermaid,format=svg]
 ----
-Java heap                         native memory
-+-------------+   memcpy   +--------------------+   write()   +--------+
-| byte[] buf  | ---------> | C buffer           | ----------> | kernel |
-+-------------+            | (stack <= 8 KB,    |             +--------+
-                           |  else malloc)      |
-                           +--------------------+
+flowchart LR
+  subgraph H["Java heap"]
+    direction LR
+    a["byte[] buf"]:::g
+  end
+  subgraph N["native memory"]
+    direction LR
+    b["C buffer<br/>stack up to 8 KB, else malloc"]:::y
+  end
+  subgraph K["kernel"]
+    direction LR
+    k["write()"]:::r
+  end
+  a -- "memcpy" --> b -- "write()" --> k
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * the *GC may move* a heap array at any time, the kernel needs a stable address
@@ -90,15 +104,21 @@ Java heap                         native memory
 
 === NIO: direct buffers
 
-[ditaa]
+[mermaid,format=svg]
 ----
-FileChannel.write(heapBuffer)               FileChannel.write(directBuffer)
-
-heap buffer --copy--> temp direct buffer    direct buffer ---------------> write()
-                      (thread local cache)  (native memory, never moved)
-                          |
-                          v
-                       write()
+flowchart LR
+  subgraph DB["write(directBuffer)"]
+    direction LR
+    d1["direct buffer<br/>(native memory, never moved)"]:::y --> k2["write()"]:::r
+  end
+  subgraph HB["write(heapBuffer)"]
+    direction LR
+    h1["heap buffer"]:::g -- "copy" --> t["temp direct buffer<br/>(thread-local cache)"]:::y --> k1["write()"]:::r
+  end
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * `ByteBuffer.allocateDirect()` lives in native memory (outside the Java heap), the GC never moves it

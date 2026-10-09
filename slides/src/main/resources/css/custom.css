@@ -2,3 +2,19 @@
   background-color: rgba(0, 0, 0, 0.6);
   color: white;
 }
+
+/* mermaid diagrams are SVG: scale to the slide width, but leave room for bullets */
+.reveal img[src*="diag-mermaid"] {
+  max-height: 380px;
+  max-width: 100%;
+  width: auto;
+}
+
+/* long content must fit the 1280x960 slide */
+.reveal table { font-size: 0.55em; }
+.reveal table th, .reveal table td { padding: 0.25em 0.6em; }
+.reveal ul, .reveal ol { font-size: 0.85em; }
+.reveal li { margin-bottom: 0.15em; }
+.reveal pre code { max-height: 560px; }
+.reveal dl { font-size: 0.7em; }
+.reveal dt { margin-top: 0.4em; }

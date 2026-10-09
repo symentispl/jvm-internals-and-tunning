@@ -7,51 +7,42 @@
 
 === Reachability
 
-[graphviz]
+[mermaid,format=svg]
 ----
-digraph {
-	rankdir=LR
-	node [shape=box]
-	A->B
-	A->C
-	A->D
-	B->E
-	C->E
-	F->G
-	G->H
-	I->J
-
-	A [label="A (GC root)"]
-	F [label="F (GC root)"]
-	I [label="I (unreachable)", style=dashed]
-	J [label="J (unreachable)", style=dashed]
-}
+flowchart LR
+  A["A<br/>(GC root)"]:::live --> B["B"]:::live
+  A --> C["C"]:::live
+  A --> D["D"]:::live
+  B --> E["E"]:::live
+  C --> E
+  F["F<br/>(GC root)"]:::live --> G["G"]:::live --> H["H"]:::live
+  I["I<br/>(unreachable)"]:::dead --> J["J<br/>(unreachable)"]:::dead
+  classDef live fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef dead fill:#eeeeee,stroke:#9e9e9e,color:#555,stroke-dasharray:5 5
 ----
 
 An object is *live* if it can be reached from a GC root, everything else is garbage
 
 === GC roots
 
-[graphviz]
+[mermaid,format=svg]
 ----
-digraph {
-	rankdir=LR
-	node [shape=box]
-	subgraph cluster_roots {
-		label="GC roots"
-		stack  [label="thread stacks\n(locals, operands)"]
-		static [label="static fields\n(of loaded classes)"]
-		jni    [label="JNI handles"]
-		cl     [label="class loaders,\nclass mirrors"]
-		mon    [label="monitors, internal\nJVM structures"]
-	}
-	heap [label="object graph\nin the heap", shape=ellipse]
-	stack->heap
-	static->heap
-	jni->heap
-	cl->heap
-	mon->heap
-}
+flowchart TB
+  subgraph roots["GC roots"]
+    direction LR
+    stack["thread stacks<br/>(locals, operands)"]
+    static["static fields<br/>(of loaded classes)"]
+    jni["JNI handles"]
+    cl["class loaders,<br/>class mirrors"]
+    mon["monitors, internal<br/>JVM structures"]
+  end
+  heap(["object graph<br/>in the heap"]):::live
+  stack --> heap
+  static --> heap
+  jni --> heap
+  cl --> heap
+  mon --> heap
+  classDef live fill:#a5d6a7,stroke:#2e7d32,color:#000
 ----
 
 === Reference strength
@@ -70,19 +61,14 @@ digraph {
 
 === Tracing: tri-colour marking
 
-[graphviz]
+[mermaid,format=svg]
 ----
-digraph {
-	rankdir=LR
-	node [shape=circle, style=filled]
-	root [label="root", fillcolor=gray]
-	a [label="A", fillcolor=black, fontcolor=white]
-	b [label="B", fillcolor=gray]
-	c [label="C", fillcolor=white]
-	d [label="D", fillcolor=white]
-	root->a->b->c
-	a->d
-}
+flowchart LR
+  root(("root")):::grey --> a(("A")):::black --> b(("B")):::grey --> c(("C")):::white
+  a --> d(("D")):::white
+  classDef white fill:#fff,stroke:#000,color:#000
+  classDef grey fill:#bdbdbd,stroke:#000,color:#000
+  classDef black fill:#000,stroke:#000,color:#fff
 ----
 
 * *white* - not visited yet (garbage if still white at the end)
@@ -94,17 +80,15 @@ digraph {
 
 If the mutator runs while the collector marks, it can hide a live object
 
-[graphviz]
+[mermaid,format=svg]
 ----
-digraph {
-	rankdir=LR
-	node [shape=circle, style=filled]
-	a [label="A", fillcolor=black, fontcolor=white]
-	b [label="B", fillcolor=gray]
-	c [label="C", fillcolor=white]
-	a->c [label="mutator: A.f = C", color=red, fontcolor=red]
-	b->c [label="mutator: B.f = null", style=dashed, color=red, fontcolor=red]
-}
+flowchart LR
+  a(("A")):::black -- "mutator: A.f = C" --> c(("C")):::white
+  b(("B")):::grey -. "mutator: B.f = null" .-> c
+  linkStyle 0,1 stroke:#c62828,color:#c62828
+  classDef white fill:#fff,stroke:#000,color:#000
+  classDef grey fill:#bdbdbd,stroke:#000,color:#000
+  classDef black fill:#000,stroke:#000,color:#fff
 ----
 
 C is live (via black A) but the collector will never scan A again, so C would be freed
@@ -126,15 +110,21 @@ Cost: a few instructions on every reference access, paid by the application
 
 === Reclaiming memory: mark-sweep
 
-[ditaa]
+[mermaid,format=svg]
 ----
-before   +---+---+---+---+---+---+---+---+
-         | A | x | B | x | x | C | x | D |
-         +---+---+---+---+---+---+---+---+
-after    +---+---+---+---+---+---+---+---+
-         | A |   | B |   |   | C |   | D |
-         +---+---+---+---+---+---+---+---+
-              free list: 4 holes, no big block
+block-beta
+  columns 9
+  l1["before"] a1["A"] x1["x"] b1["B"] x2["x"] x3["x"] c1["C"] x4["x"] d1["D"]
+  l2["after"] a2["A"] h1["free"] b2["B"] h2["free"] h3["free"] c2["C"] h4["free"] d2["D"]
+  n["free list: 4 holes, no big block"]:9
+  classDef L fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef X fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef F fill:#eeeeee,stroke:#9e9e9e,color:#555
+  classDef T fill:#fff,stroke:#fff,color:#000
+  class a1,b1,c1,d1,a2,b2,c2,d2 L
+  class x1,x2,x3,x4 X
+  class h1,h2,h3,h4 F
+  class l1,l2,n T
 ----
 
 * fast, no object movement
@@ -142,14 +132,20 @@ after    +---+---+---+---+---+---+---+---+
 
 === Reclaiming memory: mark-compact
 
-[ditaa]
+[mermaid,format=svg]
 ----
-before   +---+---+---+---+---+---+---+---+
-         | A | x | B | x | x | C | x | D |
-         +---+---+---+---+---+---+---+---+
-after    +---+---+---+---+---+---+---+---+
-         | A | B | C | D |    free       |
-         +---+---+---+---+---+---+---+---+
+block-beta
+  columns 9
+  l1["before"] a1["A"] x1["x"] b1["B"] x2["x"] x3["x"] c1["C"] x4["x"] d1["D"]
+  l2["after"] a2["A"] b2["B"] c2["C"] d2["D"] h1["free (one contiguous block)"]:4
+  classDef L fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef X fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef F fill:#eeeeee,stroke:#9e9e9e,color:#555
+  classDef T fill:#fff,stroke:#fff,color:#000
+  class a1,b1,c1,d1,a2,b2,c2,d2 L
+  class x1,x2,x3,x4 X
+  class h1 F
+  class l1,l2 T
 ----
 
 * live objects slide together, free space is one contiguous block
@@ -158,17 +154,22 @@ after    +---+---+---+---+---+---+---+---+
 
 === Reclaiming memory: mark-copy (evacuation)
 
-[ditaa]
+[mermaid,format=svg]
 ----
-from-space  +---+---+---+---+---+---+---+---+
-            | A | x | B | x | x | C | x | D |
-            +---+---+---+---+---+---+---+---+
-                  | copy live objects only
-                  v
-to-space    +---+---+---+---+---+---+---+---+
-            | A | B | C | D |    free       |
-            +---+---+---+---+---+---+---+---+
-from-space is now entirely free
+block-beta
+  columns 9
+  l1["from-space"] a1["A"] x1["x"] b1["B"] x2["x"] x3["x"] c1["C"] x4["x"] d1["D"]
+  ar["copy live objects only ⬇"]:9
+  l2["to-space"] a2["A"] b2["B"] c2["C"] d2["D"] h1["free"]:4
+  n["from-space is now entirely free"]:9
+  classDef L fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef X fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef F fill:#eeeeee,stroke:#9e9e9e,color:#555
+  classDef T fill:#fff,stroke:#fff,color:#000
+  class a1,b1,c1,d1,a2,b2,c2,d2 L
+  class x1,x2,x3,x4 X
+  class h1 F
+  class l1,l2,ar,n T
 ----
 
 * work is proportional to *live* data, not to heap size
@@ -177,18 +178,22 @@ from-space is now entirely free
 
 === Stop-the-world, parallel, concurrent
 
-[ditaa]
+[mermaid,format=svg]
 ----
-Stop-the-world   app  |==========|          |==========|
-                 GC   |          |##########|
-                                   pause
-
-Parallel         app  |==========|          |==========|
-                 GC   |          |####|     (many GC threads, still paused)
-                 GC   |          |####|
-
-Concurrent       app  |====================================|
-                 GC   |      |##########|     (GC threads run next to the app)
+block-beta
+  columns 12
+  l1["Stop-the-world"]:2 a1["app"]:3 g1["GC (1 thread)"]:4 a2["app"]:3
+  l2["Parallel"]:2 a3["app"]:3 g2["GC (many threads)"]:4 a4["app"]:3
+  l3["Concurrent"]:2 a5["app (keeps running)"]:10
+  l4["GC"]:2 space:3 g3["GC threads next to app"]:4 space:3
+  classDef A fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef G fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef C fill:#fff59d,stroke:#f9a825,color:#000
+  classDef T fill:#fff,stroke:#fff,color:#000
+  class a1,a2,a3,a4,a5 A
+  class g1,g2 G
+  class g3 C
+  class l1,l2,l3,l4 T
 ----
 
 * *stop-the-world (STW)*: all mutators are stopped, simplest
@@ -197,14 +202,12 @@ Concurrent       app  |====================================|
 
 === The GC trade-off triangle
 
-[ditaa]
+[mermaid,format=svg]
 ----
-              low pause
-                /\
-               /  \
-              /    \
-             /      \
-   high throughput --- small footprint
+flowchart LR
+  P["low pause"] --- T["high throughput"] --- M["small footprint"] --- P
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#000
+  class P,T,M n
 ----
 
 You can optimise two, the third pays for it

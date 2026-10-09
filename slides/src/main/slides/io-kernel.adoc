@@ -1,27 +1,14 @@
 === The Linux storage stack
 
-[ditaa]
+[mermaid,format=svg]
 ----
-      |  read(), write()
-      v
-+------------+      +--------------+
-|    VFS     |<---->|  page cache  |
-+------------+      +--------------+
-      |
-      v
-+------------+
-| filesystem |   ext4, xfs, ...
-+------------+
-      |
-      v
-+-------------------------+
-| block layer             |   I/O queues, I/O scheduler
-+-------------------------+
-      |
-      v
-+------------+
-|   driver   |   SATA, NVMe
-+------------+
+flowchart LR
+  app["read(), write()"]:::g --> vfs["VFS"]:::y --> fs["filesystem<br/>ext4, xfs"]:::y --> bl["block layer<br/>queues, scheduler"]:::y --> dr["driver<br/>SATA, NVMe"]:::n
+  vfs <--> pc["page cache"]:::r
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * *VFS*: one interface for all filesystems
@@ -29,12 +16,23 @@
 
 === Page cache
 
-[ditaa]
+[mermaid,format=svg]
 ----
-read(): hit                   read(): miss                  write()
-app <-- page cache            app <-- page cache <-- disk   app --> page cache (dirty page)
-                               (+ read-ahead of next pages)                |
-                                                              flusher thread later --> disk
+sequenceDiagram
+  participant A as app
+  participant P as page cache
+  participant D as disk
+  participant F as flusher
+  Note over A,D: read(): hit
+  A->>P: read
+  P-->>A: data
+  Note over A,D: read(): miss
+  A->>P: read
+  P->>D: load page + read-ahead
+  D-->>A: data via page cache
+  Note over A,F: write()
+  A->>P: write, page marked dirty
+  F->>D: later: flush dirty pages
 ----
 
 * the kernel keeps file data in RAM in 4 KB *pages*
@@ -44,11 +42,14 @@ app <-- page cache            app <-- page cache <-- disk   app --> page cache (
 
 === Copies on the read path
 
-[ditaa]
+[mermaid,format=svg]
 ----
-+-------------+      +----------------+      +----------------+      +----------------------+
-|cRED device  |----->|cRED page cache |----->|cBLU native buf |----->|cBLU Java heap buffer |
-+-------------+  DMA +----------------+ copy +----------------+ copy +----------------------+
+flowchart LR
+  d["device"]:::n -- "DMA" --> p["page cache"]:::r -- "copy" --> n["native buffer"]:::y -- "copy" --> j["Java heap buffer"]:::g
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * DMA: the device writes into the page cache without CPU

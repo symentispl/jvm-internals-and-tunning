@@ -20,13 +20,15 @@ istore_1
 
 === Compare-and-swap
 
-[ditaa]
+[mermaid,format=svg]
 ----
-lock cmpxchg [addr], new       (expected value in EAX)
-
-   [addr] == EAX ?  --yes-->  [addr] = new, ZF = 1  (success)
-        |
-        no --> EAX = [addr], ZF = 0  (failure, somebody else won)
+flowchart LR
+  s(["lock cmpxchg addr, new<br/>expected value in EAX"]):::y --> q{"addr == EAX ?"}
+  q -- "yes" --> ok["addr = new, ZF = 1<br/>success"]:::g
+  q -- "no" --> ko["EAX = addr, ZF = 0<br/>failure, somebody else won"]:::r
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
 ----
 
 * one instruction, atomic across all cores: the core owns the cache line for its duration (`lock` prefix)
@@ -50,13 +52,24 @@ do {
 
 === LongAdder
 
-[ditaa]
+[mermaid,format=svg]
 ----
-AtomicLong                         LongAdder
-+-------+                          +------+ +------+ +------+ +------+
-| value | <-- all threads CAS      | base | | cell | | cell | | cell |  <-- threads hash to cells
-+-------+                          +------+ +------+ +------+ +------+
-                                   sum() = base + cell0 + cell1 + ...
+block-beta
+  columns 6
+  a1["AtomicLong:<br/>all threads CAS<br/>one value"] v["value"] space space space space
+  a2["LongAdder:<br/>threads hash<br/>to a cell"] b["base"] c0["cell 0"] c1["cell 1"] c2["cell 2"] s["sum() = base<br/>+ all cells"]
+  class a1 n
+  class a2 n
+  class v r
+  class b g
+  class c0 g
+  class c1 g
+  class c2 g
+  class s y
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 === synchronized
@@ -68,19 +81,18 @@ AtomicLong                         LongAdder
 
 === Monitor states
 
-[graphviz]
+[mermaid,format=svg]
 ----
-digraph {
-	rankdir=LR
-	node [shape=box]
-	free [label="unlocked"]
-	thin [label="lightweight lock\n(CAS on object header / lock stack)"]
-	fat  [label="inflated\nObjectMonitor"]
-	free->thin [label="lock (CAS)"]
-	thin->free [label="unlock"]
-	thin->fat [label="contention,\nwait(), hashCode..."]
-	fat->free [label="deflated\nwhen idle"]
-}
+stateDiagram-v2
+  direction LR
+  free: unlocked
+  thin: lightweight lock<br/>CAS on header / lock stack
+  fat: inflated<br/>ObjectMonitor
+  [*] --> free
+  free --> thin: lock (CAS)
+  thin --> free: unlock
+  thin --> fat: contention, wait(),<br/>hashCode
+  fat --> free: deflated when idle
 ----
 
 * uncontended: one CAS, no OS involvement
@@ -103,14 +115,21 @@ digraph {
 
 === AbstractQueuedSynchronizer
 
-[ditaa]
+[mermaid,format=svg]
 ----
-state (volatile int)          wait queue (linked list of nodes)
-+---------+                   head --> [T2] --> [T3] --> [T4] <-- tail
-| 0 / 1.. |                            parked   parked   parked
-+---------+
- lock:   CAS state 0 -> 1, on failure enqueue and LockSupport.park()
- unlock: state = 0, LockSupport.unpark(first waiter)
+flowchart LR
+  st["state<br/>volatile int<br/>0 = free, 1.. = held"]:::y
+  subgraph q ["wait queue (FIFO)"]
+    direction LR
+    h["head"]:::n --> t2["T2<br/>parked"]:::r --> t3["T3<br/>parked"]:::r --> t4["T4<br/>parked"]:::r --> tl["tail"]:::n
+  end
+  lk["lock: CAS state 0 to 1<br/>on failure enqueue + park()"]:::g -.-> st
+  ul["unlock: state = 0<br/>unpark(first waiter)"]:::g -.-> st
+  st -.- q
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef r fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * *the* building block of `ReentrantLock`, `Semaphore`, `CountDownLatch`, `FutureTask`, ...

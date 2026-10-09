@@ -1,20 +1,16 @@
 === From source to machine code
 
-[graphviz]
+[mermaid,format=svg]
 ----
-digraph {
-	rankdir=LR
-	node [shape=box]
-	src [label="Foo.java"]
-	bc [label="bytecode\n(Foo.class)"]
-	interp [label="interpreter\n(slow, starts at once)"]
-	jit [label="JIT compilers\nC1, C2"]
-	mc [label="machine code\n(fast)", shape=ellipse]
-	src->bc [label="javac"]
-	bc->interp
-	interp->jit [label="hot code"]
-	jit->mc
-}
+flowchart LR
+  src["Foo.java"]:::N -- "javac" --> bc["bytecode<br/>Foo.class"]:::N
+  bc --> interp["interpreter<br/>slow, starts at once"]:::R
+  interp -- "hot code" --> jit["JIT compilers<br/>C1, C2"]:::Y
+  jit --> mc["machine code<br/>fast"]:::G
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef N fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * bytecode is portable, the CPU needs machine code
@@ -65,22 +61,21 @@ public static long fibonacci(int n) {
 
 === Tiered compilation
 
-[graphviz]
+[mermaid,format=svg]
 ----
-digraph {
-	rankdir=LR
-	node [shape=box]
-	t0 [label="tier 0\ninterpreter\n(profiles)"]
-	t3 [label="tier 3\nC1 + full profiling"]
-	t2 [label="tier 2\nC1 + counters only"]
-	t1 [label="tier 1\nC1, no profiling"]
-	t4 [label="tier 4\nC2"]
-	t0->t3
-	t3->t4
-	t0->t2 [style=dashed, label="C2 queue long"]
-	t2->t3 [style=dashed]
-	t0->t1 [style=dashed, label="trivial method"]
-}
+flowchart LR
+  t0["tier 0<br/>interpreter<br/>(profiles)"]:::R
+  t3["tier 3<br/>C1 + full profiling"]:::Y
+  t4["tier 4<br/>C2"]:::G
+  t2["tier 2<br/>C1 + counters only"]:::Y
+  t1["tier 1<br/>C1, no profiling"]:::G
+  t0 ==> t3 ==> t4
+  t0 -. "C2 queue long" .-> t2 -.-> t3
+  t0 -. "trivial method" .-> t1
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef N fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * default since Java 8: fast start thanks to C1, peak speed thanks to C2
@@ -100,13 +95,14 @@ C2 uses this data to decide what to optimize and what to *assume*
 
 === When is code compiled?
 
-[ditaa]
+[mermaid,format=svg]
 ----
-interpreter       counters grow       threshold crossed
-+---------+     +---------------+     +----------------+
-| invoke  | --> | invocations + | --> | enqueue for    |
-| / loop  |     | back-edges    |     | compilation    |
-+---------+     +---------------+     +----------------+
+flowchart LR
+  a["interpreter:<br/>invoke / loop"]:::R --> b["counters grow:<br/>invocations + back-edges"]:::Y --> c["threshold crossed:<br/>enqueue for compilation"]:::G
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef N fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * method is *hot* when invocations + loop iterations cross a threshold
@@ -115,14 +111,19 @@ interpreter       counters grow       threshold crossed
 
 === Compilation is asynchronous
 
-[ditaa]
+[mermaid,format=svg]
 ----
-app thread        compile queue          compiler thread        code cache
-+--------+       +--------------+       +----------------+     +-----------+
-| runs   | ----> | m1, m2, m3.. | ----> | C1 / C2 works  | --> | nmethod   |
-| in     |       +--------------+       +----------------+     | installed |
-| interp.|                                                      +-----------+
-+--------+  <---- next call uses compiled code ------------------------+
+sequenceDiagram
+  participant A as app thread
+  participant Q as compile queue
+  participant C as compiler thread
+  participant K as code cache
+  A->>Q: hot method m1 enqueued
+  Note over A: keeps running in interpreter
+  Q->>C: m1 dequeued
+  C->>K: install nmethod
+  A->>K: next call of m1
+  K-->>A: compiled code runs
 ----
 
 * the application keeps running (interpreted) while the method compiles
@@ -131,13 +132,17 @@ app thread        compile queue          compiler thread        code cache
 
 === On-stack replacement (OSR)
 
-[ditaa]
+[mermaid,format=svg]
 ----
-long running loop in interpreter
-
-for (i...) {     iteration 1 ... 10000       compiled version ready
-   work();   --> back-edge counter high  --> jump into compiled code
-}                                            in the middle of the loop
+sequenceDiagram
+  participant I as interpreter (loop)
+  participant Q as compiler thread
+  participant M as compiled code
+  I->>I: iteration 1 ... 10000
+  I->>Q: back-edge counter high, OSR compile
+  I->>I: loop keeps running
+  Q-->>M: OSR nmethod ready
+  I->>M: jump into compiled code, mid-loop
 ----
 
 * a method called once with a huge loop never reaches the invocation threshold
@@ -146,13 +151,17 @@ for (i...) {     iteration 1 ... 10000       compiled version ready
 
 === Code cache
 
-[ditaa]
+[mermaid,format=svg]
 ----
-+----------------------+----------------------+----------------------+
-| non-nmethod          | profiled code        | non-profiled code    |
-| stubs, interpreter,  | tier 2, 3 (C1)       | tier 1, 4 (C1, C2)   |
-| adapters             | short lived          | long lived           |
-+----------------------+----------------------+----------------------+
+block-beta
+  columns 3
+  a["non-nmethod<br/>stubs, interpreter, adapters"] b["profiled code<br/>tier 2, 3 (C1), short lived"] c["non-profiled code<br/>tier 1, 4 (C1, C2), long lived"]
+  classDef N fill:#eeeeee,stroke:#9e9e9e,color:#555
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  class a N
+  class b Y
+  class c G
 ----
 
 * compiled code (*nmethods*) lives in a fixed size native memory region

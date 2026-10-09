@@ -1,13 +1,17 @@
 === Allocation: bump the pointer
 
-[ditaa]
+[mermaid,format=svg]
 ----
-Eden
-+---------+---------+---------+-----------------------+
-| Obj A   | Obj B   | Obj C   |  free                 |
-+---------+---------+---------+-----------------------+
-                              ^
-                              top (bump by object size)
+block-beta
+  columns 7
+  l["Eden"] a["Obj A"] b["Obj B"] c["Obj C"] f["free"]:2 space:1
+  space:4 top["top ⬆ (bump by object size)"]:3
+  classDef E fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef F fill:#eeeeee,stroke:#9e9e9e,color:#555
+  classDef T fill:#fff,stroke:#fff,color:#000
+  class a,b,c E
+  class f F
+  class l,top T
 ----
 
 * contiguous free space (after copy/compact) => allocation is `top += size`
@@ -15,13 +19,18 @@ Eden
 
 === TLAB: thread-local allocation buffers
 
-[ditaa]
+[mermaid,format=svg]
 ----
-Eden
-+----------+----------+----------+----------+------------+
-| TLAB T1  | TLAB T2  | TLAB T3  | TLAB T4  |   free     |
-+----------+----------+----------+----------+------------+
-  Thread1    Thread2    Thread3    Thread4
+block-beta
+  columns 6
+  l["Eden"] t1["TLAB T1"] t2["TLAB T2"] t3["TLAB T3"] t4["TLAB T4"] f["free"]
+  space:1 h1["Thread 1"] h2["Thread 2"] h3["Thread 3"] h4["Thread 4"] space:1
+  classDef E fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef F fill:#eeeeee,stroke:#9e9e9e,color:#555
+  classDef T fill:#fff,stroke:#fff,color:#000
+  class t1,t2,t3,t4 E
+  class f F
+  class l,h1,h2,h3,h4 T
 ----
 
 * each thread gets a private chunk of Eden (taken with one CAS)
@@ -30,14 +39,16 @@ Eden
 
 === Object header
 
-[ditaa]
+[mermaid,format=svg]
 ----
-+------------------------------+------------------+
-| mark word (8 B)              | klass ptr (4 B)  |   12 B header (compressed class ptr)
-| hash | age | lock | GC bits  | -> class metadata|
-+------------------------------+------------------+
-| fields ...                                      |
-+-------------------------------------------------+
+packet-beta
+  0-1: "lock"
+  2-2: "-"
+  3-6: "age"
+  7-37: "identity hash (31 bits)"
+  38-63: "GC bits / unused"
+  64-95: "klass ptr (4 B)"
+  96-127: "fields ..."
 ----
 
 * *mark word*: identity hash, GC *age*, lock state, GC marks / forwarding pointer
@@ -47,14 +58,21 @@ Eden
 
 === How does GC find references?
 
-[ditaa]
+[mermaid,format=svg]
 ----
-Heap object                       Thread stack frame
-+-------+-------+-------+        +-----------------+
-| hdr   | int   | ref   |        | local0 (int)    |
-+-------+-------+-------+        | local1 (ref) <--+-- *oop map* says
-        oop map of class:        | operand (ref)   |   slots 1, 2 are refs
-        "field 2 is a ref"       +-----------------+
+flowchart LR
+  subgraph obj["Heap object"]
+    direction LR
+    h["hdr"] ~~~ i["int"] ~~~ r["ref"]:::ref
+  end
+  subgraph fr["Thread stack frame"]
+    direction TB
+    l0["local0 (int)"] ~~~ l1["local1 (ref)"]:::ref ~~~ op["operand (ref)"]:::ref
+  end
+  om1(["oop map of class:<br/>field 2 is a ref"]):::map -.-> r
+  om2(["oop map at safepoint:<br/>slots 1, 2 are refs"]):::map -.-> l1
+  classDef ref fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef map fill:#fff59d,stroke:#f9a825,color:#000
 ----
 
 * GC must tell references from plain numbers precisely
@@ -84,13 +102,11 @@ The JVM cannot force a thread to stop, threads stop *themselves* when they see t
 
 === Safepoint polling
 
-[ditaa]
+[mermaid,format=svg]
 ----
-JVM arms the poll          thread hits poll           thread parks
-+----------------+         +-----------------+        +---------+
-| poll page      |  --->   | test [poll_page]|  --->  |  wait   |
-| made unreadable|         | -> trap/branch  |        |         |
-+----------------+         +-----------------+        +---------+
+flowchart LR
+  a["JVM arms the poll<br/>poll page made unreadable"]:::stw --> b["thread hits the poll<br/>test poll_page, trap"] --> c["thread parks<br/>(waits)"]:::stw
+  classDef stw fill:#ef9a9a,stroke:#c62828,color:#000
 ----
 
 * poll = a read of a special memory page (JIT compiled code), armed by protecting that page
@@ -99,15 +115,23 @@ JVM arms the poll          thread hits poll           thread parks
 
 === Time to safepoint
 
-[ditaa]
+[mermaid,format=svg]
 ----
-JVM requests safepoint
- |
- J1 |=====|~stopped~~~~~~~~~~~~~~~~~~~~~~~~~~~|
- J2 |=============================|~stopped~~~~|   long loop without poll
- J3 |===========|~stopped~~~~~~~~~~~~~~~~~~~~~|
- J4 (in JNI)  already stopped
- |<---- time to safepoint ---->|<---- GC work ---->|
+block-beta
+  columns 11
+  l1["J1"] r1["running"]:2 s1["stopped, waiting"]:8
+  l2["J2 (long loop, no poll)"] r2["running"]:7 s2["stopped"]:3
+  l3["J3"] r3["running"]:4 s3["stopped, waiting"]:6
+  l4["J4 (in JNI)"] s4["already stopped"]:10
+  l5["JVM requests safepoint"] t["time to safepoint"]:7 g["GC work"]:3
+  classDef R fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef W fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef P fill:#fff59d,stroke:#f9a825,color:#000
+  classDef T fill:#fff,stroke:#fff,color:#000
+  class r1,r2,r3 R
+  class s1,s2,s3,s4,g W
+  class t P
+  class l1,l2,l3,l4,l5 T
 ----
 
 * every thread waits for the slowest one

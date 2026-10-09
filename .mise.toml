@@ -21,7 +21,7 @@ description = "Build the slides (HTML output in build/slides/)"
 depends = ["install"]
 run = [
   "mkdir -p build/slides",
-  "bundle exec asciidoctor -r asciidoctor-revealjs -r asciidoctor-diagram -b revealjs -a revealjsdir=https://cdn.jsdelivr.net/npm/reveal.js@5.1.0 -a puppeteer-config=$(pwd)/slides/puppeteer-config.json -a diagram-mmdc=$(mise which mmdc) -D build/slides slides/src/main/slides/index.adoc",
+  "bundle exec asciidoctor -r asciidoctor-revealjs -r asciidoctor-diagram -b revealjs -a revealjsdir=https://cdn.jsdelivr.net/npm/reveal.js@5.1.0 -a puppeteer-config=$(pwd)/slides/puppeteer-config.json -a mmdc=$(pwd)/bin/mmdc -D build/slides slides/src/main/slides/index.adoc",
   "cp -r slides/src/main/resources/. build/slides/"
 ]
 

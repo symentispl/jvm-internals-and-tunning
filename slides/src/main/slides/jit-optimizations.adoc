@@ -7,13 +7,20 @@
 
 === Inlining
 
-[ditaa]
+[mermaid,format=svg]
 ----
-before                            after inlining getX() and add()
-
-main()                            main()
-  |--> add(a, b)                    t = a.getX() body + b
-         |--> a.getX()              (one big method, no calls)
+flowchart LR
+  subgraph before
+    m1["main()"]:::R --> add["add(a, b)"]:::R --> gx["a.getX()"]:::R
+  end
+  subgraph after["after inlining"]
+    m2["main():<br/>t = a.x + b<br/>one method, no calls"]:::G
+  end
+  before ==> after
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef N fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * the callee body is pasted into the caller
@@ -115,11 +122,20 @@ compiled as: `return -1;` (and the allocation disappears)
 
 === Escape analysis
 
-[ditaa]
+[mermaid,format=svg]
 ----
-Point p = new Point(x, y);        int px = x;       // no allocation
-return p.x + p.y;           ==>   int py = y;       // fields live in registers
-                                  return px + py;
+flowchart LR
+  subgraph before
+    b1["Point p = new Point(x, y)<br/>return p.x + p.y"]:::R
+  end
+  subgraph after["after scalar replacement"]
+    a1["int px = x<br/>int py = y<br/>return px + py<br/>no allocation, fields in registers"]:::G
+  end
+  before ==> after
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef N fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * if an object never *escapes* the compiled method (not stored to the heap, not passed on), nobody else can see it
@@ -142,12 +158,20 @@ public static int lockElision(int j) {
 
 === Implicit null checks
 
-[ditaa]
+[mermaid,format=svg]
 ----
-explicit                          implicit
-test obj, obj                     mov  eax, [obj+16]     ; just load
-je   throw_NPE                    ; null => CPU fault => signal handler
-mov  eax, [obj+16]                ;   => uncommon trap / throws NPE
+flowchart LR
+  subgraph explicit
+    e1["test obj, obj"]:::R --> e2["je throw_NPE"]:::R --> e3["mov eax, obj+16"]:::R
+  end
+  subgraph implicit
+    i1["mov eax, obj+16<br/>just load"]:::G -. "null: CPU fault" .-> i2["signal handler:<br/>uncommon trap / NPE"]:::Y
+  end
+  explicit ==> implicit
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef N fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * if the profile says "never null", the check costs nothing
@@ -156,11 +180,20 @@ mov  eax, [obj+16]                ;   => uncommon trap / throws NPE
 
 === Loop optimizations
 
-[ditaa]
+[mermaid,format=svg]
 ----
-for (i = 0; i < n; i++)         for (i = 0; i < n; i += 4) {
-  sum += a[i];             ==>    sum += a[i] + a[i+1] + a[i+2] + a[i+3];
-                                }
+flowchart LR
+  subgraph before
+    b["for (i = 0; i < n; i++)<br/>sum += a[i]"]:::R
+  end
+  subgraph after["after unrolling x4"]
+    a["for (i = 0; i < n; i += 4)<br/>sum += a[i] + a[i+1]<br/>+ a[i+2] + a[i+3]"]:::G
+  end
+  before ==> after
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef N fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 * *unrolling*: more work per iteration, fewer branches and counter updates
@@ -170,14 +203,22 @@ for (i = 0; i < n; i++)         for (i = 0; i < n; i += 4) {
 
 === Auto-vectorization (SuperWord)
 
-[ditaa]
+[mermaid,format=svg]
 ----
-scalar                         SIMD (one instruction, 4+ values)
-x1 = y1 + z1                   +------+------+------+------+
-x2 = y2 + z2                   | y1   | y2   | y3   | y4   |
-x3 = y3 + z3              +    +------+------+------+------+
-x4 = y4 + z4                   | z1   | z2   | z3   | z4   |
-                               +------+------+------+------+
+flowchart LR
+  subgraph scalar
+    s["x1 = y1 + z1<br/>x2 = y2 + z2<br/>x3 = y3 + z3<br/>x4 = y4 + z4<br/>4 instructions"]:::R
+  end
+  subgraph simd["SIMD, 1 instruction"]
+    y["y1 y2 y3 y4"]:::Y --> p(("+")):::G
+    z["z1 z2 z3 z4"]:::Y --> p
+    p --> x["x1 x2 x3 x4"]:::G
+  end
+  scalar ==> simd
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+  classDef R fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef N fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
 [source,java]

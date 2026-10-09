@@ -1,17 +1,18 @@
 === Generational hypothesis
 
-[ditaa]
+[mermaid,format=svg]
 ----
- objects
- surviving
-   ^
-   |#
-   |#
-   |##
-   |####
-   |###########____________________
-   +------------------------------------> age (bytes allocated since birth)
-     most die young          few live long
+---
+config:
+  themeVariables:
+    xyChart:
+      plotColorPalette: "#c62828"
+---
+xychart-beta
+  title "objects surviving vs age (most die young, few live long)"
+  x-axis ["0", "1", "2", "3", "4", "5", "6", "7", "8"]
+  y-axis "% surviving" 0 --> 100
+  line [100, 40, 18, 10, 6, 4, 3, 3, 3]
 ----
 
 * *weak generational hypothesis*: most objects die young
@@ -19,20 +20,29 @@
 
 === Heap generations
 
-[ditaa]
+[mermaid,format=svg]
 ----
-+--------------------------------------+  +------------------------+
-|              Young                   |  |          Old           |
-| +----------------+----------+------+ |  |   (tenured)            |
-| |      Eden      |    S0    |  S1  | |  |                        |
-| +----------------+----------+------+ |  |                        |
-+--------------------------------------+  +------------------------+
-              Java heap
-
-+--------------------+  +--------------------+
-|     Metaspace      |  |     Code cache     |      outside the heap
-| (class metadata)   |  | (JIT compiled code)|      (native memory)
-+--------------------+  +--------------------+
+block-beta
+  columns 5
+  block:young:3
+    columns 3
+    yt["Young"]:3
+    eden["Eden"]:1 s0["S0"] s1["S1"]
+  end
+  block:old:2
+    columns 1
+    ot["Old (tenured)"]
+    og["objects that survived long"]
+  end
+  ms["Metaspace<br/>(class metadata)"]:2 cc["Code cache<br/>(JIT compiled code)"]:2 nat["outside the heap<br/>(native memory)"]
+  classDef E fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef S fill:#fff59d,stroke:#f9a825,color:#000
+  classDef O fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef F fill:#eeeeee,stroke:#9e9e9e,color:#555
+  class eden E
+  class s0,s1 S
+  class og O
+  class ms,cc,nat F
 ----
 
 * *Eden* - where new objects are allocated
@@ -41,14 +51,38 @@
 
 === Young collection
 
-[ditaa]
+[mermaid,format=svg]
 ----
-1. Eden full           2. copy live objects       3. swap roles
-+------+----+----+     +------+----+----+         +------+----+----+
-| Eden | S0 | S1 |     | Eden | S0 | S1 |         | Eden | S0 | S1 |
-|ABxCx |    |    | ->  | free |    | AC | ->      | free | AC |    |
-+------+----+----+     +------+----+----+         +------+----+----+
- roots: stacks, statics, old->young refs        S0 <-> S1 each GC
+block-beta
+  columns 3
+  h1["1. Eden full"] h2["2. copy live objects"] h3["3. swap roles"]
+  block:a
+    columns 1
+    a1["Eden: A B x C x"]
+    a2["S0: empty"]
+    a3["S1: empty"]
+  end
+  block:b
+    columns 1
+    b1["Eden: free"]
+    b2["S0: empty"]
+    b3["S1: A C"]
+  end
+  block:c
+    columns 1
+    c1["Eden: free"]
+    c2["S0: A C"]
+    c3["S1: empty"]
+  end
+  n["roots: stacks, statics, old-to-young refs. S0 and S1 swap each GC"]:3
+  classDef E fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef S fill:#fff59d,stroke:#f9a825,color:#000
+  classDef F fill:#eeeeee,stroke:#9e9e9e,color:#555
+  class a1 E
+  class a2,a3,b1,b2,c1,c3 F
+  class b3,c2 S
+  classDef T fill:#fff,stroke:#fff,color:#000
+  class h1,h2,h3,n T
 ----
 
 * mark-copy: only live objects are touched
@@ -64,15 +98,18 @@
 
 === The old->young problem
 
-[graphviz]
+[mermaid,format=svg]
 ----
-digraph {
-	rankdir=LR
-	node [shape=box]
-	subgraph cluster_old { label="Old"; O [label="O (old object)"] }
-	subgraph cluster_young { label="Young"; Y [label="Y (young object)"] }
-	O->Y
-}
+flowchart LR
+  subgraph old["Old"]
+    O["O (old object)"]:::O
+  end
+  subgraph young["Young"]
+    Y["Y (young object)"]:::E
+  end
+  O --> Y
+  classDef E fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef O fill:#ef9a9a,stroke:#c62828,color:#000
 ----
 
 * a young GC must not scan the whole Old generation
@@ -81,14 +118,20 @@ digraph {
 
 === Card table
 
-[ditaa]
+[mermaid,format=svg]
 ----
-Heap (Old)  +--------+--------+--------+--------+--------+
-            | card 0 | card 1 | card 2 | card 3 | card 4 |   512 B each
-            +--------+--------+--------+--------+--------+
-Card table  |   0    |   1    |   0    |   0    |   1    |   1 byte per card
-            +--------+--------+--------+--------+--------+
-                         dirty                     dirty
+block-beta
+  columns 6
+  l1["Heap (Old), 512 B per card"] c0["card 0"] c1["card 1"] c2["card 2"] c3["card 3"] c4["card 4"]
+  l2["Card table, 1 byte per card"] t0["0"] t1["1"] t2["0"] t3["0"] t4["1"]
+  classDef C fill:#ef9a9a,stroke:#c62828,color:#000
+  classDef D fill:#fff59d,stroke:#f9a825,color:#000,stroke-width:3px
+  classDef F fill:#eeeeee,stroke:#9e9e9e,color:#555
+  classDef T fill:#fff,stroke:#fff,color:#000
+  class c0,c1,c2,c3,c4 C
+  class t1,t4 D
+  class t0,t2,t3 F
+  class l1,l2 T
 ----
 
 * heap split into 512 byte *cards*, one byte per card in the card table
