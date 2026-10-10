@@ -2,8 +2,8 @@
 source "https://rubygems.org"
 
 gem "asciidoctor",          "~> 2.0"
-gem "asciidoctor-revealjs", "5.1.0"
-gem "asciidoctor-diagram",  "~> 2.2"
+gem "asciidoctor-revealjs", "5.2.0"
+gem "asciidoctor-diagram",  "~> 3.2"
 
 # Live reload dev server
 gem "guard",            "~> 2.18"
