@@ -89,4 +89,4 @@ Old code is marked *made not entrant*: running calls finish, new calls go elsewh
 * do not use exceptions for control flow
 * choose good data structures first, the compiler can't fix the algorithm
 
-Flags, logs and disassembly: see the *Appendix*
+Flags, logs and disassembly: see <<appendix_jit_flags_and_diagnostics,Appendix: JIT flags and diagnostics>>

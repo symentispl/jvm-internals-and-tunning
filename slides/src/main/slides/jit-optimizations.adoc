@@ -38,7 +38,7 @@ flowchart LR
 |max nesting of inlined calls |15
 |===
 
-* values change between JDK versions, see appendix for flags
+* values change between JDK versions, see <<inlining_settings,Appendix: inlining settings>>
 * huge methods (> 8000 bytes) are not compiled at all
 
 === Inlining unlocks other optimizations
@@ -118,7 +118,7 @@ compiled as: `return -1;` (and the allocation disappears)
 |===
 
 * *class hierarchy analysis (CHA)*: if only one loaded class implements the method, no type check is needed at all
-* the type check is guarded by an *uncommon trap* (next section)
+* the type check is guarded by an *uncommon trap* (see <<jit_speculates,JIT speculates>>)
 
 === Escape analysis
 

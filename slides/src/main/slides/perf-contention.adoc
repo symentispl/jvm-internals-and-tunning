@@ -55,7 +55,7 @@ asprof -e lock -d 30 -f locks.html <pid>     # time spent waiting for monitors a
 * async-profiler `-e lock`: *which* lock, *which* stack, how long
 * JFR `jdk.JavaMonitorEnter` (synchronized) and `jdk.ThreadPark` (j.u.c locks, queues), with the threshold set to e.g. 10 ms
 * `jdk.JavaMonitorWait` is mostly idle waiting (`Object.wait`), do not confuse it with contention
-* see the observability chapter for the tooling
+* see the <<voyeurs_in_the_jvm_land,observability chapter>> for the tooling
 
 === Investigate: OS view
 
@@ -68,7 +68,7 @@ perf c2c record -p <pid> -- sleep 10 && perf c2c report   # false sharing
 
 * many *voluntary* switches = threads wait for something (locks, I/O)
 * many *involuntary* switches with a long run queue = more runnable threads than cores
-* `perf c2c` finds cache lines bounced between cores (*HITM*), see the hardware chapter
+* `perf c2c` finds cache lines bounced between cores (*HITM*), see <<false_sharing_2,false sharing>> in the <<java_memory_model_and_concurrency,concurrency chapter>>
 
 === Investigate: draw the scalability curve
 
@@ -352,7 +352,7 @@ queue.drainTo(batch, 256);          // one lock acquisition for up to 256 items
 
 === Lock-free structures
 
-* design: no thread holds anything that others wait for, see *lock-free programming* in the concurrency chapter (CAS loop, ABA, memory ordering)
+* design: no thread holds anything that others wait for, see *lock-free programming* in the <<java_memory_model_and_concurrency,concurrency chapter>> (CAS loop, ABA, memory ordering)
 * *CAS* = compare-and-set one word atomically, the loser retries instead of sleeping
 * *MPSC* = many producers, single consumer queue; the single consumer needs no CAS
 * libraries: *JCTools* (`MpscArrayQueue`, `SpscArrayQueue`), *LMAX Disruptor* (ring buffer), `ConcurrentLinkedQueue`
@@ -454,7 +454,7 @@ flowchart LR
   classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
-* JEP 444, final in Java 21; details in the virtual threads chapter
+* JEP 444, final in Java 21; details in the <<virtual_threads,virtual threads chapter>>
 * blocking I/O or `LockSupport.park` unmounts the virtual thread: the carrier runs another one
 * Java 24 (JEP 491): `synchronized` no longer pins the carrier while blocked on a monitor
 * remaining pinning: native frames (JNI / FFM upcalls) and some class initialisation

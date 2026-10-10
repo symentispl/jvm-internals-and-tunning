@@ -1,0 +1,289 @@
+=== Create a project
+
+ mvn archetype:generate \
+   -DinteractiveMode=false \
+   -DarchetypeGroupId=org.openjdk.jmh \
+   -DarchetypeArtifactId=jmh-java-benchmark-archetype \
+   -DgroupId=org.sample -DartifactId=benchmarks -Dversion=1.0
+
+ mvn package
+ java -jar target/benchmarks.jar
+
+* the archetype builds an *uber jar* with the JMH runner, benchmarks are discovered by annotation
+* tip: keep benchmarks in a separate module, run from the jar, not from the IDE
+
+=== A benchmark
+
+[source,java]
+----
+public class CodeBenchmark {
+
+  @Benchmark
+  public int testMethod() {
+    return compute();           // returned value is consumed by JMH
+  }
+}
+----
+
+* a *benchmark* is a public method annotated with `@Benchmark`
+* JMH generates a harness around it: loop, timing, consuming the result
+
+=== How JMH runs it
+
+[mermaid,format=svg]
+----
+flowchart LR
+  r["JMH runner"] --> f["fork: fresh JVM<br/>(repeat -f times)"]
+  subgraph fork["inside one fork"]
+    direction LR
+    w["warm-up iterations<br/>-wi, result discarded"]:::y --> m["measurement iterations<br/>-i, result recorded"]:::g
+  end
+  f --> w
+  m --> a["aggregate: score ± error"]
+  classDef g fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef y fill:#fff59d,stroke:#f9a825,color:#000
+----
+
+* each fork = a fresh JVM, so profile and JIT state start clean
+* *iteration* = a fixed time (default 10 s) of repeated calls
+* more forks give more confidence, 3-5 is a good default
+
+=== Benchmark modes
+
+[cols="2,3",options="header"]
+|===
+|Mode |Measures
+|`Throughput` |operations per time unit (higher is better)
+|`AverageTime` |time per operation (lower is better)
+|`SampleTime` |distribution of times: percentiles, a tail
+|`SingleShotTime` |one call, cold: startup, class loading, warm-up cost
+|===
+
+`@BenchmarkMode(Mode.AverageTime) @OutputTimeUnit(TimeUnit.NANOSECONDS)`
+
+=== State
+
+[source,java]
+----
+@State(Scope.Thread)
+public class ListState {
+  public final ArrayList<Integer> list = new ArrayList<>();
+
+  @Setup(Level.Trial)
+  public void setUp() { for (int i = 0; i < 1000; i++) list.add(i); }
+}
+
+public class CodeBenchmark {
+  @Benchmark
+  public int sum(ListState s) {
+    int sum = 0;
+    for (int v : s.list) sum += v;
+    return sum;
+  }
+}
+----
+
+state objects hold the data a benchmark needs, so setup cost is *not* measured
+
+=== State scopes
+
+[cols="1,3",options="header"]
+|===
+|Scope |Instances
+|`Scope.Thread` |one per benchmark thread (default for private data)
+|`Scope.Benchmark` |one shared by *all* threads (shared data, contention)
+|`Scope.Group` |one per thread group (see <<asymmetric_benchmarks,asymmetric benchmarks>>)
+|===
+
+=== Fixtures: @Setup and @TearDown
+
+[cols="1,3",options="header"]
+|===
+|Level |Runs
+|`Level.Trial` |once per fork (build big data structures)
+|`Level.Iteration` |before each iteration
+|`Level.Invocation` |before each call, adds its own overhead, avoid for fast benchmarks
+|===
+
+=== Parameters
+
+[source,java]
+----
+@State(Scope.Benchmark)
+public class MapState {
+
+  @Param({"0.1", "0.5", "0.75", "1.0"})
+  public float loadFactor;
+
+  Map<String, String> map;
+
+  @Setup
+  public void setUp() { map = new HashMap<>(16, loadFactor); }
+}
+----
+
+* `@Param` runs the benchmark once per value (and per combination of several params)
+* override on the command line: `-p loadFactor=0.8,0.9`
+
+=== Dead code and Blackhole
+
+[source,java]
+----
+@Benchmark
+public void wrong() {
+  Math.sqrt(x);                    // result unused: JIT removes the call
+}
+
+@Benchmark
+public void right(Blackhole bh) {
+  bh.consume(Math.sqrt(x));        // or simply: return Math.sqrt(x);
+}
+----
+
+* *dead code elimination*: the JIT removes computations whose result is not used
+* returning the value from the benchmark method, or giving it to a `Blackhole`, keeps it alive
+
+=== Constant folding
+
+[source,java]
+----
+private final double x = Math.PI;         // constant: JIT may compute sqrt at compile time
+private double y = Math.PI;               // non-final field: must be computed
+
+@Benchmark public double folded()   { return Math.sqrt(x); }
+@Benchmark public double computed() { return Math.sqrt(y); }
+----
+
+* inputs must *look* variable to the JIT: read them from non-final `@State` fields
+* the same mistake: loops inside the benchmark, the JIT unrolls and hoists them, let JMH do the looping (`@OperationsPerInvocation` if you must)
+
+=== Asymmetric benchmarks
+
+[source,java]
+----
+@State(Scope.Group)
+public class SharedMap { ConcurrentHashMap<Integer, Integer> map = new ConcurrentHashMap<>(); }
+
+@Benchmark @Group("rw") @GroupThreads(1)
+public void write(SharedMap s) { s.map.put(1, 1); }
+
+@Benchmark @Group("rw") @GroupThreads(3)
+public Integer read(SharedMap s) { return s.map.get(1); }
+----
+
+* benchmarks in the same `@Group` run *at the same time*, each with its own number of threads
+* for read vs write paths and contention (see the <<java_memory_model_and_concurrency,concurrency chapter>>)
+* `@Threads(n)` runs *the same* benchmark on n threads
+
+=== Example: iteration speed
+
+[source,java]
+----
+@State(Scope.Thread) public class Data {
+  int[] array = new int[10_000];
+  List<Integer> arrayList = new ArrayList<>();
+  List<Integer> linkedList = new LinkedList<>();
+  // fill with the same values in @Setup
+}
+
+@Benchmark public long array(Data d)      { long s = 0; for (int v : d.array) s += v; return s; }
+@Benchmark public long arrayList(Data d)  { long s = 0; for (int v : d.arrayList) s += v; return s; }
+@Benchmark public long linkedList(Data d) { long s = 0; for (int v : d.linkedList) s += v; return s; }
+----
+
+* the question is *why* the numbers differ, not only which one is faster: memory layout, boxing, cache misses (see <<cpu_bound,CPU bound>>)
+* a benchmark gives a number, a profiler gives the explanation
+
+=== Example: counters
+
+[source,java]
+----
+@State(Scope.Benchmark) public class Counters {
+  long plain;                          // not thread safe
+  long synced;                         // synchronized
+  AtomicLong atomic = new AtomicLong();
+  LongAdder adder = new LongAdder();
+}
+
+@Benchmark @Threads(8) public void atomic(Counters c) { c.atomic.incrementAndGet(); }
+@Benchmark @Threads(8) public void adder(Counters c)  { c.adder.increment(); }
+----
+
+* compare `synchronized`, `AtomicLong`, `LongAdder` under contention with 1, 2, 4, 8 threads
+* the winner changes with the number of threads: *always measure the real concurrency level* (see <<contention_bound,Contention bound>>)
+
+=== Profilers
+
+ java -jar benchmarks.jar -lprof                 # list available
+ java -jar benchmarks.jar -prof gc               # allocation rate, GC count
+ java -jar benchmarks.jar -prof "async:output=flamegraph"
+
+[cols="1,3",options="header"]
+|===
+|Profiler |Shows
+|`gc` |bytes allocated per operation, GC time
+|`stack` |simple sampling of Java stacks
+|`async` |async-profiler: CPU, allocation, lock flame graphs
+|`perfasm` |hot assembly with `perf` (needs hsdis)
+|`perfnorm` |hardware counters per operation (cycles, cache misses)
+|`jfr` |a JFR recording of the run
+|===
+
+=== Flame graph of a benchmark
+
+[source]
+----
+java -jar target/benchmarks.jar "ReadKeyBenchmark.readKey" -f 1 \
+  -prof "async:output=flamegraph" -p bufferSize=512
+----
+
+=== !
+
+image::introdb.heap.ReadUnorderedHeapFileBenchmark.readKey.svg[background, size=contain]
+
+=== Results
+
+[source]
+----
+java -jar benchmarks.jar -rf json -rff results.json
+java -jar benchmarks.jar -rf csv  -rff results.csv
+----
+
+* default output: score *± error* per benchmark, read the error first: a big error means noise
+* export as JSON or CSV, view with *JMH Visualizer*, or compare runs in CI
+* the unit of the score depends on the mode (ops/s, ns/op)
+
+=== The benchmarking machine
+
+[mermaid,format=svg]
+----
+flowchart LR
+  n["noise sources"] --> a["CPU frequency scaling<br/>and turbo"]
+  n --> b["other processes,<br/>browser, IDE"]
+  n --> c["thermal throttling"]
+  n --> d["hyper-thread sibling<br/>and noisy cloud neighbour"]
+----
+
+* fixed CPU frequency: `sudo cpupower frequency-set -g performance`
+* quiet machine, pinned cores (`taskset`), same hardware for the comparison
+* `perf` access: `kernel.perf_event_paranoid=-1` and `kernel.kptr_restrict=0` for profilers (use only on a test machine)
+* run the comparison *twice*, on different days: if the result changes, it was noise
+
+=== Reading the results
+
+* a difference smaller than the *error* is no difference
+* a result that you can't *explain* (with a profiler or the generated assembly) is not trustworthy
+* a micro benchmark answers "which is faster *here*", the macro benchmark tells you if it *matters*
+* write down JDK version, flags, hardware, JMH settings with the results
+
+=== Why is my code slow?
+
+* sometimes code written according to all best practices is slow, for no obvious reason
+* the explanation is usually *below* the source: the JIT, the GC, the memory model, the OS
+
+=== Beyond JMH
+
+* JMH is *micro*: it can't tell you how the whole system behaves
+* macro / load tests: JMeter, Gatling, k6, wrk2 (use an *open model*, see <<coordinated_omission,coordinated omission>>)
+* in production: observability tools, JFR, profilers
+

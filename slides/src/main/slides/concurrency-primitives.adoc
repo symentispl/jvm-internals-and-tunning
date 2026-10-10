@@ -151,5 +151,5 @@ flowchart LR
 
 * `ExecutorService` = a queue of tasks + a set of worker threads
 * `ForkJoinPool`: one deque per worker, idle workers *steal* from the others
-* platform threads are 1:1 with OS threads, so they are expensive: see *virtual threads* section
+* platform threads are 1:1 with OS threads, so they are expensive: see the <<virtual_threads,virtual threads chapter>>
 * `ThreadLocal` costs memory per thread, `ScopedValue` (final in Java 25, JEP 506) is the immutable, bounded alternative

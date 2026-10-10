@@ -38,7 +38,7 @@ sequenceDiagram
 * the kernel keeps file data in RAM in 4 KB *pages*
 * *read*: a hit is a memory copy, a miss reads from disk (and prefetches the following pages, *read-ahead*)
 * *write*: copied to a page marked *dirty*, `write()` returns, a background thread writes it to disk later
-* so "written" does not mean "on disk" (see durability)
+* so "written" does not mean "on disk" (see <<durability,durability>>)
 
 === Copies on the read path
 

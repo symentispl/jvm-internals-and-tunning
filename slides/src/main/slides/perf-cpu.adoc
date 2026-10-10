@@ -35,7 +35,7 @@ flowchart LR
 |GC share small (GC log, JFR) |the cost is not allocation
 |===
 
-* *flame graph*: stack samples merged into boxes, width = share of CPU time (see Observability)
+* *flame graph*: stack samples merged into boxes, width = share of CPU time (see <<voyeurs_in_the_jvm_land,Observability>>)
 
 === Is it really CPU bound?
 
@@ -69,7 +69,7 @@ flowchart LR
 ----
 
 * *IPC* = instructions retired / CPU cycles, read from hardware counters
-* *cache miss*: the data is not in L1/L2/L3 and the core waits for main memory (see Concurrency, cache hierarchy)
+* *cache miss*: the data is not in L1/L2/L3 and the core waits for main memory (see <<cache_hierarchy,cache hierarchy>> in the <<java_memory_model_and_concurrency,concurrency chapter>>)
 * rule of thumb, not a law: IPC well below 1 usually means the CPU is waiting for memory, not computing
 * a "100% busy" CPU says nothing about which of the two it is
 
@@ -92,7 +92,7 @@ flowchart LR
  asprof -e cpu -d 30 -f cpu.html <pid>
 
 * samples the stacks of threads that are *on CPU*, idle threads cost nothing
-* sees Java, native and kernel frames, low overhead (see Observability for how it works)
+* sees Java, native and kernel frames, low overhead (see <<voyeurs_in_the_jvm_land,Observability>> for how it works)
 * `-e cpu` uses `perf_events` where allowed, otherwise falls back to timer based `itimer`
 * add `-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints` for better line attribution
 
@@ -123,7 +123,7 @@ block-beta
  jfr print --events jdk.ExecutionSample rec.jfr
  jfr view hot-methods rec.jfr
 
-* `jdk.ExecutionSample` is a sample of the stack of threads running Java code (see Observability)
+* `jdk.ExecutionSample` is a sample of the stack of threads running Java code (see <<voyeurs_in_the_jvm_land,Observability>>)
 * `jfr view hot-methods` aggregates the samples per method, no extra tool needed
 * in the JDK Mission Control the same data is a flame graph
 
@@ -211,7 +211,7 @@ flowchart LR
  -XX:+UnlockDiagnosticVMOptions -XX:+PrintInlining
 
 * hot method stays *interpreted* or is compiled again and again: warm-up or *deoptimization* (the JIT drops a compiled method because an assumption broke) problem
-* `PrintInlining` shows which calls were *not* inlined and why, see JIT chapter
+* `PrintInlining` shows which calls were *not* inlined and why, see <<jit_me_baby_one_more_time,JIT chapter>>
 
 === JITWatch
 
@@ -312,7 +312,7 @@ flowchart LR
   classDef R fill:#ef9a9a,stroke:#c62828,color:#000
 ----
 
-* the type profile of the JIT chapter, now as a design rule
+* the type profile of the <<jit_me_baby_one_more_time,JIT chapter>>, now as a design rule
 * in a hot loop keep the receivers of one type: sort or group the items by type, process each group in its own loop
 * do not hide a hot loop behind a generic framework callback
 
@@ -341,7 +341,7 @@ xychart-beta
   line [10, 25, 50, 75, 90, 98, 100]
 ----
 
-* code starts interpreted, hot methods are compiled after thousands of invocations (JIT chapter)
+* code starts interpreted, hot methods are compiled after thousands of invocations (<<jit_me_baby_one_more_time,JIT chapter>>)
 * the JIT threads *also* use CPU, so a fresh JVM is slow and CPU hungry at the same time
 * do not judge a service, or a benchmark, by its first seconds
 * short lived processes (CLI, serverless) live in the warm-up phase all their life
@@ -444,7 +444,7 @@ flowchart LR
 
 * adding cores helps only for work that can be split and does not fight over shared state
 * parallelism does not make the algorithm cheaper: first reduce the work, then spread it
-* when more threads give less throughput: see the *contention bound* part
+* when more threads give less throughput: see <<contention_bound,Contention bound>>
 
 === CPU bound: summary
 
@@ -452,4 +452,4 @@ flowchart LR
 * find it: async-profiler / JFR, then JMH, `perf stat`, JIT logs
 * fix in order: algorithm, data layout, JIT friendly code, SIMD, less work
 * measure after every change
-* background: JIT, GC, Concurrency and Observability chapters of this deck
+* background: <<jit_me_baby_one_more_time,JIT>>, <<garbage_collection,GC>>, <<java_memory_model_and_concurrency,Concurrency>> and <<voyeurs_in_the_jvm_land,Observability>> chapters

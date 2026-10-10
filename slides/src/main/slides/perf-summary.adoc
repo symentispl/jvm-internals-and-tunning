@@ -31,10 +31,10 @@
 [cols="2,3",options="header"]
 |===
 |Topic |Chapter in this deck
-|JIT, inlining, escape analysis |JIT me baby one more time
-|memory model, locks, lock-free |Java Memory Model and concurrency
-|collectors, safepoints, barriers |Garbage collection
-|files, page cache, zero copy, mmap |Java I/O
-|profilers, JFR, NMT, logs |Voyeurs in the JVM land
-|cheap threads for blocking code |Virtual threads
+|JIT, inlining, escape analysis |<<jit_me_baby_one_more_time,JIT me baby one more time>>
+|memory model, locks, lock-free |<<java_memory_model_and_concurrency,Java Memory Model and concurrency>>
+|collectors, safepoints, barriers |<<garbage_collection,Garbage collection>>
+|files, page cache, zero copy, mmap |<<java_io,Java I/O>>
+|profilers, JFR, NMT, logs |<<voyeurs_in_the_jvm_land,Voyeurs in the JVM land>>
+|cheap threads for blocking code |<<virtual_threads,Virtual threads>>
 |===

@@ -94,5 +94,5 @@ flowchart LR
 |actors (Erlang, Akka, Pony) |isolated state, communication by messages only
 |CSP (Go channels) |processes communicate over typed channels
 |STM (Clojure) |memory changes in transactions, retried on conflict
-|*virtual threads* + structured concurrency |plain blocking code, cheap threads (see next section); structured concurrency is in preview (JEP 505, 5th) in Java 25
+|*virtual threads* + structured concurrency |plain blocking code, cheap threads (see the <<virtual_threads,virtual threads chapter>>); structured concurrency is in preview (JEP 505, 5th) in Java 25
 |===

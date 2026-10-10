@@ -6,7 +6,7 @@
 * What the kernel does: page cache, block layer
 * Ways to do I/O: buffered, vectored, memory mapped, zero copy, direct
 * Durability and asynchronous I/O
-* Appendix: I/O tools and tuning
+* <<appendix_io_tools_and_tuning,Appendix: I/O tools and tuning>>
 
 include::io-path.adoc[]
 

@@ -55,7 +55,7 @@ stateDiagram-v2
 
 * a request is a thread (or a chain of them) that is either *running* or *waiting for something*
 * CPU, locks, I/O and memory: the four places where time can go
-* this chapter has one part for each
+* this chapter has one part for each: <<cpu_bound,CPU>>, <<contention_bound,contention>>, <<io_bound,I/O>>, <<memory_bound,memory>>
 
 === USE method
 
@@ -99,7 +99,7 @@ flowchart LR
 |where does CPU go? |async-profiler, JFR
 |===
 
-details of every tool: *observability* chapter
+details of every tool: <<voyeurs_in_the_jvm_land,observability chapter>>
 
 === The improvement loop
 

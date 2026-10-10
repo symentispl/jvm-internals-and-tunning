@@ -7,7 +7,7 @@
 * How the interpreter executes bytecode
 * Class loading, linking and verification
 * Generating and changing bytecode: agents, ASM, ByteBuddy, Class-File API
-* Appendix: bytecode tools and commands
+* <<appendix_bytecode_tools_and_commands,Appendix: bytecode tools and commands>>
 
 include::bytecode-machine.adoc[]
 

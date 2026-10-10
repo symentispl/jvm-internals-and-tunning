@@ -57,7 +57,7 @@ public static long fibonacci(int n) {
 |===
 
 * the *interpreter* is generated at JVM startup from templates, one per bytecode
-* GraalVM's compiler is a separate JVMCI-based option, not part of this talk
+* GraalVM's compiler is a separate JVMCI-based option, not part of this training
 
 === Tiered compilation
 
@@ -81,6 +81,79 @@ flowchart LR
 * default since Java 8: fast start thanks to C1, peak speed thanks to C2
 * typical path: 0 -> 3 -> 4
 * it does not remove warmup, it makes it shorter
+
+=== Who decides the tier? The compilation policy
+
+[mermaid,format=svg]
+----
+flowchart LR
+  c["method counters<br/>cross a threshold"] --> p{"compilation policy"}
+  p -- "trivial method,<br/>or C2 can't compile it" --> t1["tier 1<br/>C1, no profiling"]:::G
+  p -- "C2 queue is long" --> t2["tier 2<br/>C1, light counters"]:::Y
+  p -- "normal case" --> t3["tier 3<br/>C1, full profiling"]:::Y
+  t2 -- "C2 queue shrinks" --> t3
+  t3 -- "hot enough,<br/>C2 has capacity" --> t4["tier 4<br/>C2"]:::G
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+----
+
+* the *compilation policy* is a piece of HotSpot code that decides, for every hot method, *which tier next*
+* inputs: the method's counters, its size and shape, and *how busy the compilers are*
+* the tier is not fixed by your code: the same method can take a different path on a busy and on an idle JVM
+
+=== Why tier 2: compilers are busy
+
+[mermaid,format=svg]
+----
+flowchart LR
+  m["many methods get hot<br/>(start-up, warm-up)"] --> q["C2 queue grows"]
+  q --> d{"queue longer than<br/>5 x C2 threads?<br/>(Tier3DelayOn)"}
+  d -- yes --> t2["compile at tier 2:<br/>cheaper, faster than tier 3"]:::G
+  d -- no --> t3["compile at tier 3<br/>(profiling)"]:::Y
+  t2 --> w["C2 catches up:<br/>queue shorter than 2 x threads<br/>(Tier3DelayOff)"] --> t3b["recompile at tier 3,<br/>then tier 4"]:::Y
+  classDef G fill:#a5d6a7,stroke:#2e7d32,color:#000
+  classDef Y fill:#fff59d,stroke:#f9a825,color:#000
+----
+
+* *tier 3 code is slow-ish*: it updates profile counters on calls, branches and type checks
+* a method waiting in a long C2 queue would run that slow code for a long time, with no one to use the profile
+* so the policy picks *tier 2* (counters only, much cheaper), and sends the method through tier 3 later, when C2 can take it
+* this is *load feedback*: the policy reacts to the length of the queues
+
+=== Load feedback: thresholds move
+
+[cols="2,3",options="header"]
+|===
+|Mechanism |Rule
+|threshold scaling |thresholds are multiplied by `queue length / (LoadFeedback x compiler threads) + 1`, long queue = a method must be hotter to be queued
+|`Tier3LoadFeedback=5`, `Tier4LoadFeedback=3` |feedback factor for the C1 queue (tier 3) and the C2 queue (tier 4)
+|`Tier3DelayOn=5` |C2 queue longer than 5 x C2 threads: new methods go to tier 2
+|`Tier3DelayOff=2` |C2 queue shorter than 2 x C2 threads: tier 2 methods move on to tier 3
+|===
+
+on an idle JVM thresholds are the plain values (~200 invocations for tier 3, ~5000 for tier 4)
+
+=== Why tier 1: profiling is pointless
+
+* *trivial methods* (getters, setters, empty or one-line methods): C2 could not make them faster, they are mostly inlined anyway
+* methods C2 *cannot compile* (too large, unsupported constructs, or a failed compilation): a method that fails at tier 4 is recompiled at tier 1
+* tier 1 = C1 with full optimization and *no profiling*: the cheapest good code, it is *final*, the method never moves up
+* so policy saves both the profiling overhead and a useless C2 compilation
+
+=== Possible paths
+
+[cols="2,3",options="header"]
+|===
+|Path |Why
+|0 -> 3 -> 4 |the normal case, C1 profiles, then C2 optimizes
+|0 -> 2 -> 3 -> 4 |C2 is busy: cheap tier 2 first, tier 3 profiling when C2 can accept
+|0 -> 1 |trivial method, nothing to gain from C2
+|0 -> 3 -> 1 |C2 can't compile the method, fall back to tier 1
+|0 -> 4 |C1 queue is long, the interpreter profiles itself and the method skips tier 3
+|4 -> 0 |*deoptimization*: speculation failed, back to the interpreter, climb again
+|===
+
+see which tier a method got in `-Xlog:jit+compilation=debug` (tier column), or `-XX:+PrintTieredEvents` for the policy's decisions
 
 === Profiling
 

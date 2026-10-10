@@ -103,19 +103,8 @@ flowchart TB
   classDef n fill:#eeeeee,stroke:#9e9e9e,color:#555
 ----
 
-* memory moves in *cache lines* (64 bytes), never single bytes
+* memory moves in *cache lines* (64 bytes for x86_64 and arm64), never single bytes
 * the same line can sit in several private caches at once
-
-=== MESI states
-
-[cols="1,3",options="header"]
-|===
-|State |Meaning
-|**M**odified |only this cache has the line, memory is stale
-|**E**xclusive |only this cache has the line, same as memory
-|**S**hared |several caches have it, read-only
-|**I**nvalid |line is not usable
-|===
 
 === Cache coherence: a write invalidates
 
@@ -134,6 +123,19 @@ sequenceDiagram
 
 * writing needs *exclusive ownership* of the line
 * coherence makes caches consistent per line, it does *not* give ordering across lines
+
+=== MESI states
+
+There is a protocol used between caches to communicated cache line ownership changes.
+
+[cols="1,3",options="header"]
+|===
+|State |Meaning
+|**M**odified |only this cache has the line, memory is stale
+|**E**xclusive |only this cache has the line, same as memory
+|**S**hared |several caches have it, read-only
+|**I**nvalid |line is not usable
+|===
 
 === False sharing
 

@@ -20,6 +20,31 @@ Everything above is how the JIT works. This appendix is about observing and conf
 `-XX:Tier3BackEdgeThreshold`, `-XX:Tier4BackEdgeThreshold`:: back-edge counts that trigger OSR compilation
 `-XX:-BackgroundCompilation`:: compile synchronously, application waits
 
+=== Tiered policy flags: thresholds
+
+[cols="2,1,3",options="header"]
+|===
+|Flag |Default |Meaning
+|`Tier3InvocationThreshold` |200 |invocations to queue a method for tier 3
+|`Tier3CompileThreshold` |2000 |invocations + loop iterations, alternative trigger
+|`Tier3BackEdgeThreshold` |60000 |loop iterations that trigger OSR at tier 3
+|`Tier4InvocationThreshold` |5000 |invocations to queue a method for tier 4
+|`Tier4CompileThreshold` |15000 |invocations + loop iterations for tier 4
+|`Tier4BackEdgeThreshold` |40000 |loop iterations that trigger OSR at tier 4
+|===
+
+=== Tiered policy flags: load feedback
+
+[cols="2,1,3",options="header"]
+|===
+|Flag |Default |Meaning
+|`Tier3LoadFeedback` / `Tier4LoadFeedback` |5 / 3 |how strongly queue length raises thresholds
+|`Tier3DelayOn` / `Tier3DelayOff` |5 / 2 |C2 queue length (per C2 thread) to switch to / from tier 2
+|`+PrintTieredEvents` |off |print every tier decision of the policy
+|===
+
+policy source: `src/hotspot/share/compiler/compilationPolicy.cpp`
+
 === Compiler threads
 
 `-XX:CICompilerCount=N`:: total number of compiler threads (minimum 2), split between C1 and C2, scales with CPU count

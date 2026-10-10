@@ -7,7 +7,7 @@
 * Java primitives: `volatile`, `synchronized`, locks, atomics
 * Lock-free programming: CAS, ABA, spinning, queues
 * Other concurrency models
-* Appendix: concurrency diagnostics
+* <<appendix_concurrency_diagnostics,Appendix: concurrency diagnostics>>
 
 include::concurrency-hardware.adoc[]
 

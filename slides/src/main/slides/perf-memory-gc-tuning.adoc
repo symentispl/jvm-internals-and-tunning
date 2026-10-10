@@ -37,7 +37,7 @@ flowchart LR
 * you know the allocation profile and it will not change (for example batch jobs)
 * you do not own the code and cannot allocate less
 * there is a measured SLO problem tied to GC in the log
-* otherwise: allocate less first (previous section), defaults are good
+* otherwise: allocate less first (<<allocate_less_the_best_gc_tuning,allocate less>>), defaults are good
 
 === Sins of GC tuning
 
@@ -127,7 +127,7 @@ flowchart LR
 
 === G1 tuning: refinement and remembered sets
 
-* a *remembered set* (RSet) tracks references into a region, filled by write barriers and *concurrent refinement* threads (see the GC chapter)
+* a *remembered set* (RSet) tracks references into a region, filled by write barriers and *concurrent refinement* threads (see the <<garbage_collection,GC chapter>>)
 * `-XX:G1ConcRefinementThreads`: if refinement cannot keep up, application threads do the work, which you want to avoid
 * `-XX:G1RSetUpdatingPauseTimePercent=10`: share of the pause goal spent updating RSets during the pause, lower pushes work to the refinement threads
 * RSet statistics: `-Xlog:gc+remset*` and `-Xlog:gc+refine*` (the old `-XX:+G1SummarizeRSetStats` flag no longer exists)
@@ -180,7 +180,7 @@ flowchart LR
   class a,b,c,d,e y
 ----
 
-* humongous object: at least half a region, allocated straight into old regions (see the GC chapter)
+* humongous object: at least half a region, allocated straight into old regions (see the <<garbage_collection,GC chapter>>)
 * work top to bottom, change one thing at a time
 
 === Evacuation failure: the knobs
@@ -222,7 +222,7 @@ flowchart LR
 * keep the GC log on: `-Xlog:gc*,safepoint:file=gc.log:time,uptime,level,tags:filecount=5,filesize=10m`
 * compare before and after: pause percentiles, GC time share, allocation and promotion rate, tail latency of the service
 * a tuning that is not measured under realistic load is a guess
-* GCeasy, GCViewer, JFR events: see the memory bound section on investigation
+* GCeasy, GCViewer, JFR events: see <<memory_bound_how_to_investigate,Memory bound: how to investigate>>
 
 === Useful links
 

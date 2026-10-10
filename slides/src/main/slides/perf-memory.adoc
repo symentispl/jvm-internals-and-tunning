@@ -24,7 +24,7 @@ flowchart LR
 |GC takes a large share of CPU time |heap too small for the live set, or too much garbage
 |used heap after GC keeps growing |memory leak
 |RSS much larger than `-Xmx` |native memory: metaspace, direct buffers, threads, malloc
-|`OutOfMemoryError` |see next slide
+|`OutOfMemoryError` |see <<outofmemoryerror_which_one,OutOfMemoryError: which one?>>
 |===
 
 === Three numbers to know
@@ -99,7 +99,7 @@ flowchart LR
 * unified logging (JDK 9+): `-Xlog:gc*`, `-Xlog:safepoint`, `-Xlog:gc+heap=debug`
 * gather logs from a long and representative period of time
 * look at pause times, time-to-safepoint, allocation rate, promotion rate
-* see the observability chapter for the logging syntax
+* see the <<voyeurs_in_the_jvm_land,observability chapter>> for the logging syntax
 
 === Reading a GC log line
 
@@ -114,7 +114,7 @@ flowchart LR
 |`812M->96M(2048M)` |heap before, after, total: the *after* values over time are the live set
 |`14.2ms` |pause length, compare with the goal
 |gap between lines |time between collections, with the freed amount gives the allocation rate
-|`Pause Full`, `to-space exhausted` |trouble, see the GC tuning section
+|`Pause Full`, `to-space exhausted` |trouble, see <<gc_tuning_footprint_vs_throughput_vs_pause,GC tuning>>
 |===
 
 === Monitoring: tools
@@ -122,7 +122,7 @@ flowchart LR
 * GC log analysers: GCeasy, GCViewer, Censum, they chart pauses, allocation and promotion rate
 * JDK Flight Recorder (`jdk.GarbageCollection`, `jdk.GCPhasePause`, `jdk.GCHeapSummary` events)
 * `jcmd <pid> GC.heap_info`, `jstat -gcutil <pid> 1s` for a live view
-* JMX memory MXBeans for dashboards, see the observability chapter
+* JMX memory MXBeans for dashboards, see the <<voyeurs_in_the_jvm_land,observability chapter>>
 
 === JFR: who allocates?
 
@@ -148,7 +148,7 @@ asprof -e alloc -d 30 -f alloc.html <pid>
 * samples allocations on TLAB refills and outside-TLAB allocations, result is a flame graph by allocation size
 * no safepoint bias, low overhead
 * look for wide frames in your own code: that is where to allocate less
-* see the observability chapter for profiler basics
+* see the <<voyeurs_in_the_jvm_land,observability chapter>> for profiler basics
 
 === Class histogram
 
@@ -249,7 +249,7 @@ flowchart LR
   class h r
 ----
 
-* C2 removes allocations of objects that do not escape (see the JIT chapter)
+* C2 removes allocations of objects that do not escape (see the <<jit_me_baby_one_more_time,JIT chapter>>)
 * keep short-lived objects local: small methods that inline, no storing into fields or collections
 * do not rely on it for big or branching code, check with an allocation profile
 * a failing escape analysis shows up as allocation in the profile of hot code
@@ -288,7 +288,7 @@ for (Long v : list) sum += v;      // unboxing, and list holds objects
 === Reuse buffers, avoid defensive copies
 
 * reuse `byte[]`, `StringBuilder`, `ByteBuffer` per thread or per request instead of allocating per call
-* read into a caller-supplied buffer (`InputStream.read(byte[])`, `ByteBuffer`), see the I/O chapter
+* read into a caller-supplied buffer (`InputStream.read(byte[])`, `ByteBuffer`), see the <<java_io,Java I/O chapter>>
 * return unmodifiable views or immutable records instead of copying collections "just in case"
 * `List.copyOf` is cheap on an already immutable list, it returns the same instance
 * size collections up front: `new ArrayList<>(n)`, `new HashMap<>(n * 4 / 3 + 1)` avoids resizing garbage
@@ -315,7 +315,7 @@ packet-beta
 * mark word and klass pointer share 8 B, so every object is 4 B smaller (10-20% less heap on object-heavy apps)
 * more objects per cache line and per GC cycle, often a small throughput gain too
 * no code change, test with your workload, and watch for tools that read the header layout
-* object layout details: GC chapter
+* object layout details: <<garbage_collection,GC chapter>>
 
 === Pooling and its caveats
 
@@ -364,7 +364,7 @@ ByteBuffer buf = ByteBuffer.allocateDirect(1 << 20);
 ----
 
 * memory outside the heap, the object on the heap is only a small handle
-* NIO channels can read and write without an extra copy (see the I/O chapter)
+* NIO channels can read and write without an extra copy (see the <<java_io,Java I/O chapter>>)
 * limited by `-XX:MaxDirectMemorySize` (default: about the max heap)
 * freed only after the handle is garbage collected (Cleaner), so a quiet heap can hold a lot of native memory
 * allocation and zeroing are slower than heap buffers: allocate once and reuse
@@ -398,7 +398,7 @@ try (Arena arena = Arena.ofShared();
 * the file is mapped into the address space, the OS page cache is the buffer, no copy to the heap
 * `FileChannel.map` with an `Arena` returns a `MemorySegment`: no 2 GB limit, deterministic unmap
 * good for big read-mostly data: indexes, columnar files, shared between processes
-* page faults happen as latency on first touch (see the I/O chapter)
+* page faults happen as latency on first touch (see the <<java_io,Java I/O chapter>>)
 
 === When off-heap pays
 
@@ -437,9 +437,9 @@ flowchart LR
   class serial,parallel,zgc,g1 lead
 ----
 
-* the decision tree is in the GC chapter, "Choosing a collector"
+* the decision tree is in the <<garbage_collection,GC chapter>>, "Choosing a collector"
 * G1 is the default and right for most applications: change it only for a measured reason
-* tuning flags and the troubleshooting flow: next section
+* tuning flags and the troubleshooting flow: <<gc_tuning_footprint_vs_throughput_vs_pause,GC tuning>>
 
 === Memory bound: summary
 

@@ -96,6 +96,25 @@ block-beta
 * the JVM adapts the threshold at runtime (survivor space occupancy)
 * promoting too early ("premature promotion") fills Old with short-lived garbage
 
+=== Object header
+
+[mermaid,format=svg]
+----
+packet-beta
+  0-1: "lock"
+  2-2: "-"
+  3-6: "age"
+  7-37: "identity hash (31 bits)"
+  38-63: "GC bits / unused"
+  64-95: "klass ptr (4 B)"
+  96-127: "fields ..."
+----
+
+* *mark word*: identity hash, GC *age*, lock state, GC marks / forwarding pointer
+* *klass pointer*: the class of the object (tells GC the object layout)
+* *compressed oops*: 32-bit references (shifted by 3) for heaps < 32 GB
+* JDK 25: *compact object headers* (`-XX:+UseCompactObjectHeaders`, JEP 519) merge both into 8 B, up to ~20% less heap in benchmarks, opt-in
+
 === The old->young problem
 
 [mermaid,format=svg]

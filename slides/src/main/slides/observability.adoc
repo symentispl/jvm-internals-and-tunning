@@ -7,7 +7,7 @@
 * JVM logging, Flight Recorder, native memory tracking
 * Sampling profilers, safepoint bias, flame graphs
 * Linux tools: pidstat, perf, sysdig
-* Appendix: command cheat sheet
+* <<appendix_jvm_observability_cheat_sheet,Appendix: command cheat sheet>>
 
 include::observability-sources.adoc[]
 

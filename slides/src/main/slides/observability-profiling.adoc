@@ -20,7 +20,7 @@ flowchart LR
   class st r
 ----
 
-* the official JVMTI call `GetAllStackTraces` needs a *safepoint* (see safepoint slides in the GC section)
+* the official JVMTI call `GetAllStackTraces` needs a *safepoint* (see <<safepoint,safepoints>> in the <<garbage_collection,GC chapter>>)
 * samples can only land on safepoint polls: loops and method returns
 * time spent in code without polls is attributed to the next poll, profiles *lie*
 

@@ -385,7 +385,7 @@ flowchart LR
   class serial,parallel,zgc,g1 lead
 ----
 
-GC tuning and monitoring: see the chapter *Writing performant Java applications*
+GC tuning and monitoring: see <<gc_tuning_footprint_vs_throughput_vs_pause,GC tuning>> in the chapter <<memory_bound,Memory bound>>
 
 === Further reading
 

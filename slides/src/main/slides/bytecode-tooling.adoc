@@ -89,4 +89,4 @@ public class Agent {
 
 === Appendix pointer
 
-Commands to look at bytecode and class loading: see the *Appendix*
+Commands to look at bytecode and class loading: see <<appendix_bytecode_tools_and_commands,Appendix: bytecode tools and commands>>

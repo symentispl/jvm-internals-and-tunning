@@ -7,7 +7,7 @@
 * When and what gets compiled, code cache
 * Optimizations: inlining, escape analysis, loops, intrinsics
 * Speculation, uncommon traps, deoptimization
-* Appendix: JIT flags and diagnostics
+* <<appendix_jit_flags_and_diagnostics,Appendix: JIT flags and diagnostics>>
 
 include::jit-compilers.adoc[]
 

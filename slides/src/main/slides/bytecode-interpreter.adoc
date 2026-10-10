@@ -30,7 +30,7 @@ block-beta
 
 * counts method invocations and loop back edges
 * collects a *profile* (branches taken, receiver types) in `MethodData`
-* when a counter crosses a threshold, the method is queued for compilation (see *JIT* section)
+* when a counter crosses a threshold, the method is queued for compilation (see the <<jit_me_baby_one_more_time,JIT chapter>>)
 * compiled code can *deoptimize* back to an interpreter frame at any bytecode index
 
 === Quickening

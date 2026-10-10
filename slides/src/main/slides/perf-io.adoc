@@ -35,7 +35,7 @@ flowchart LR
 |tracing (OpenTelemetry) |time spent per call along the request path
 |===
 
-* details of JFR and thread dumps: observability chapter
+* details of JFR and thread dumps: <<voyeurs_in_the_jvm_land,observability chapter>>
 
 === How to investigate: OS side
 
@@ -130,7 +130,7 @@ sequenceDiagram
 * small writes into a buffer, one big system call (`BufferedOutputStream`, 8 KB default)
 * `readv` / `writev` for header + body in one call
 * `transferTo` for file to socket or file to file: data never enters the heap
-* the details and pictures: Java I/O chapter, ways to do I/O
+* the details and pictures: <<ways_to_do_io_in_java,Java I/O chapter: ways to do I/O>>
 
 === Technique: when to use it
 
@@ -174,7 +174,7 @@ flowchart LR
 
 === Virtual threads and I/O: what to know
 
-* final in Java 21 (JEP 444), details in the virtual threads chapter
+* final in Java 21 (JEP 444), details in the <<virtual_threads,virtual threads chapter>>
 * socket I/O is non-blocking underneath, the virtual thread unmounts while waiting
 * *file I/O still blocks the carrier thread*, the scheduler may temporarily add carriers to compensate
 * Java 24 (JEP 491): `synchronized` no longer pins the carrier, remaining pinning: native frames, class initialization
@@ -367,7 +367,7 @@ try (JsonParser p = factory.createParser(in)) {      // Jackson streaming API
 * faster: code generation at build time (protobuf, Avro, annotation processors, Jackson afterburner-style bytecode generation)
 * records: a compact, final shape, easy to bind (supported by common libraries)
 * Java 25 AOT cache (Leyden) helps startup, it does not remove the per-message work
-* warm up: first requests run in the interpreter, see the JIT chapter
+* warm up: first requests run in the interpreter, see the <<jit_me_baby_one_more_time,JIT chapter>>
 
 === Buffer reuse and fewer copies
 
@@ -384,7 +384,7 @@ Order o = mapper.readValue(in, Order.class);
 * avoid the intermediate `String` and `byte[]` copies, hand the parser the stream
 * reuse buffers (thread-local or pooled), mind that pooled buffers need care with virtual threads
 * write with a reused `ByteArrayOutputStream` / `ByteBuffer` instead of new ones per message
-* fewer allocations = fewer young collections, see the GC chapter
+* fewer allocations = fewer young collections, see the <<garbage_collection,GC chapter>>
 
 === Parsing from ByteBuffer and MemorySegment
 
